@@ -35,11 +35,9 @@ exports.getAllLeads = async (req, res) => {
 };
 
 exports.searchLeads = async (req, res) => {
-  console.log("HHHHHHHITTTTTT")
   try {
-    // console.log(req.user);
-    const { searchQuery} = req.query;
-    const regex = new RegExp(searchQuery, 'i');
+    const { page = 1, limit = 25, search = "" } = req.query;
+    const regex = new RegExp(search, 'i');
     const searchCriteria = {
       $or: [
         { name: { $regex: regex } },
@@ -52,8 +50,8 @@ exports.searchLeads = async (req, res) => {
       company: req.user.company // Assuming each lead is tied to a company from the user's context
     };
 
-    const leads = await Lead.find(searchCriteria)
-                             .populate('assignedTo', '_id firstName lastName')
+    const leads = await Lead.find(searchCriteria).populate('assignedTo', '_id firstName lastName').limit(limit * 1).skip((page - 1) * limit).exec();
+                         
     res.status(200).json({
       leads: leads
     });
