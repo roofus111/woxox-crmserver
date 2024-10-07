@@ -48,6 +48,7 @@ router.get("/", leadsController.getAllLeads);
 router.get("/search", leadsController.searchLeads);
 router.post("/", leadsController.createLead);
 router.put("/assign", leadsController.AssignLeadEqual);
+router.put("/:leadId/status", leadsController.UpdateLeadStatus);
 router.post("/upload", upload.single("file"), async (req, res) => {
   const file = req.file;
   const docName = req.body.docName;
