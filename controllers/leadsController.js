@@ -155,3 +155,31 @@ exports.UpdateLeadStatus = async (req, res) => {
     });
   }
 };
+
+exports.AssignUserToLead = async (req, res) => {
+  const { leadId, userId } = req.params;
+
+  try {
+    // Check if the user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Find the lead and update it
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      { assignedTo: user._id },
+      { new: true } // Return the updated object and run validation
+    ) .populate("assignedTo", "_id firstName lastName")
+
+    if (!updatedLead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    res.status(200).json(updatedLead);
+  } catch (error) {
+    res.status(500).json({ message: 'Error assigning user to lead', error: error.message });
+  }
+};
+
