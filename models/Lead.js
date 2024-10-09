@@ -82,9 +82,9 @@ const FormSchema = new mongoose.Schema({
 const LeadSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String },
-  phone: { type: String, required: true  },
+  phone: { type: String, required: true },
   campaign: { type: String },
-  status: { type: String, enum: ['New', 'Contacted','Interested','Not Interested', 'Converted','Pending','In Progress', 'Lost', 'Won'], default: 'New' },
+  status: { type: String, enum: ['New', 'Contacted', 'Interested', 'Not Interested', 'Converted', 'Pending', 'In Progress', 'Lost', 'Won'], default: 'New' },
   source: { type: String },
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   assignedTo: {
@@ -92,9 +92,10 @@ const LeadSchema = new mongoose.Schema({
     ref: 'User',
     default: null  // This specifies that the default value can be null.
   },
-  
+
   createdAt: { type: Date, default: Date.now },
-  profile : FormSchema
+  profile: FormSchema,
+  stages: { type: String, enum: [null, 'Pending', 'In Progress', 'Document Collected', 'Pending Documents', 'Application Submitted', 'Interview Scheduled', 'Offer letter Received', 'Offer letter Rejected', 'Visa Documentation In Progress', 'Visa Documentation Success', 'Visa Approved', 'Visa Rejected'], default: null }
 });
 
 module.exports = mongoose.model('Lead', LeadSchema);

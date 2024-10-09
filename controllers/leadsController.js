@@ -144,6 +144,11 @@ exports.UpdateLeadStatus = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    if( lead.status === "Converted"){
+      console.log('Push it to Finance');
+      
+    }
+
     res.status(200).json({
       message: "Lead status updated successfully",
       lead,
@@ -248,3 +253,32 @@ exports.UpdateLead = async (req, res) => {
     res.status(500).json({ message: 'Error updating lead', error });
   }
 }
+
+
+exports.UpdateLeadStages = async (req, res) => {
+  const { leadId } = req.params; // Lead ID from request parameters
+  const { stages } = req.body; // New status from request body
+  console.log(req.body);
+
+  try {
+    const lead = await Lead.findByIdAndUpdate(
+      leadId,
+      { stages },
+      { new: true } // Return the updated document
+    );
+
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    res.status(200).json({
+      message: "Lead status updated successfully",
+      lead,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating lead status",
+      error: error.message,
+    });
+  }
+};
