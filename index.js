@@ -9,6 +9,7 @@ const leadsRoutes = require('./routes/leadsRoutes');
 const excelRoutes =require('./routes/excelRoutes')
 const leadactivity = require('./routes/leadActivityRoutes')
 const followUp = require("./routes/followRoutes")
+const documentation = require('./routes/documentation')
 const app = express();
 
 // Connect to MongoDB
@@ -29,6 +30,7 @@ app.use('/api/leads', leadsRoutes);
 app.use('/api/excel', excelRoutes);
 app.use('/api/leadactivity',leadactivity)
 app.use('/api/followups',followUp)
+app.use('/api/documentation',documentation)
 
 // Start server
 app.listen(8000, () => {

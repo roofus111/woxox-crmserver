@@ -1,5 +1,84 @@
 const mongoose = require('mongoose');
-
+const FormSchema = new mongoose.Schema({
+  age: {
+    type: Number,
+  },
+  address: {
+    type: String,
+  },
+  pinCode: {
+    type: String,
+  },
+  state: {
+    type: String,
+  },
+  city: {
+    type: String,
+  },
+  country: {
+    type: String,
+  },
+  sslcJoinYear: {
+    type: Number,
+  },
+  sslcPassOutYear: {
+    type: Number,
+  },
+  sslcScore: {
+    type: Number,
+  },
+  hscJoinYear: {
+    type: Number,
+  },
+  hscPassOutYear: {
+    type: Number,
+  },
+  hscScore: {
+    type: Number,
+  },
+  ieltsScore: {
+    type: Number,
+  },
+  pteToeflScore: {
+    type: Number,
+  },
+  germanScore: {
+    type: Number,
+  },
+  xiiEnglishScore: {
+    type: Number,
+  },
+  careerGapFrom: {
+    type: Number,
+  },
+  careerGapTo: {
+    type: Number,
+  },
+  experienceFrom: {
+    type: Number,
+  },
+  experienceTo: {
+    type: Number,
+  },
+  backlogs: {
+    type: Number,
+  },
+  targetIntake: {
+    type: String,
+  },
+  programOfInterest: {
+    type: String,
+  },
+  countryOfInterest: {
+    type: String,
+  },
+  visaRefusal: {
+    type: String,
+  },
+  tuitionFeePreference: {
+    type: Number,
+  }
+});
 const LeadSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String },
@@ -14,7 +93,8 @@ const LeadSchema = new mongoose.Schema({
     default: null  // This specifies that the default value can be null.
   },
   
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  profile : FormSchema
 });
 
 module.exports = mongoose.model('Lead', LeadSchema);

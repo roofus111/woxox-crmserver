@@ -183,3 +183,68 @@ exports.AssignUserToLead = async (req, res) => {
   }
 };
 
+// Update Lead by ID controller
+exports.UpdateLead = async (req, res) => {
+  try {
+    const leadId = req.params.id; // Lead ID from the request parameters
+    const updateData = req.body; // Data from the request body to update the lead
+
+    // Find the lead by ID and update it
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      {
+        $set: {
+          name: updateData.fullName,  // Update lead name if provided
+          email: updateData.email,  // Update lead email if provided
+          phone: updateData.phone,  // Update lead phone if provided
+          campaign: updateData.campaign,  // Update campaign if provided
+          status: updateData.status,  // Update status if provided
+          source: updateData.source,  // Update source if provided
+          company: updateData.company,  // Update company reference if provided
+          assignedTo: updateData.assignedTo,  // Update assigned user if provided
+          // Update the nested profile schema fields
+          profile: {
+            age: updateData.age,
+            address: updateData.address,
+            pinCode: updateData.pinCode,
+            state: updateData.state,
+            city: updateData.city,
+            country: updateData.country,
+            sslcJoinYear: updateData.sslcJoinYear,
+            sslcPassOutYear: updateData.sslcPassOutYear,
+            sslcScore: updateData.sslcScore,
+            hscJoinYear: updateData.hscJoinYear,
+            hscPassOutYear: updateData.hscPassOutYear,
+            hscScore: updateData.hscScore,
+            ieltsScore: updateData.ieltsScore,
+            pteToeflScore: updateData.pteToeflScore,
+            germanScore: updateData.germanScore,
+            xiiEnglishScore: updateData.xiiEnglishScore,
+            careerGapFrom: updateData.careerGapFrom,
+            careerGapTo: updateData.careerGapTo,
+            experienceFrom: updateData.experienceFrom,
+            experienceTo: updateData.experienceTo,
+            backlogs: updateData.backlogs,
+            targetIntake: updateData.targetIntake,
+            programOfInterest: updateData.programOfInterest,
+            countryOfInterest: updateData.countryOfInterest,
+            visaRefusal: updateData.visaRefusal,
+            tuitionFeePreference: updateData.tuitionFeePreference
+          }
+        }
+      },
+      { new: true, runValidators: true }  // Return the updated document and run schema validation
+    );
+
+    // If lead is not found, return a 404 error
+    if (!updatedLead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    // Send the updated lead data as a response
+    res.status(200).json(updatedLead);
+  } catch (error) {
+    // Handle any errors that occur during the update
+    res.status(500).json({ message: 'Error updating lead', error });
+  }
+}

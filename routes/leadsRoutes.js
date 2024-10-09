@@ -48,6 +48,7 @@ router.get("/", leadsController.getAllLeads);
 router.get("/search", leadsController.searchLeads);
 router.post("/", leadsController.createLead);
 router.put("/assign", leadsController.AssignLeadEqual);
+router.put("/updateprofile/:id", leadsController.UpdateLead);
 router.put("/assignlead/:leadId/:userId", leadsController.AssignUserToLead);
 router.put("/:leadId/status", leadsController.UpdateLeadStatus);
 router.post("/upload", upload.single("file"), async (req, res) => {
