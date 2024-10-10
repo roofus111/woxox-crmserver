@@ -1,5 +1,6 @@
 const Lead = require("../models/Lead");
 const User = require("../models/User");
+const Sales = require('../models/sales'); 
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -122,44 +123,42 @@ exports.AssignLeadEqual = async (req, res) => {
   }
 };
 
-exports.UpdateLeadStatus = async (req, res) => {
-  const { leadId } = req.params; // Lead ID from request parameters
-  const { status } = req.body; // New status from request body
-  console.log(req.body);
-  // Validate status value
-  // const validStatuses = ["New", "Contacted", "Qualified", "Lost", "Won"];
-  // if (!validStatuses.includes(status)) {
-  //   return res.status(400).json({ message: "Invalid status value" });
-  // }
-
-  try {
-    // Find the lead by ID and update the status
-    const lead = await Lead.findByIdAndUpdate(
-      leadId,
-      { status },
-      { new: true } // Return the updated document
-    );
-
-    if (!lead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if( lead.status === "Converted"){
-      console.log('Push it to Finance');
-      
-    }
-
-    res.status(200).json({
-      message: "Lead status updated successfully",
-      lead,
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Error updating lead status",
-      error: error.message,
-    });
-  }
+// Helper function to handle errors
+const handleAsync = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
 };
+
+// Route handler for updating lead status
+exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+  const { leadId } = req.params;
+  const { status } = req.body;
+
+  // Find the lead by ID and update the status
+  const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
+  if (!lead) {
+    return res.status(404).json({ message: "Lead not found" });
+  }
+
+  // If the status is converted, create a new sales entry
+  if (lead.status === "Converted") {
+    const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+    const salesCount = await Sales.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), 0, 1), $lte: new Date(new Date().getFullYear(), 11, 31) } }) + 1;
+    const salesId = `${year}-${salesCount.toString().padStart(3, '0')}`;
+    const newSales = new Sales({
+      SalesId: salesId,
+      LeadId: lead._id,
+      company: req.user.company._id
+    });
+    const savedSales = await newSales.save();
+    console.log(savedSales);
+  }
+
+  // Respond success message if not converted or after converted logic
+  return res.status(200).json({
+    message: "Lead status updated successfully",
+    lead
+  });
+});
 
 exports.AssignUserToLead = async (req, res) => {
   const { leadId, userId } = req.params;
@@ -280,5 +279,19 @@ exports.UpdateLeadStages = async (req, res) => {
       message: "Error updating lead status",
       error: error.message,
     });
+  }
+};
+
+exports.getLeadsForDocs = async (req, res) => {
+  try {
+    const leads = await Lead.find({ company: req.user.company,status:'Pending' })
+      .populate("assignedTo", "_id firstName lastName")
+      .limit(100);
+
+    res.status(200).json({
+      leads: leads
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

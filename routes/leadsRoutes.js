@@ -45,6 +45,7 @@ router.get("/docs/:id", async (req, res) => {
 });
 router.use(authenticateUser); // Apply authentication to all routes
 router.get("/", leadsController.getAllLeads);
+router.get("/getleadsfordoc", leadsController.getLeadsForDocs);
 router.get("/search", leadsController.searchLeads);
 router.post("/", leadsController.createLead);
 router.put("/assign", leadsController.AssignLeadEqual);
