@@ -34,6 +34,25 @@ exports.getAllLeads = async (req, res) => {
   }
 };
 
+exports.getLeadById = async (req, res) => {
+  try {
+    const leadId = req.params.id; // Get the ID from the request parameters
+
+    // Fetch the lead from the database
+    const lead = await Lead.findById(leadId)
+                           .populate("assignedTo", "firstName lastName email"); // Populate the 'assignedTo' field if needed
+
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    res.status(200).json(lead);
+  } catch (err) {
+    console.error("Error fetching lead by ID:", err);
+    res.status(500).json({ message: 'Failed to retrieve lead' });
+  }
+};
+
 exports.searchLeads = async (req, res) => {
   try {
     const { page = 1, limit = 25, search = "", assignedTo, status } = req.query;
