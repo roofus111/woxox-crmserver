@@ -11,6 +11,7 @@ const leadactivity = require('./routes/leadActivityRoutes')
 const followUp = require("./routes/followRoutes")
 const documentation = require('./routes/documentation')
 const sales =require('./routes/salesRoutes')
+const invoice =require('./routes/invoiceRoutes')
 const app = express();
 
 // Connect to MongoDB
@@ -33,6 +34,7 @@ app.use('/api/leadactivity',leadactivity)
 app.use('/api/followups',followUp)
 app.use('/api/documentation',documentation)
 app.use('/api/sales',sales)
+app.use('/api/invoice',invoice)
 
 // Start server
 app.listen(8000, () => {
