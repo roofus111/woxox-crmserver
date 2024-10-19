@@ -1,3 +1,4 @@
+const Company = require('../models/Company');
 const Invoice = require('../models/invoice');
 
 // Create a new invoice
@@ -5,18 +6,13 @@ exports.createInvoice = async (req, res) => {
   try {
     const invoiceData = req.body;
 
-    // Calculate the subtotal, tax, and grand total
-    const subTotal = invoiceData.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-    const taxAmount = subTotal * (invoiceData.taxRate / 100);
-    const grandTotal = subTotal + taxAmount;
+
 
     const invoice = new Invoice({
       ...invoiceData,
-      subTotal,
-      taxAmount,
-      grandTotal,
+      company:req.user.company
     });
-
+    console.log(invoice);
     const savedInvoice = await invoice.save();
     res.status(201).json(savedInvoice);
   } catch (error) {
@@ -27,8 +23,27 @@ exports.createInvoice = async (req, res) => {
 // Get all invoices
 exports.getInvoices = async (req, res) => {
   try {
-    const invoices = await Invoice.find().populate('company').populate('customer');
-    res.status(200).json(invoices);
+    const invoices = await Invoice.find({company:req.user.company}).populate('customer');
+    const formattedInvoices = invoices.map(invoice => ({
+      id: invoice.invoiceNumber, // Assuming _id is used as the invoice id
+      issuedDate: invoice.dateIssued,
+      address: invoice.customer.phone, // Assuming the address is stored in the populated customer object
+      company: invoice.customer.name, // Assuming company name is stored directly in the invoice document
+      companyEmail: invoice.customer.email, // Assuming company email is also stored in the invoice document
+      country: invoice.customer.profile.countryOfInterest, // Assuming customer country is available
+      contact: invoice.customer.phone, // Assuming customer phone is available
+      name: invoice.customer.name, // Assuming customer name is available
+      service: invoice.status, // Assuming service is stored in the invoice
+      total: invoice.grandTotal, // Total amount
+      avatar: '', // Assuming no avatar data is stored in the database
+      avatarColor: 'primary', // Defaulting to 'primary' as there is no data about this
+      invoiceStatus: invoice.status, // Assuming invoice status is stored as 'status'
+      balance: `$123432`, // Balance amount in dollars
+      dueDate: invoice.dueDate.getDate,
+      refId: invoice._id
+    }));
+    
+    res.status(200).json(formattedInvoices);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -36,12 +51,35 @@ exports.getInvoices = async (req, res) => {
 
 // Get a specific invoice by ID
 exports.getInvoiceById = async (req, res) => {
+  console.log('api triggered');
+  
   try {
-    const invoice = await Invoice.findById(req.params.id).populate('company').populate('customer');
+    const invoice = await Invoice.findById(req.params.id).populate('customer');
+    console.log(invoice);
+    
+    const formattedInvoices = {
+      id: invoice.invoiceNumber, // Assuming _id is used as the invoice id
+      issuedDate: invoice.dateIssued,
+      address: invoice.customer.phone, // Assuming the address is stored in the populated customer object
+      company: invoice.customer.name, // Assuming company name is stored directly in the invoice document
+      companyEmail: invoice.customer.email, // Assuming company email is also stored in the invoice document
+      country: invoice.customer.profile.countryOfInterest, // Assuming customer country is available
+      contact: invoice.customer.phone, // Assuming customer phone is available
+      name: invoice.customer.name, // Assuming customer name is available
+      service: invoice.status, // Assuming service is stored in the invoice
+      total: invoice.grandTotal, // Total amount
+      avatar: '', // Assuming no avatar data is stored in the database
+      avatarColor: 'primary', // Defaulting to 'primary' as there is no data about this
+      invoiceStatus: invoice.status, // Assuming invoice status is stored as 'status'
+      balance: `$123432`, // Balance amount in dollars
+      dueDate: invoice.dueDate,
+      address : invoice.customer.profile.address
+    };
+   
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found' });
     }
-    res.status(200).json(invoice);
+    res.status(200).json(formattedInvoices);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
