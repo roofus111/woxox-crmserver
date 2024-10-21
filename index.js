@@ -12,6 +12,7 @@ const followUp = require("./routes/followRoutes")
 const documentation = require('./routes/documentation')
 const sales =require('./routes/salesRoutes')
 const invoice =require('./routes/invoiceRoutes')
+const payment = require('./routes/paymentRoutes')
 const app = express();
 
 // Connect to MongoDB
@@ -35,6 +36,7 @@ app.use('/api/followups',followUp)
 app.use('/api/documentation',documentation)
 app.use('/api/sales',sales)
 app.use('/api/invoice',invoice)
+app.use('/api/payment',payment)
 
 // Start server
 app.listen(8000, () => {

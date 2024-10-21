@@ -81,6 +81,10 @@ totalAmount: {
     type: Date,
     default: Date.now,
   },
+  paid:{
+    type:Number,
+    default:0
+  }
 });
 
 module.exports = mongoose.model("Invoice", InvoiceSchema);
