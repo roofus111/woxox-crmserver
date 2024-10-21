@@ -1,20 +1,31 @@
 const Payment = require("../models/payment");
 const Invoice = require("../models/invoice");
-const { v4: uuidv4 } = require("uuid");
 const mongoose = require("mongoose");
 // Add a new payment
 
+
+const getTotalCount = async (companyId) => {
+  try {
+    const filter = companyId ? { company: companyId } : {}; // Create a filter based on companyId if provided
+    const count = await Payment.countDocuments(filter); // Count documents in the Invoice collection
+    return count;
+  } catch (error) {
+    console.error("Error getting invoice count:", error);
+    throw new Error("Unable to retrieve invoice count.");
+  }
+};
 exports.createPayment = async (req, res) => {
   const session = await mongoose.startSession(); // Start a transaction session
   session.startTransaction();
   try {
     // Generate a unique payment ID
-    const paymentId = uuidv4();
+   
+    const count = await getTotalCount(req.user.company);
 
     // Merge the generated payment ID with the body data
     const data = {
       ...req.body,
-      paymentId,
+      paymentId: (count + 1).toString().padStart(5, '0'),
       userId: req.user._id,
       company: req.user.company._id,
     };

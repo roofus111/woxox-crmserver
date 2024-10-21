@@ -1,13 +1,27 @@
 const Company = require("../models/Company");
 const Invoice = require("../models/invoice");
 
+const getTotalInvoiceCount = async (companyId) => {
+  try {
+    const filter = companyId ? { company: companyId } : {}; // Create a filter based on companyId if provided
+    const count = await Invoice.countDocuments(filter); // Count documents in the Invoice collection
+    return count;
+  } catch (error) {
+    console.error("Error getting invoice count:", error);
+    throw new Error("Unable to retrieve invoice count.");
+  }
+};
+
 // Create a new invoice
 exports.createInvoice = async (req, res) => {
   try {
     const invoiceData = req.body;
 
+    const count = await getTotalInvoiceCount(req.user.company);
+
     const invoice = new Invoice({
       ...invoiceData,
+      invoiceNumber : (count + 1).toString().padStart(5, '0'),
       company: req.user.company,
     });
     console.log(invoice);
