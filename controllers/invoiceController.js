@@ -39,22 +39,29 @@ exports.getInvoices = async (req, res) => {
       "customer"
     );
     const formattedInvoices = invoices.map((invoice) => ({
-      id: invoice.invoiceNumber, // Assuming _id is used as the invoice id
+      id: invoice.invoiceNumber,
       issuedDate: invoice.dateIssued,
-      address: invoice.customer.phone, // Assuming the address is stored in the populated customer object
-      company: invoice.customer.name, // Assuming company name is stored directly in the invoice document
-      companyEmail: invoice.customer.email, // Assuming company email is also stored in the invoice document
-      country: invoice.customer.profile.countryOfInterest, // Assuming customer country is available
-      contact: invoice.customer.phone, // Assuming customer phone is available
-      name: invoice.customer.name, // Assuming customer name is available
-      service: invoice.status, // Assuming service is stored in the invoice
-      total: invoice.grandTotal, // Total amount
-      avatar: "", // Assuming no avatar data is stored in the database
-      avatarColor: "primary", // Defaulting to 'primary' as there is no data about this
-      invoiceStatus: invoice.status, // Assuming invoice status is stored as 'status'
-      balance: `$123432`, // Balance amount in dollars
-      dueDate: invoice.dueDate.getDate,
+      address: invoice.customer.phone, 
+      company: invoice.customer.name, 
+      companyEmail: invoice.customer.email, 
+      country: invoice.customer.profile.countryOfInterest, 
+      contact: invoice.customer.phone, 
+      name: invoice.customer.name, 
+      service: "Some Service", 
+      total: invoice.grandTotal, 
+      avatar: "", 
+      avatarColor: "primary", 
+      invoiceStatus: invoice.status, 
+      balance: invoice?.grandTotal - invoice?.paid, 
+      dueDate: invoice.dueDate,
+      items: invoice.items,
+      address: invoice.customer.profile.address,
+      paid: invoice.paid,
+      subtotal: invoice.totalAmount,
+      taxRate: invoice.taxRate,
+      gst: invoice.gst,
       refId: invoice._id,
+      leadId:invoice.customer._id
     }));
 
     res.status(200).json(formattedInvoices);
@@ -131,6 +138,44 @@ exports.deleteInvoice = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
     }
     res.status(200).json({ message: "Invoice deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.getInvoicesByLeads = async (req, res) => {
+  try {
+    const invoices = await Invoice.find({ company: req.user.company,customer :req.params.leadId }).populate(
+      "customer"
+    );
+    const formattedInvoices = invoices.map((invoice) => ({
+      id: invoice.invoiceNumber,
+      issuedDate: invoice.dateIssued,
+      address: invoice.customer.phone, 
+      company: invoice.customer.name, 
+      companyEmail: invoice.customer.email, 
+      country: invoice.customer.profile.countryOfInterest, 
+      contact: invoice.customer.phone, 
+      name: invoice.customer.name, 
+      service: "Some Service", 
+      total: invoice.grandTotal, 
+      avatar: "", 
+      avatarColor: "primary", 
+      invoiceStatus: invoice.status, 
+      balance: invoice?.grandTotal - invoice?.paid, 
+      dueDate: invoice.dueDate,
+      items: invoice.items,
+      address: invoice.customer.profile.address,
+      paid: invoice.paid,
+      subtotal: invoice.totalAmount,
+      taxRate: invoice.taxRate,
+      gst: invoice.gst,
+      refId: invoice._id,
+      leadId:invoice.customer._id
+    }));
+
+    res.status(200).json(formattedInvoices);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

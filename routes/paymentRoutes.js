@@ -11,6 +11,7 @@ router.get('/', paymentController.getAllPayments);
 
 // GET route to fetch a single payment by ID
 router.get('/:id', paymentController.getPaymentById);
+router.get('/byLead/:leadId', paymentController.getPaymentsByLeads);
 
 // PATCH route to update a payment by ID
 router.patch('/:id', paymentController.updatePayment);

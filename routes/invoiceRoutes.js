@@ -12,6 +12,7 @@ router.get('/', invoiceController.getInvoices);
 
 // Get a specific invoice by ID
 router.get('/:id', invoiceController.getInvoiceById);
+router.get('/bylead/:leadId', invoiceController.getInvoicesByLeads);
 
 // Update an invoice
 router.put('/:id', invoiceController.updateInvoice);

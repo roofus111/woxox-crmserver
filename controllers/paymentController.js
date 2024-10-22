@@ -70,6 +70,17 @@ exports.getAllPayments = async (req, res) => {
   }
 };
 
+exports.getPaymentsByLeads = async (req, res) => {
+  try {
+    const payments = await Payment.find({ company: req.user.company,leadId:req.params.leadId }).populate(
+      "leadId"
+    ).populate("invoice");
+    res.status(200).send(payments);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+};
+
 // Get a single payment by ID
 exports.getPaymentById = async (req, res) => {
   try {
