@@ -314,3 +314,47 @@ exports.getLeadsForDocs = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+exports.getCampaigns = async (req, res) => {
+  try {
+    const campaignNames = await Lead.distinct('campaign', { company: req.user.company, assignedTo:req.user._id});
+    res.status(200).json({
+      campaign: campaignNames
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+exports.getCounsellorLeads = async (req, res) => {
+  try {
+    console.log(req.user);
+
+    // Retrieve the 'page' and 'limit' from the request query parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Calculate the 'skip' value
+    const skip = (page - 1) * limit;
+
+    // Query to find leads with pagination
+    const leads = await Lead.find({ company: req.user.company,campaign:req.params.campaign,assignedTo:req.user._id })
+      .populate("assignedTo", "_id firstName lastName")
+      .skip(skip)
+      .limit(limit);
+
+    // Optionally, you can return the total count of leads to help with pagination on the frontend
+    const totalCount = await Lead.countDocuments({ company: req.user.company });
+
+    res.status(200).json({
+      leads: leads,
+      totalLeads: totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: page,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
