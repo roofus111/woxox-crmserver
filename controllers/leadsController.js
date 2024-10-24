@@ -55,7 +55,7 @@ exports.getLeadById = async (req, res) => {
 
 exports.searchLeads = async (req, res) => {
   try {
-    const { page = 1, limit = 25, search = "", assignedTo, status } = req.query;
+    const { page = 1, limit = 25, search = "", assignedTo, status ,campaign} = req.query;
     const regex = new RegExp(search, "i");
     const searchCriteria = {
       $or: [
@@ -71,6 +71,13 @@ exports.searchLeads = async (req, res) => {
     // Add filters for assignedTo and status if provided
     if (assignedTo) {
       searchCriteria.assignedTo = assignedTo; // assuming assignedTo is an ID
+    }
+    if (campaign && campaign != 'undefined') {
+      searchCriteria.campaign = campaign ; // assuming assignedTo is an ID
+    }
+
+    if(req.user.role =='user'){
+      searchCriteria.assignedTo = req.user._id;
     }
 
     if (status) {

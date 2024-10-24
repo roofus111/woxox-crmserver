@@ -66,9 +66,20 @@ exports.createFollowUp = async (req, res) => {
 
 exports.getAllfollowUps = async (req, res) => {
   try {
-    const followUp = await LeadFollowUp.find({
-      company: req.user.company,
-    })
+    let searchCriteria = {}
+    if(req.user.role =='user'){
+       searchCriteria = { assignedTo : req.user._id, company: req.user.company,}
+    }
+    else {
+       searchCriteria = {company: req.user.company}
+  
+    }
+
+    console.log(searchCriteria);
+    
+    const followUp = await LeadFollowUp.find(
+      searchCriteria
+    )
       .populate("leadId")
       .populate("assignedTo",'name')
       .populate("createdBy",'name');
