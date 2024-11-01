@@ -29,7 +29,7 @@ router.post('/upload', authorizeCompanyAccess, upload.single('file'), async (req
     const duplicateLeads = []; // Array to store duplicates
     const leadsPromises = jsonData.map(async data => {
       const leadData = {
-        name: data.Name || data.name || data["full name"],
+        name: data.Name || data.name || data["full name"] || data.full_name,
         email: data.Email || data.email,
         phone: data.Phone || data.phone || data.phone_number,
         status: 'New',
