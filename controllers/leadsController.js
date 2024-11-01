@@ -365,3 +365,18 @@ exports.getCounsellorLeads = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.deleteLeadsByCompany = async (req, res) => {
+  // const { companyId } = req.params; // Assuming company ID is passed as a URL parameter
+
+  try {
+    // Deleting all leads where the 'company' field matches the companyId provided
+    const result = await Lead.deleteMany({ company: "66e1675aad0e5a07675470f8" });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "No leads found for the specified company." });
+    }
+    res.status(200).json({ message: `Successfully deleted ${result.deletedCount} leads.` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

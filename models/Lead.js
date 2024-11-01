@@ -95,7 +95,8 @@ const LeadSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
   profile: FormSchema,
-  stages: { type: String, enum: [null, 'Pending', 'In Progress', 'Document Collected', 'Pending Documents', 'Application Submitted', 'Interview Scheduled', 'Offer letter Received', 'Offer letter Rejected', 'Visa Documentation In Progress', 'Visa Documentation Success', 'Visa Approved', 'Visa Rejected'], default: null }
+  stages: { type: String, enum: [null, 'Pending', 'In Progress', 'Document Collected', 'Pending Documents', 'Application Submitted', 'Interview Scheduled', 'Offer letter Received', 'Offer letter Rejected', 'Visa Documentation In Progress', 'Visa Documentation Success', 'Visa Approved', 'Visa Rejected'], default: null },
+  additionalFields: { type: mongoose.Schema.Types.Mixed } 
 });
 
 module.exports = mongoose.model('Lead', LeadSchema);

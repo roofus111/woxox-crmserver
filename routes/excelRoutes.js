@@ -36,8 +36,20 @@ router.post('/upload', authorizeCompanyAccess, upload.single('file'), async (req
         source: req.body.source,
         campaign: req.body.campaign,
         company: req.user.company._id,
-        assignedTo: null
-      };
+        assignedTo: null,
+        additionalFields: {
+          //add additional fields here
+        }
+      }
+
+      Object.keys(data).forEach(key => {
+        if (['which_level_are_you_at_right_now?','what_job_are_you_looking_for_in_luxembourg?',
+          'how_many_years_of_minimum_experience_you_have_in_the_same_field?','what_is_your_highest_educational_qualification?'
+        ].includes(key)) {
+          leadData.additionalFields[key] = data[key];
+        }
+      });
+      
 
       if (!leadData.name || !leadData.company || !leadData.phone) {
         console.error('Missing required lead data', leadData);

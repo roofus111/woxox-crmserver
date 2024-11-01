@@ -56,6 +56,7 @@ router.put("/assignlead/:leadId/:userId", leadsController.AssignUserToLead);
 router.put("/:leadId/status", leadsController.UpdateLeadStatus);
 router.put("/:leadId/stages", leadsController.UpdateLeadStages);
 router.get('/leads/:id', leadsController.getLeadById);
+router.delete('/deleteall', leadsController.deleteLeadsByCompany);
 router.post("/upload", upload.single("file"), async (req, res) => {
   const file = req.file;
   const docName = req.body.docName;
