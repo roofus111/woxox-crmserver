@@ -16,6 +16,13 @@ const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
 const app = express();
+const http = require('http');
+const socketIo = require('socket.io');
+
+
+const server = http.createServer(app);
+const io = socketIo(server);
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI);
@@ -44,6 +51,34 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
+
+
+
+
+io.on('connection', (socket) => {
+  console.log('New client connected');
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Start server
 app.listen(8000, () => {

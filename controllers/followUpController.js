@@ -2,6 +2,29 @@ const LeadFollowUp = require("../models/followUp"); // Import the LeadFollowUp m
 const Lead = require("../models/Lead"); // Assuming you have a Lead model
 const LeadActivity = require("../models/LeadActivity"); // Assuming the model is in the models folder
 const mongoose = require("mongoose");
+const cron = require('node-cron');
+
+
+function checkFollowUpsAndNotify() {
+  const now = new Date();
+  const nextHour = new Date(now.getTime() + 60*60*1000);
+
+  LeadFollowUp.find({
+    followUpDate: { $gte: now, $lt: nextHour },
+    status: { $in: ['Pending', 'In Progress'] }
+  })
+  .then(followUps => {
+    followUps.forEach(followUp => {
+      io.emit('followUpReminder', {
+        message: `Reminder: You have a follow-up scheduled at ${followUp.followUpDate}`,
+        details: followUp
+      });
+    });
+  })
+  .catch(err => console.error('Error:', err));
+}
+
+cron.schedule('*/10 * * * *', checkFollowUpsAndNotify);
 
 // Create a new follow-up
 exports.createFollowUp = async (req, res) => {
