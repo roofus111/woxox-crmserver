@@ -23,5 +23,5 @@ router.put('/update/:followUpId', leadFollowUpController.updateFollowUp);
 
 // Delete a follow-up
 router.delete('/delete/:followUpId', leadFollowUpController.deleteFollowUp);
-
+router.delete('/delete-with-no-lead', leadFollowUpController.deleteLeadFollowUpsWithNoLeadId);
 module.exports = router;
