@@ -16,12 +16,18 @@ const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
 const app = express();
-const http = require('http');
+const { createServer } = require('node:http');
 const socketIo = require('socket.io');
 
 
-const server = http.createServer(app);
-const io = socketIo(server);
+const { Server } = require('socket.io');
+const server = createServer(app);
+const io = new Server(server, {
+    cors: {
+      origin: "*", // Allow any origin for testing; specify your client origin in production
+      methods: ["GET", "POST"],
+    },
+  });
 
 
 // Connect to MongoDB
@@ -55,29 +61,11 @@ app.use("/api/tasks", Task);
 
 
 
-io.on('connection', (socket) => {
-  console.log('New client connected');
+const userSockets = new Map(); // Map to track user ID and socket ID
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+io.on("connection", (socket) => {
+    console.log(socket.id); // x8WIv7-mJelg7on_ALbx
   });
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // Start server

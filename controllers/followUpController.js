@@ -24,7 +24,7 @@ function checkFollowUpsAndNotify() {
   .catch(err => console.error('Error:', err));
 }
 
-cron.schedule('*/10 * * * *', checkFollowUpsAndNotify);
+cron.schedule('*/1 * * * *', checkFollowUpsAndNotify);
 
 // Create a new follow-up
 exports.createFollowUp = async (req, res) => {
