@@ -16,19 +16,21 @@ const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
 const app = express();
-const { createServer } = require('node:http');
-const socketIo = require('socket.io');
+const http = require('http'); // Import Node's HTTP module
+const { Server } = require("socket.io"); // Import Socket.IO Server class
+const scheduleJobs = require('./controllers/followUpController'); 
+const User = require("./models/User")
+const server = http.createServer(app);
+const cron = require('node-cron');
+const LeadFollowUp = require("./models/followUp");
 
-
-const { Server } = require('socket.io');
-const server = createServer(app);
+const alertBeforeMinutes = 30;
 const io = new Server(server, {
-    cors: {
-      origin: "*", // Allow any origin for testing; specify your client origin in production
-      methods: ["GET", "POST"],
-    },
-  });
-
+  cors: {
+    origin: "http://localhost:3000", // Allow requests from this origin and my frontend port = 5173
+    methods: ["GET", "POST"], // Allow these HTTP methods
+  },
+});
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI);
@@ -59,19 +61,66 @@ app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
 
 
+// Utility to check if a user is connected
+const isUserConnected = (userId) => {
+  return io.sockets.adapter.rooms.get(userId)?.size > 0;
+};
 
+io.on('connection', (socket) => {
+  console.log('New client connected');
+  
+  socket.emit('welcome', { message: 'Welcome to the notification system!' });
 
-const userSockets = new Map(); // Map to track user ID and socket ID
-
-io.on("connection", (socket) => {
-    console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+  socket.on('register', userId => {
+    socket.join(userId);
+    console.log(`User ${userId} registered and joined their room`);
   });
 
+  socket.on('disconnect', () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+});
+
+cron.schedule('*/10 * * * * *', async () => {
+  console.log("Running follow-up check");
+  try {
+    const now = new Date();
+    const alertBeforeMinutes = 30; // Adjust this value as needed
+    const upcomingFollowUps = await LeadFollowUp.find({
+      nextFollowUpDate: {
+        $gte: now,
+        $lte: new Date(now.getTime() + alertBeforeMinutes * 60000)
+      },
+      status: { $in: ['Pending', 'In Progress'] }
+    }).populate('assignedTo').exec();
+
+    if (upcomingFollowUps.length) {
+      console.log(`Found ${upcomingFollowUps.length} upcoming follow-ups`);
+    }
+
+    upcomingFollowUps.forEach(followUp => {
+      const userId = followUp.assignedTo._id.toString();
+      if (isUserConnected(userId)) {
+        const message = `Follow-up with lead ${followUp.leadId} is approaching at ${followUp.nextFollowUpDate}`;
+        io.to(userId).emit('followUpAlert', {
+          message: message,
+          details: followUp
+        });
+        console.log(`Alert sent to user ${userId}: ${message}`);
+      } else {
+        console.log(`User ${userId} not connected, skipping notification`);
+      }
+    });
+  } catch (error) {
+    console.error('Cron job failed:', error);
+  }
+});
 
 // Start server
-app.listen(8000, () => {
+server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
+
 
 
 app.get('/', (req, res) => res.status(200).send('OK'));
