@@ -15,6 +15,8 @@ const invoice = require("./routes/invoiceRoutes");
 const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
+const Pipeline =require("./routes/pipelineRoutes")
+const Campaign =require("./routes/campaignRoutes")
 const app = express();
 const http = require('http'); // Import Node's HTTP module
 const { Server } = require("socket.io"); // Import Socket.IO Server class
@@ -59,7 +61,8 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
-
+app.use("/api/pipelines",Pipeline)
+app.use("/api/campaign",Campaign)
 
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
