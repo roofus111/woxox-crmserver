@@ -92,6 +92,7 @@ const LeadSchema = new mongoose.Schema({
     ref: 'User',
     default: null  // This specifies that the default value can be null.
   },
+  untouched:{type:Boolean,default:true},
 
   createdAt: { type: Date, default: Date.now },
   profile: FormSchema,
