@@ -10,6 +10,10 @@ const CampaignSchema = new mongoose.Schema({
       ref: "User", // Assuming you have a User model for sales representatives
       required: true,
     },
+    Pipeline: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Pipeline", // Assuming you have a User model for sales representatives
+    },
     name: {
       type: String,
       required: true

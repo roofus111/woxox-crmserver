@@ -79,6 +79,9 @@ exports.searchLeads = async (req, res) => {
     if(req.user.role =='user'){
       searchCriteria.assignedTo = req.user._id;
     }
+    if(req.user.role =='unassigned'){
+      searchCriteria.unassignedTo = null;
+    }
 
     if (status) {
       searchCriteria.status = status; // assuming status is a string (e.g., "active", "inactive")

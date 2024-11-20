@@ -23,7 +23,7 @@ exports.getCampaign = async (req, res) => {
     }
   };
   exports.updateCampaign = async (req, res) => {
-    try {
+    try { 
       const { campaignid } = req.params;
       const updatedCampaign = await Campaign.findByIdAndUpdate(
         campaignid,
@@ -50,3 +50,39 @@ exports.getCampaign = async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   };
+  
+  exports.getCampaignsByPipelineId = async (req, res) => {
+    try {
+      const { pipelineid } = req.params; // Extract the pipeline ID from request parameters
+  
+      // Check if the pipeline ID is provided
+      if (!pipelineid) {
+        return res.status(400).json({ message: 'Pipeline ID is required.' });
+      }
+  
+      // Find all campaigns that belong to the provided pipeline ID
+      const campaigns = await Campaign.find({ pipelineId: pipelineid })
+        .populate('pipelineId', 'name') // Optionally populate the pipeline details (like name) if needed
+        .exec();
+  
+      // If no campaigns are found for the specified pipeline ID, return a 404 response
+      if (!campaigns || campaigns.length === 0) {
+        return res.status(404).json({ message: 'No campaigns found for this pipeline.' });
+      }
+  
+      // Return the found campaigns
+      res.status(200).json({
+        message: 'Campaigns fetched successfully.',
+        campaigns
+      });
+    } catch (error) {
+      // Catch any error and respond with a generic message and the error details
+      res.status(500).json({
+        message: 'An error occurred while fetching campaigns.',
+        error: error.message
+      });
+    }
+  };
+  
+
+  

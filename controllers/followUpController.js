@@ -168,20 +168,69 @@ exports.updateFollowUp = async (req, res) => {
 };
 
 // Delete a follow-up
+// exports.deleteFollowUp = async (req, res) => {
+//   try {
+//     const { followUpId } = req.params;
+
+//     // Find and delete the follow-up
+//     const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId);
+
+//     if (!deletedFollowUp) {
+//       return res.status(404).json({ message: "Follow-up not found" });
+//     }
+
+//     res.status(200).json({ message: "Follow-up deleted successfully" });
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+//delete a follow up
 exports.deleteFollowUp = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { followUpId } = req.params;
 
-    // Find and delete the follow-up
-    const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId);
-
-    if (!deletedFollowUp) {
-      return res.status(404).json({ message: "Follow-up not found" });
+    if (!followUpId) {
+      throw new Error("Follow-up ID is required.");
     }
 
-    res.status(200).json({ message: "Follow-up deleted successfully" });
+    // Find and delete the follow-up
+    const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId, { session });
+
+    if (!deletedFollowUp) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Follow-up not found." });
+    }
+
+    // Create a new activity log for the deletion
+    const newActivity = new LeadActivity({
+      leadId: deletedFollowUp.leadId,
+      userId: req.user._id,
+      action: "deleted",
+      details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-US")}`,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    await newActivity.save({ session });
+
+    // Commit the transaction
+    await session.commitTransaction();
+
+    res.status(200).json({
+      message: "Follow-up deleted successfully.",
+      activity: newActivity,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    // Abort the transaction on error
+    await session.abortTransaction();
+    res.status(500).json({ message: "Server error.", error: error.message });
+  } finally {
+    // End the session
+    session.endSession();
   }
 };
 

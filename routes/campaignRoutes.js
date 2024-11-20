@@ -5,7 +5,11 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 router.use(authenticateUser);
 router.post('/createcampaign', campaignController.createCampaign);
+// Route to get all campaigns by pipeline ID
+router.get('/pipeline/:pipelineid', campaignController.getCampaignsByPipelineId);
 router.get('/getcampaign', campaignController.getCampaign);
 router.put('/updatecampaign/:campaignid', campaignController.updateCampaign);
 router.delete('/deletecampaign/:campaignid', campaignController.deleteCampaign);
+
+
 module.exports = router;
