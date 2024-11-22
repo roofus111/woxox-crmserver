@@ -24,4 +24,13 @@ router.put('/update/:followUpId', leadFollowUpController.updateFollowUp);
 // Delete a follow-up
 router.delete('/delete/:followUpId', leadFollowUpController.deleteFollowUp);
 router.delete('/delete-with-no-lead', leadFollowUpController.deleteLeadFollowUpsWithNoLeadId);
+
+
+
+// Route to update all follow-up details (including nextFollowUpDate)
+router.put('/follow-up/:followUpId', leadFollowUpController.updateFollowUp);
+
+// Route to update only the nextFollowUpDate of a follow-up
+// router.put('/follow-up/:followUpId/next-follow-up', leadFollowUpController.updateFollowUp);
+
 module.exports = router;

@@ -1,3 +1,4 @@
+const { RestoreObjectCommand } = require("@aws-sdk/client-s3");
 const LeadFollowUp = require("../models/followUp"); // Import the LeadFollowUp model
 const Lead = require("../models/Lead"); // Assuming you have a Lead model
 const LeadActivity = require("../models/LeadActivity"); // Assuming the model is in the models folder
@@ -112,6 +113,180 @@ exports.getFollowUpsByLead = async (req, res) => {
 };
 
 // Update a follow-up
+// exports.updateFollowUp = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { followUpId } = req.params;
+//     const { followUpDate, status, notes, nextFollowUpDate, assignedTo } = req.body;
+
+//     if (!followUpId || !status) { // Ensuring mandatory fields are present
+//       throw new Error("Missing required fields.");
+//     }
+
+//     const updatedFollowUp = await LeadFollowUp.findByIdAndUpdate(
+//       followUpId,
+//       {
+//         followUpDate,
+//         status,
+//         notes,
+//         nextFollowUpDate,
+//         assignedTo,
+//         updatedBy: req.user._id, // Ensure you have this field in your schema for tracking purposes
+//         updatedAt: Date.now(),
+//       },
+//       { new: true, session }
+//     );
+
+//     if (!updatedFollowUp) {
+//       await session.abortTransaction();
+//       return res.status(404).json({ message: "Follow-up not found" });
+//     }
+
+//     const newActivity = new LeadActivity({
+//       leadId: updatedFollowUp.leadId,
+//       userId: req.user._id,
+//       action: "status_change",
+//       details: `Updated follow-up on ${new Date(followUpDate).toLocaleDateString("en-US")}`,
+//       ipAddress: req.ip,
+//       userAgent: req.headers["user-agent"],
+//     });
+
+//     const savedActivity = await newActivity.save({ session });
+
+//     await session.commitTransaction();
+//     res.status(200).json({
+//       followUp: updatedFollowUp,
+//       activity: savedActivity,
+//     });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   } finally {
+//     session.endSession(); 
+//   }
+// };
+// exports.updateFollowUp = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { followUpId } = req.params;
+//     const { followUpDate, status, notes, nextFollowUpDate, assignedTo } = req.body;
+
+//     if (!followUpId) {
+//       throw new Error("Follow-up ID is required.");
+//     }
+
+//     // Find the follow-up
+//     const followUp = await LeadFollowUp.findById(followUpId).session(session);
+//     if (!followUp) {
+//       await session.abortTransaction();
+//       return res.status(404).json({ message: "Follow-up not found" });
+//     }
+
+//     // Update fields only if provided
+//     if (followUpDate) followUp.followUpDate = followUpDate;
+//     if (status) followUp.status = status;
+//     if (notes) followUp.notes = notes;
+//     if (assignedTo) followUp.assignedTo = assignedTo;
+
+//     // Handle nextFollowUpDate updates explicitly
+//     if (nextFollowUpDate) {
+//       followUp.nextFollowUpDate = nextFollowUpDate;
+//       followUp.updatedAt = Date.now(); // Always update the timestamp
+//     }
+
+//     followUp.updatedBy = req.user._id;
+
+//     // Save the updates
+//     const updatedFollowUp = await followUp.save({ session });
+
+//     await session.commitTransaction();
+//     session.endSession();
+
+//     res.status(200).json({
+//       message: "Follow-up updated successfully.",
+//       followUp: updatedFollowUp,
+//     });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     console.error("Error updating follow-up:", error.message);
+//     res.status(500).json({
+//       message: "An error occurred while updating the follow-up.",
+//       error: error.message,
+//     });
+//   }
+// };
+// exports.updateFollowUp = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const { followUpId } = req.params;
+//     const { followUpDate, status, notes, nextFollowUpDate, assignedTo } = req.body;
+
+//     if (!followUpId) {
+//       throw new Error("Follow-up ID is required.");
+//     }
+
+//     // Find the follow-up
+//     const followUp = await LeadFollowUp.findById(followUpId).session(session);
+//     if (!followUp) {
+//       await session.abortTransaction();
+//       return res.status(404).json({ message: "Follow-up not found" });
+//     }
+
+//     // Update fields only if provided
+//     if (followUpDate) followUp.followUpDate = followUpDate;
+//     if (status) followUp.status = status;
+//     if (notes) followUp.notes = notes;
+//     if (assignedTo) followUp.assignedTo = assignedTo;
+
+//     // Handle nextFollowUpDate updates explicitly
+//     if (nextFollowUpDate) {
+//       followUp.nextFollowUpDate = nextFollowUpDate;
+//       followUp.updatedAt = Date.now(); // Always update the timestamp
+//     }
+
+//     followUp.updatedBy = req.user._id;
+
+//     // Save the updates
+//     const updatedFollowUp = await followUp.save({ session });
+
+//     // Log the activity
+//     const newActivity = new LeadActivity({
+//       leadId: updatedFollowUp.leadId,
+//       userId: req.user._id,
+//       action: "updated",
+//       details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-US")}`,
+//       ipAddress: req.ip,
+//       userAgent: req.headers["user-agent"],
+//     });
+
+//     const savedActivity = await newActivity.save({ session });
+
+//     // Commit the transaction
+//     await session.commitTransaction();
+//     session.endSession();
+
+//     res.status(200).json({
+//       message: "Follow-up updated successfully.",
+//       followUp: updatedFollowUp,
+//       activity: savedActivity,
+//     });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     console.error("Error updating follow-up:", error.message);
+//     res.status(500).json({
+//       message: "An error occurred while updating the follow-up.",
+//       error: error.message,
+//     });
+//   }
+// };
 exports.updateFollowUp = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -120,53 +295,81 @@ exports.updateFollowUp = async (req, res) => {
     const { followUpId } = req.params;
     const { followUpDate, status, notes, nextFollowUpDate, assignedTo } = req.body;
 
-    if (!followUpId || !status) { // Ensuring mandatory fields are present
-      throw new Error("Missing required fields.");
+    if (!followUpId) {
+      throw new Error("Follow-up ID is required.");
     }
 
-    const updatedFollowUp = await LeadFollowUp.findByIdAndUpdate(
-      followUpId,
-      {
-        followUpDate,
-        status,
-        notes,
-        nextFollowUpDate,
-        assignedTo,
-        updatedBy: req.user._id, // Ensure you have this field in your schema for tracking purposes
-        updatedAt: Date.now(),
-      },
-      { new: true, session }
-    );
-
-    if (!updatedFollowUp) {
+    // Find the follow-up
+    const followUp = await LeadFollowUp.findById(followUpId).session(session);
+    if (!followUp) {
       await session.abortTransaction();
       return res.status(404).json({ message: "Follow-up not found" });
     }
 
-    const newActivity = new LeadActivity({
+    // Store original nextFollowUpDate for comparison
+    const originalNextFollowUpDate = followUp.nextFollowUpDate;
+
+    // Update fields only if provided
+    if (followUpDate) followUp.followUpDate = followUpDate;
+    if (status) followUp.status = status;
+    if (notes) followUp.notes = notes;
+    if (assignedTo) followUp.assignedTo = assignedTo;
+
+    // Handle nextFollowUpDate updates explicitly
+    if (nextFollowUpDate) {
+      followUp.nextFollowUpDate = nextFollowUpDate;
+      followUp.updatedAt = Date.now(); // Always update the timestamp
+    }
+
+    followUp.updatedBy = req.user._id;
+
+    // Save the updates
+    const updatedFollowUp = await followUp.save({ session });
+
+    // Log general update activity
+    const generalActivity = new LeadActivity({
       leadId: updatedFollowUp.leadId,
       userId: req.user._id,
-      action: "status_change",
-      details: `Updated follow-up on ${new Date(followUpDate).toLocaleDateString("en-US")}`,
+      action: "assigned",
+      details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-US")}`,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
     });
 
-    const savedActivity = await newActivity.save({ session });
+    await generalActivity.save({ session });
 
+    // Log specific next follow-up date activity, if changed
+    if (nextFollowUpDate && nextFollowUpDate !== originalNextFollowUpDate?.toISOString()) {
+      const nextFollowUpActivity = new LeadActivity({
+        leadId: updatedFollowUp.leadId,
+        userId: req.user._id,
+        action: "Rescheduled",
+        details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-US")}`,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      await nextFollowUpActivity.save({ session });
+    }
+
+    // Commit the transaction
     await session.commitTransaction();
+    session.endSession();
+
     res.status(200).json({
-      followUp: updatedFollowUp,
-      activity: savedActivity,
+      message: "Follow-up updated successfully.",
+      followUp: updatedFollowUp
     });
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({ message: "Server error", error: error.message });
-  } finally {
     session.endSession();
+    console.error("Error updating follow-up:", error.message);
+    res.status(500).json({
+      message: "An error occurred while updating the follow-up.",
+      error: error.message,
+    });
   }
 };
-
 // Delete a follow-up
 // exports.deleteFollowUp = async (req, res) => {
 //   try {
