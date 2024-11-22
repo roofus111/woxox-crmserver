@@ -41,12 +41,12 @@ exports.getInvoices = async (req, res) => {
     const formattedInvoices = invoices.map((invoice) => ({
       id: invoice.invoiceNumber,
       issuedDate: invoice.dateIssued,
-      address: invoice.customer.phone, 
-      company: invoice.customer.name, 
-      companyEmail: invoice.customer.email, 
-      country: invoice.customer.profile.countryOfInterest, 
-      contact: invoice.customer.phone, 
-      name: invoice.customer.name, 
+      address: invoice.customer?.phone, 
+      company: invoice.customer?.name, 
+      companyEmail: invoice.customer?.email, 
+      country: invoice.customer?.profile.countryOfInterest, 
+      contact: invoice.customer?.phone, 
+      name: invoice.customer?.name, 
       service: "Some Service", 
       total: invoice.grandTotal, 
       avatar: "", 
@@ -55,13 +55,13 @@ exports.getInvoices = async (req, res) => {
       balance: invoice?.grandTotal - invoice?.paid, 
       dueDate: invoice.dueDate,
       items: invoice.items,
-      address: invoice.customer.profile.address,
+      address: invoice.customer?.profile.address,
       paid: invoice.paid,
       subtotal: invoice.totalAmount,
       taxRate: invoice.taxRate,
       gst: invoice.gst,
       refId: invoice._id,
-      leadId:invoice.customer._id
+      leadId:invoice.customer?._id
     }));
 
     res.status(200).json(formattedInvoices);
@@ -75,18 +75,18 @@ exports.getInvoiceById = async (req, res) => {
   console.log("api triggered");
 
   try {
-    const invoice = await Invoice.findById(req.params.id).populate("customer");
+    const invoice = await Invoice.findById(req.params.id).populate("customer?");
     console.log(invoice);
 
     const formattedInvoices = {
       id: invoice.invoiceNumber,
       issuedDate: invoice.dateIssued,
-      address: invoice.customer.phone, 
-      company: invoice.customer.name, 
-      companyEmail: invoice.customer.email, 
-      country: invoice.customer.profile.countryOfInterest, 
-      contact: invoice.customer.phone, 
-      name: invoice.customer.name, 
+      address: invoice.customer?.phone, 
+      company: invoice.customer?.name, 
+      companyEmail: invoice.customer?.email, 
+      country: invoice.customer?.profile.countryOfInterest, 
+      contact: invoice.customer?.phone, 
+      name: invoice.customer?.name, 
       service: "Some Service", 
       total: invoice.grandTotal, 
       avatar: "", 
@@ -95,13 +95,13 @@ exports.getInvoiceById = async (req, res) => {
       balance: invoice?.grandTotal - invoice?.paid, 
       dueDate: invoice.dueDate,
       items: invoice.items,
-      address: invoice.customer.profile.address,
+      address: invoice.customer?.profile.address,
       paid: invoice.paid,
       subtotal: invoice.totalAmount,
       taxRate: invoice.taxRate,
       gst: invoice.gst,
       refId: invoice._id,
-      leadId:invoice.customer._id
+      leadId:invoice.customer?._id
     };
 
     if (!invoice) {
@@ -152,12 +152,12 @@ exports.getInvoicesByLeads = async (req, res) => {
     const formattedInvoices = invoices.map((invoice) => ({
       id: invoice.invoiceNumber,
       issuedDate: invoice.dateIssued,
-      address: invoice.customer.phone, 
-      company: invoice.customer.name, 
-      companyEmail: invoice.customer.email, 
-      country: invoice.customer.profile.countryOfInterest, 
-      contact: invoice.customer.phone, 
-      name: invoice.customer.name, 
+      address: invoice.customer?.phone, 
+      company: invoice.customer?.name, 
+      companyEmail: invoice.customer?.email, 
+      country: invoice.customer?.profile.countryOfInterest, 
+      contact: invoice.customer?.phone, 
+      name: invoice.customer?.name, 
       service: "Some Service", 
       total: invoice.grandTotal, 
       avatar: "", 
@@ -166,13 +166,13 @@ exports.getInvoicesByLeads = async (req, res) => {
       balance: invoice?.grandTotal - invoice?.paid, 
       dueDate: invoice.dueDate,
       items: invoice.items,
-      address: invoice.customer.profile.address,
+      address: invoice.customer?.profile.address,
       paid: invoice.paid,
       subtotal: invoice.totalAmount,
       taxRate: invoice.taxRate,
       gst: invoice.gst,
       refId: invoice._id,
-      leadId:invoice.customer._id
+      leadId:invoice.customer?._id
     }));
 
     res.status(200).json(formattedInvoices);
