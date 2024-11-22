@@ -158,6 +158,36 @@ const handleAsync = (fn) => (req, res, next) => {
 };
 
 // Route handler for updating lead status
+// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+//   const { leadId } = req.params;
+//   const { status } = req.body;
+
+//   // Find the lead by ID and update the status
+//   const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
+//   if (!lead) {
+//     return res.status(404).json({ message: "Lead not found" });
+//   }
+
+//   // If the status is converted, create a new sales entry
+//   if (lead.status === "Converted") {
+//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+//     const salesCount = await Sales.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), 0, 1), $lte: new Date(new Date().getFullYear(), 11, 31) } }) + 1;
+//     const salesId = `${year}-${salesCount.toString().padStart(3, '0')}`;
+//     const newSales = new Sales({
+//       SalesId: salesId,
+//       LeadId: lead._id,
+//       company: req.user.company._id
+//     });
+//     const savedSales = await newSales.save();
+//     console.log(savedSales);
+//   }
+
+//   // Respond success message if not converted or after converted logic
+//   return res.status(200).json({
+//     message: "Lead status updated successfully",
+//     lead
+//   });
+// });
 exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
@@ -169,23 +199,36 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   }
 
   // If the status is converted, create a new sales entry
-  if (lead.status === "Converted") {
+  if (status === "Converted") {
     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
-    const salesCount = await Sales.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), 0, 1), $lte: new Date(new Date().getFullYear(), 11, 31) } }) + 1;
-    const salesId = `${year}-${salesCount.toString().padStart(3, '0')}`;
+
+    // Count sales for the specific company in the current year
+    const salesCount = await Sales.countDocuments({
+      company: req.user.company._id, // Filter by company ID
+      createdAt: {
+        $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
+        $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
+      },
+    }) + 1;
+
+    // Generate SalesId
+    const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+
+    // Create a new sales document
     const newSales = new Sales({
       SalesId: salesId,
       LeadId: lead._id,
-      company: req.user.company._id
+      company: req.user.company._id, // Associate with the company
     });
+
     const savedSales = await newSales.save();
     console.log(savedSales);
   }
 
-  // Respond success message if not converted or after converted logic
+  // Respond with success message
   return res.status(200).json({
     message: "Lead status updated successfully",
-    lead
+    lead,
   });
 });
 
