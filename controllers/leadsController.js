@@ -426,3 +426,66 @@ exports.deleteLeadsByCompany = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// exports.openLead = async (req, res, next) => {
+//   try {
+//     const { leadId } = req.params;
+
+//     // Find the lead and update its untouched status
+//     const lead = await Lead.findByIdAndUpdate(
+//       leadId,
+//       { untouched: false },
+//       { new: true } // Return the updated document
+//     );
+
+//     if (!lead) {
+//       return res.status(404).json({ success: false, message: "Lead not found" });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Lead status updated successfully",
+//       lead,
+//     });
+//   } catch (error) {
+//     next(error); // Pass the error to the error handling middleware
+//   }
+// };
+exports.updateLead = async (req, res) => {
+  try {
+    const { id } = req.params; // Lead ID from request parameters
+    const updates = req.body; // Fields to update from request body
+
+    // Fetch the current lead from the database
+    const existingLead = await Lead.findById(id);
+    if (!existingLead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    // Check if any of the monitored fields are being updated
+    const fieldsToCheck = ['followUp', 'notes', 'status'];
+    const isCriticalFieldUpdated = fieldsToCheck.some((field) => updates[field] !== undefined);
+
+    // Prevent reverting untouched back to true
+    if (updates.untouched === true) {
+      return res.status(400).json({ message: 'The "untouched" field cannot be reverted to true once set to false.' });
+    }
+
+    // Prepare update object
+    const updateData = { ...updates };
+    if (isCriticalFieldUpdated && existingLead.untouched) {
+      updateData.untouched = false; // Set untouched to false if it's still true
+    }
+
+    // Update the lead
+    const updatedLead = await Lead.findByIdAndUpdate(id, updateData, {
+      new: true, // Return the updated document
+      runValidators: true, // Ensure validators are applied
+    });
+
+    res.status(200).json({ message: 'Lead updated successfully', lead: updatedLead });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
