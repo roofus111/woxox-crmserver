@@ -157,37 +157,6 @@ const handleAsync = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// Route handler for updating lead status
-// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
-//   const { leadId } = req.params;
-//   const { status } = req.body;
-
-//   // Find the lead by ID and update the status
-//   const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
-//   if (!lead) {
-//     return res.status(404).json({ message: "Lead not found" });
-//   }
-
-//   // If the status is converted, create a new sales entry
-//   if (lead.status === "Converted") {
-//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
-//     const salesCount = await Sales.countDocuments({ createdAt: { $gte: new Date(new Date().getFullYear(), 0, 1), $lte: new Date(new Date().getFullYear(), 11, 31) } }) + 1;
-//     const salesId = `${year}-${salesCount.toString().padStart(3, '0')}`;
-//     const newSales = new Sales({
-//       SalesId: salesId,
-//       LeadId: lead._id,
-//       company: req.user.company._id
-//     });
-//     const savedSales = await newSales.save();
-//     console.log(savedSales);
-//   }
-
-//   // Respond success message if not converted or after converted logic
-//   return res.status(200).json({
-//     message: "Lead status updated successfully",
-//     lead
-//   });
-// });
 exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
@@ -426,30 +395,7 @@ exports.deleteLeadsByCompany = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-// exports.openLead = async (req, res, next) => {
-//   try {
-//     const { leadId } = req.params;
 
-//     // Find the lead and update its untouched status
-//     const lead = await Lead.findByIdAndUpdate(
-//       leadId,
-//       { untouched: false },
-//       { new: true } // Return the updated document
-//     );
-
-//     if (!lead) {
-//       return res.status(404).json({ success: false, message: "Lead not found" });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Lead status updated successfully",
-//       lead,
-//     });
-//   } catch (error) {
-//     next(error); // Pass the error to the error handling middleware
-//   }
-// };
 exports.updateLead = async (req, res) => {
   try {
     const { id } = req.params; // Lead ID from request parameters
@@ -488,4 +434,62 @@ exports.updateLead = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Unassign leads untouched for more than 30 days.
+ 
+exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
+  try {
+    // Calculate the time 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    console.log(`Unassigning leads untouched since: ${thirtyDaysAgo}`);
+
+    // Find leads that are untouched, assigned, and created more than 30 days ago
+    const leadsToUnassign = await Lead.find({
+      untouched: true, // Must be marked as untouched
+      assignedTo: { $ne: null }, // Must have an assigned user
+      createdAt: { $lte: thirtyDaysAgo }, // Created more than 30 days ago
+    });
+
+    console.log(`Found ${leadsToUnassign.length} leads to unassign.`);
+
+    if (leadsToUnassign.length === 0) {
+      return res
+        ? res.status(200).json({ message: 'No leads to unassign.' })
+        : console.log('No leads to unassign.');
+    }
+
+    // Perform the update to unassign these leads
+    const result = await Lead.updateMany(
+      {
+        untouched: true,
+        assignedTo: { $ne: null },
+        createdAt: { $lte: thirtyDaysAgo },
+      },
+      { $set: { assignedTo: null } } // Set assignedTo to null
+    );
+
+    console.log(`Successfully unassigned ${result.modifiedCount} leads.`);
+
+    // Optional response for manual triggers
+    if (res) {
+      return res.status(200).json({
+        message: `${result.modifiedCount} leads were unassigned.`,
+        leadsUpdated: result.modifiedCount,
+      });
+    }
+  } catch (error) {
+    console.error('Error while unassigning leads:', error.message);
+
+    if (res) {
+      return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+  }
+};
+
+
+
+
+
 
