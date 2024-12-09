@@ -15,15 +15,15 @@ const invoice = require("./routes/invoiceRoutes");
 const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
-const Pipeline =require("./routes/pipelineRoutes")
-const Campaign =require("./routes/campaignRoutes")
+const Pipeline = require("./routes/pipelineRoutes");
+const Campaign = require("./routes/campaignRoutes");
 const app = express();
-const http = require('http'); // Import Node's HTTP module
+const http = require("http"); // Import Node's HTTP module
 const { Server } = require("socket.io"); // Import Socket.IO Server class
-const scheduleJobs = require('./controllers/followUpController'); 
-const User = require("./models/User")
+const scheduleJobs = require("./controllers/followUpController");
+const User = require("./models/User");
 const server = http.createServer(app);
-const cron = require('node-cron');
+const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
 
 const alertBeforeMinutes = 30;
@@ -61,30 +61,30 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
-app.use("/api/pipelines",Pipeline)
-app.use("/api/campaign",Campaign)
+app.use("/api/pipelines", Pipeline);
+app.use("/api/campaign", Campaign);
 
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
   return io.sockets.adapter.rooms.get(userId)?.size > 0;
 };
 
-io.on('connection', (socket) => {
-  console.log('New client connected');
-  
-  socket.emit('welcome', { message: 'Welcome to the notification system!' });
+io.on("connection", (socket) => {
+  console.log("New client connected");
 
-  socket.on('register', userId => {
+  socket.emit("welcome", { message: "Welcome to the notification system!" });
+
+  socket.on("register", (userId) => {
     socket.join(userId);
     console.log(`User ${userId} registered and joined their room`);
   });
 
-  socket.on('disconnect', () => {
+  socket.on("disconnect", () => {
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
 
-cron.schedule('*/10 * * * * *', async () => {
+cron.schedule("*/10 * * * * *", async () => {
   console.log("Running follow-up check");
   try {
     const now = new Date();
@@ -92,22 +92,34 @@ cron.schedule('*/10 * * * * *', async () => {
     const upcomingFollowUps = await LeadFollowUp.find({
       nextFollowUpDate: {
         $gte: now,
-        $lte: new Date(now.getTime() + alertBeforeMinutes * 60000)
+        $lte: new Date(now.getTime() + alertBeforeMinutes * 60000),
       },
-      status: { $in: ['Pending', 'In Progress'] }
-    }).populate('assignedTo').exec();
+      status: { $in: ["Pending", "In Progress"] },
+    })
+      .populate("assignedTo")
+      .populate("leadId")
+      .exec();
 
     if (upcomingFollowUps.length) {
       console.log(`Found ${upcomingFollowUps.length} upcoming follow-ups`);
     }
+    console.log(upcomingFollowUps);
 
-    upcomingFollowUps.forEach(followUp => {
+    upcomingFollowUps.forEach((followUp) => {
       const userId = followUp.assignedTo._id.toString();
+
+      const hours = followUp.nextFollowUpDate.getHours();
+      const minutes = followUp.nextFollowUpDate.getMinutes().toString().padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+
+      const formattedHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+      const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
+
       if (isUserConnected(userId)) {
-        const message = `Follow-up with lead ${followUp.leadId} is approaching at ${followUp.nextFollowUpDate}`;
-        io.to(userId).emit('followUpAlert', {
+        const message = `You have a Follow-up Meeting with ${followUp.leadId.name} today at ${formattedTime}`;
+        io.to(userId).emit("followUpAlert", {
           message: message,
-          details: followUp
+          details: followUp,
         });
         console.log(`Alert sent to user ${userId}: ${message}`);
       } else {
@@ -115,7 +127,7 @@ cron.schedule('*/10 * * * * *', async () => {
       }
     });
   } catch (error) {
-    console.error('Cron job failed:', error);
+    console.error("Cron job failed:", error);
   }
 });
 
@@ -124,6 +136,4 @@ server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
 
-
-
-app.get('/', (req, res) => res.status(200).send('OK'));
+app.get("/", (req, res) => res.status(200).send("OK"));
