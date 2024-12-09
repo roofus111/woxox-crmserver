@@ -2,6 +2,7 @@ const Lead = require("../models/Lead");
 const User = require("../models/User");
 const Sales = require('../models/sales'); 
 const Campaign = require("../models/Campaign")
+const Customer = require("../models/Customer")
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -531,81 +532,9 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
   }
 };
 
-// exports.DistributeLeadsToUsersByCampaign = async (req, res) => {
-//   const { campaignId } = req.params;
-//   const { u } = req.body; // Expect an array of { userId, leadIds }
-
-//   try {
-//     // Validate input
-//     if (!Array.isArray(assignments) || assignments.length === 0) {
-//       return res.status(400).json({ message: "No assignments provided or invalid format." });
-//     }
-
-//     // Validate Campaign
-//     const campaign = await Campaign.findById(campaignId);
-//     if (!campaign) {
-//       return res.status(404).json({ message: "Campaign not found." });
-//     }
-
-//     // Validate each assignment
-//     for (const assignment of assignments) {
-//       const { userId, leadIds } = assignment;
-
-//       if (!mongoose.Types.ObjectId.isValid(userId)) {
-//         return res.status(400).json({ message: `Invalid user ID: ${userId}` });
-//       }
-
-//       if (!Array.isArray(leadIds) || !leadIds.every(id => mongoose.Types.ObjectId.isValid(id))) {
-//         return res.status(400).json({ message: `Invalid lead IDs in assignment for user: ${userId}` });
-//       }
-
-//       const user = await User.findById(userId);
-//       if (!user) {
-//         return res.status(404).json({ message: `User not found: ${userId}` });
-//       }
-//     }
-
-//     // Bulk update leads
-//     const bulkOperations = [];
-//     for (const assignment of assignments) {
-//       const { userId, leadIds } = assignment;
-
-//       bulkOperations.push({
-//         updateMany: {
-//           filter: { 
-//             _id: { $in: leadIds }, 
-//             campaign: campaignId // Ensure leads belong to the campaign
-//           },
-//           update: { assignedTo: userId },
-//           runValidators: true
-//         }
-//       });
-//     }
-
-//     const bulkResult = await Lead.bulkWrite(bulkOperations);
-
-//     // Response preparation
-//     const totalMatched = bulkResult.matchedCount || 0;
-//     const totalModified = bulkResult.modifiedCount || 0;
-
-//     res.status(200).json({
-//       message: "Leads successfully assigned to users.",
-//       totalMatched,
-//       totalModified,
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Error assigning leads to users.",
-//       error: error.message,
-//     });
-//   }
-// };
-
-// Create a new lead
 
 exports.createLead = async (req, res) => {
   const { name, phone, email, campaignId } = req.body; // Extract relevant fields from the request
-  console.log("Campaign ID:", campaignId);
 
   // Validate required fields
   if (!name || !phone || !campaignId) {
@@ -628,12 +557,23 @@ exports.createLead = async (req, res) => {
       return res.status(409).json({ message: "Lead with the same phone number or email already exists." });
     }
 
+    // Check if customer already exists based on phone or email
+    let customerId = null;
+    const existingCustomer = await Customer.findOne({
+      $or: [{ phone }, { email }],
+    });
+
+    if (existingCustomer) {
+      customerId = existingCustomer._id; // Store the found customerId
+    }
+
     // Create a new lead
     const lead = new Lead({
       name,
       phone,
       email,
       campaignid: campaignId, // Associate lead with the campaign ID
+      Customer: customerId, // Associate the lead with the existing customer (if found)
       company: req.user.company._id, // Associate with the user's company
     });
 
@@ -642,6 +582,65 @@ exports.createLead = async (req, res) => {
   } catch (err) {
     console.error("Error creating lead:", err.message);
     res.status(500).json({ message: "Failed to create lead. Please try again later." });
+  }
+};
+exports.AssignLeadsToUsersByCampaign = async (req, res) => {
+  const { campaignId } = req.params;
+  const { userAssignments } = req.body;  // Expecting an object { userId: [leadIds] }
+
+  try {
+    // Validate userAssignments
+    if (!userAssignments || typeof userAssignments !== 'object') {
+      return res.status(400).json({ message: "Invalid userAssignments format." });
+    }
+
+    // Check if the campaign exists
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ message: "Campaign not found." });
+    }
+
+    const userIds = Object.keys(userAssignments);
+    
+    // Check if users exist
+    const users = await User.find({ '_id': { $in: userIds } });
+    if (users.length !== userIds.length) {
+      return res.status(404).json({ message: "Some users not found." });
+    }
+
+    // Flatten all leadIds from the assignments and check if they exist
+    const allLeadIds = [].concat(...Object.values(userAssignments));
+    const leads = await Lead.find({ '_id': { $in: allLeadIds }, campaign: campaignId });
+    if (leads.length !== allLeadIds.length) {
+      return res.status(404).json({ message: "Some leads not found in the specified campaign." });
+    }
+
+    // Assign the leads to the respective users
+    const updatePromises = [];
+
+    for (const [userId, leadIds] of Object.entries(userAssignments)) {
+      updatePromises.push(
+        Lead.updateMany(
+          { _id: { $in: leadIds }, campaign: campaignId }, // Match leads in the given campaign
+          { assignedTo: userId } // Assign to the current user
+        )
+      );
+    }
+
+    // Execute the update operations
+    await Promise.all(updatePromises);
+
+    // Optionally, you can fetch the updated leads with populated user data
+    const updatedLeads = await Lead.find({ _id: { $in: allLeadIds } })
+      .populate('assignedTo', '_id firstName lastName');
+
+    res.status(200).json({
+      message: `Leads successfully assigned to users.`,
+      leads: updatedLeads,
+    });
+  } catch (error) {
+    console.error(error);  // Log the error for debugging
+    res.status(500).json({ message: "Error assigning leads to users.", error: error.message });
   }
 };
 

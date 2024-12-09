@@ -35,6 +35,7 @@ router.post('/upload', authorizeCompanyAccess, upload.single('file'), async (req
         status: 'New',
         source: req.body.source,
         campaign: req.body.campaign,
+        campaignid : req.body.campaignid,
         company: req.user.company._id,
         assignedTo: null,
         additionalFields: {
