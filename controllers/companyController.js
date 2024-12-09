@@ -15,6 +15,21 @@ exports.getCompanyById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+exports.getAllCompanies = async (req, res) => {
+  try {
+    const companies = await Company.find(); // Fetch all companies from the database
+
+    if (!companies || companies.length === 0) {
+      return res.status(404).json({ message: 'No companies found' });
+    }
+
+    res.status(200).json(companies); // Return all companies
+  } catch (err) {
+    console.error(err); // Optional logging
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 
 // Create a new company
 exports.createCompany = async (req, res) => {
@@ -90,3 +105,31 @@ exports.deleteCompany = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Update Module Controller
+exports.updateModule = async (req, res) => {
+  try {
+    const { id } = req.params; // Assuming the document ID is passed as a URL parameter
+    const updates = req.body; // Assuming the updated data is sent in the request body
+
+    // Find the document by ID and update it
+    const updatedModule = await Company.findByIdAndUpdate(
+      id,
+      { $set: updates }, // Updates the specified fields
+      { new: true, runValidators: true } // Return the updated document and validate fields
+    );
+
+    if (!updatedModule) {
+      return res.status(404).json({ message: 'Module not found' });
+    }
+
+    res.status(200).json({
+      message: 'Module updated successfully',
+      data: updatedModule,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+

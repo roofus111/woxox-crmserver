@@ -15,8 +15,10 @@ const invoice = require("./routes/invoiceRoutes");
 const payment = require("./routes/paymentRoutes");
 const Note = require("./routes/noteRoutes");
 const Task = require("./routes/taskRoutes");
-const Pipeline = require("./routes/pipelineRoutes");
-const Campaign = require("./routes/campaignRoutes");
+const Pipeline =require("./routes/pipelineRoutes")
+const Campaign =require("./routes/campaignRoutes")
+const Customer=require("./routes/customerRoutes")
+const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
 const { Server } = require("socket.io"); // Import Socket.IO Server class
@@ -61,8 +63,9 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
-app.use("/api/pipelines", Pipeline);
-app.use("/api/campaign", Campaign);
+app.use("/api/pipelines",Pipeline)
+app.use("/api/campaign",Campaign)
+app.use("/api/customer",Customer)
 
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
@@ -131,6 +134,11 @@ cron.schedule("*/10 * * * * *", async () => {
   }
 });
 
+// Schedule the task to run daily at midnight
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running scheduled task: unassign untouched leads after 30 days...');
+  await unassignUntouchedLeadsAfter30Days();
+});
 // Start server
 server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
