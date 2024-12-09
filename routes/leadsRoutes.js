@@ -58,6 +58,8 @@ router.put("/:leadId/stages", leadsController.UpdateLeadStages);
 router.get('/leads/:id', leadsController.getLeadById);
 router.delete('/deleteall', leadsController.deleteLeadsByCompany);
 router.put('/putleads/:id',leadsController.updateLead);
+// router.put('/distribute/:campaignId',leadsController.DistributeLeadsToUsersByCampaign);
+router.put('/assign-multiple/:userId',leadsController.AssignMultipleLeadsToUser);
 router.post("/upload", upload.single("file"), async (req, res) => {
   const file = req.file;
   const docName = req.body.docName;

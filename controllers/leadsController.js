@@ -1,6 +1,7 @@
 const Lead = require("../models/Lead");
 const User = require("../models/User");
 const Sales = require('../models/sales'); 
+const Campaign = require("../models/Campaign")
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -101,20 +102,20 @@ exports.searchLeads = async (req, res) => {
   }
 };
 
-// Create a new lead
-exports.createLead = async (req, res) => {
-  const lead = new Lead({
-    ...req.body,
-    company: req.user.company._id,
-  });
+// // Create a new lead
+// exports.createLead = async (req, res) => {
+//   const lead = new Lead({
+//     ...req.body,
+//     company: req.user.company._id,
+//   });
 
-  try {
-    const newLead = await lead.save();
-    res.status(201).json(newLead);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-};
+//   try {
+//     const newLead = await lead.save();
+//     res.status(201).json(newLead);
+//   } catch (err) {
+//     res.status(400).json({ message: err.message });
+//   }
+// };
 
 exports.AssignLeadEqual = async (req, res) => {
   try {
@@ -487,6 +488,163 @@ exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
     }
   }
 };
+exports.AssignMultipleLeadsToUser = async (req, res) => {
+  const { userId } = req.params;
+  const { leadIds } = req.body; // Expect an array of lead IDs in the request body
+
+  try {
+    // Validate input
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ message: "No lead IDs provided or invalid format." });
+    }
+
+    // Check if the user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Update all leads in the list
+    const updatedLeads = await Lead.updateMany(
+      { _id: { $in: leadIds } }, // Match all leads with IDs in the list
+      { assignedTo: user._id }, // Assign the user ID
+      { new: true, runValidators: true } // Ensure validation and return updated docs
+    );
+
+    // Check if any leads were updated
+    if (updatedLeads.matchedCount === 0) {
+      return res.status(404).json({ message: "No leads found with the provided IDs." });
+    }
+
+    // Fetch the updated leads with populated user data
+    const populatedLeads = await Lead.find({ _id: { $in: leadIds } }).populate(
+      "assignedTo",
+      "_id firstName lastName"
+    );
+
+    res.status(200).json({
+      message: `${updatedLeads.matchedCount} leads successfully assigned.`,
+      leads: populatedLeads,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error assigning leads to user.", error: error.message });
+  }
+};
+
+// exports.DistributeLeadsToUsersByCampaign = async (req, res) => {
+//   const { campaignId } = req.params;
+//   const { u } = req.body; // Expect an array of { userId, leadIds }
+
+//   try {
+//     // Validate input
+//     if (!Array.isArray(assignments) || assignments.length === 0) {
+//       return res.status(400).json({ message: "No assignments provided or invalid format." });
+//     }
+
+//     // Validate Campaign
+//     const campaign = await Campaign.findById(campaignId);
+//     if (!campaign) {
+//       return res.status(404).json({ message: "Campaign not found." });
+//     }
+
+//     // Validate each assignment
+//     for (const assignment of assignments) {
+//       const { userId, leadIds } = assignment;
+
+//       if (!mongoose.Types.ObjectId.isValid(userId)) {
+//         return res.status(400).json({ message: `Invalid user ID: ${userId}` });
+//       }
+
+//       if (!Array.isArray(leadIds) || !leadIds.every(id => mongoose.Types.ObjectId.isValid(id))) {
+//         return res.status(400).json({ message: `Invalid lead IDs in assignment for user: ${userId}` });
+//       }
+
+//       const user = await User.findById(userId);
+//       if (!user) {
+//         return res.status(404).json({ message: `User not found: ${userId}` });
+//       }
+//     }
+
+//     // Bulk update leads
+//     const bulkOperations = [];
+//     for (const assignment of assignments) {
+//       const { userId, leadIds } = assignment;
+
+//       bulkOperations.push({
+//         updateMany: {
+//           filter: { 
+//             _id: { $in: leadIds }, 
+//             campaign: campaignId // Ensure leads belong to the campaign
+//           },
+//           update: { assignedTo: userId },
+//           runValidators: true
+//         }
+//       });
+//     }
+
+//     const bulkResult = await Lead.bulkWrite(bulkOperations);
+
+//     // Response preparation
+//     const totalMatched = bulkResult.matchedCount || 0;
+//     const totalModified = bulkResult.modifiedCount || 0;
+
+//     res.status(200).json({
+//       message: "Leads successfully assigned to users.",
+//       totalMatched,
+//       totalModified,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Error assigning leads to users.",
+//       error: error.message,
+//     });
+//   }
+// };
+
+// Create a new lead
+
+exports.createLead = async (req, res) => {
+  const { name, phone, email, campaignId } = req.body; // Extract relevant fields from the request
+  console.log("Campaign ID:", campaignId);
+
+  // Validate required fields
+  if (!name || !phone || !campaignId) {
+    return res.status(400).json({ message: "Name, phone, and campaign ID are required." });
+  }
+
+  try {
+    // Verify if the campaign ID exists
+    const campaignExists = await Campaign.findById(campaignId);
+    if (!campaignExists) {
+      return res.status(404).json({ message: "Campaign not found." });
+    }
+
+    // Check for duplicates based on phone or email
+    const existingLead = await Lead.findOne({
+      $or: [{ phone }, { email }],
+    });
+
+    if (existingLead) {
+      return res.status(409).json({ message: "Lead with the same phone number or email already exists." });
+    }
+
+    // Create a new lead
+    const lead = new Lead({
+      name,
+      phone,
+      email,
+      campaignid: campaignId, // Associate lead with the campaign ID
+      company: req.user.company._id, // Associate with the user's company
+    });
+
+    const newLead = await lead.save(); // Save the lead in the database
+    res.status(201).json(newLead); // Send the saved lead as a response
+  } catch (err) {
+    console.error("Error creating lead:", err.message);
+    res.status(500).json({ message: "Failed to create lead. Please try again later." });
+  }
+};
+
 
 
 
