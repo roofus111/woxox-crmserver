@@ -534,16 +534,17 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
 
 
 exports.createLead = async (req, res) => {
-  const { name, phone, email, campaignId } = req.body; // Extract relevant fields from the request
+  const { name, phone, email, campaignid } = req.body; // Extract relevant fields from the request
+console.log(campaignid);
 
   // Validate required fields
-  if (!name || !phone || !campaignId) {
+  if (!name || !phone || !campaignid) {
     return res.status(400).json({ message: "Name, phone, and campaign ID are required." });
   }
 
   try {
     // Verify if the campaign ID exists
-    const campaignExists = await Campaign.findById(campaignId);
+    const campaignExists = await Campaign.findById(campaignid);
     if (!campaignExists) {
       return res.status(404).json({ message: "Campaign not found." });
     }
@@ -572,7 +573,7 @@ exports.createLead = async (req, res) => {
       name,
       phone,
       email,
-      campaignid: campaignId, // Associate lead with the campaign ID
+      campaignid: campaignid, // Associate lead with the campaign ID
       Customer: customerId, // Associate the lead with the existing customer (if found)
       company: req.user.company._id, // Associate with the user's company
     });
@@ -585,7 +586,7 @@ exports.createLead = async (req, res) => {
   }
 };
 exports.AssignLeadsToUsersByCampaign = async (req, res) => {
-  const { campaignId } = req.params;
+  const { campaignid } = req.params;
   const { userAssignments } = req.body;  // Expecting an object { userId: [leadIds] }
 
   try {
@@ -595,11 +596,11 @@ exports.AssignLeadsToUsersByCampaign = async (req, res) => {
     }
 
     // Check if the campaign exists
-    const campaign = await Campaign.findById(campaignId);
+    const campaign = await Campaign.findById(campaignid);
     if (!campaign) {
       return res.status(404).json({ message: "Campaign not found." });
     }
-
+    
     const userIds = Object.keys(userAssignments);
     
     // Check if users exist
@@ -610,7 +611,7 @@ exports.AssignLeadsToUsersByCampaign = async (req, res) => {
 
     // Flatten all leadIds from the assignments and check if they exist
     const allLeadIds = [].concat(...Object.values(userAssignments));
-    const leads = await Lead.find({ '_id': { $in: allLeadIds }, campaign: campaignId });
+    const leads = await Lead.find({ '_id': { $in: allLeadIds }, campaignid: campaignid });
     if (leads.length !== allLeadIds.length) {
       return res.status(404).json({ message: "Some leads not found in the specified campaign." });
     }
@@ -618,10 +619,10 @@ exports.AssignLeadsToUsersByCampaign = async (req, res) => {
     // Assign the leads to the respective users
     const updatePromises = [];
 
-    for (const [userId, leadIds] of Object.entries(userAssignments)) {
+    for (const [userId, leadsid] of Object.entries(userAssignments)) {
       updatePromises.push(
         Lead.updateMany(
-          { _id: { $in: leadIds }, campaign: campaignId }, // Match leads in the given campaign
+          { _id: { $in: leadsid }, campaignid: campaignid }, // Match leads in the given campaign
           { assignedTo: userId } // Assign to the current user
         )
       );
