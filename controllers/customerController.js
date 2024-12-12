@@ -80,15 +80,15 @@ exports.getAllCustomers = async (req, res) => {
 // Get a single customer by ID
 exports.getCustomerById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { customerId } = req.params;
 
     // Validate ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!customerId || !customerId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ error: 'Invalid customer ID' });
     }
 
     // Fetch the customer by ID
-    const customer = await Customer.findById(id);
+    const customer = await Customer.findById(customerId);
 
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
@@ -109,7 +109,7 @@ exports.getCustomerById = async (req, res) => {
 
 exports.updateCustomer = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { customerId } = req.params;
     const updates = req.body;
 
     // Validate ID format
@@ -123,7 +123,7 @@ exports.updateCustomer = async (req, res) => {
     }
 
     // Find and update the customer
-    const updatedCustomer = await Customer.findByIdAndUpdate(id, updates, {
+    const updatedCustomer = await Customer.findByIdAndUpdate(customerId, updates, {
       new: true, // Return the updated document
       runValidators: true // Validate the updates against the schema
     });
@@ -148,15 +148,15 @@ exports.updateCustomer = async (req, res) => {
 
 exports.deleteCustomer = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { customerId } = req.params;
 
     // Validate ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!customerId || !customerId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ error: 'Invalid customer ID' });
     }
 
     // Find and delete the customer by ID
-    const deletedCustomer = await Customer.findByIdAndDelete(id);
+    const deletedCustomer = await Customer.findByIdAndDelete(customerId);
 
     if (!deletedCustomer) {
       return res.status(404).json({ error: 'Customer not found' });

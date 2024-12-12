@@ -1,8 +1,11 @@
+
+const mongoose = require('mongoose');
 const Lead = require("../models/Lead");
 const User = require("../models/User");
 const Sales = require('../models/sales'); 
 const Campaign = require("../models/Campaign")
 const Customer = require("../models/Customer")
+
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -644,6 +647,37 @@ exports.AssignLeadsToUsersByCampaign = async (req, res) => {
     res.status(500).json({ message: "Error assigning leads to users.", error: error.message });
   }
 };
+
+exports.getLeadsByCampaignId = async (req, res) => {
+  const { campaignid } = req.params;
+  
+  try {
+    // Validate campaignId
+    if (!mongoose.Schema.Types.ObjectId.isValid(campaignid)) {
+      return res.status(400).json({ error: 'Invalid campaign ID format.' });
+    }
+
+    // Convert to ObjectId
+    const objectId = mongoose.Schema.Types.ObjectId(campaignid);
+    // Fetch leads from the database
+    const leads = await Lead.find({ campaignid: objectId })
+      .populate("assignedTo", "_id firstName lastName")
+      .exec();
+
+    // Check if leads exist
+    if (!leads || leads.length === 0) {
+      return res.status(404).json({ message: 'No leads found for the given campaign ID.' });
+    }
+
+    // Return the leads
+    res.status(200).json(leads);
+  } catch (error) {
+    console.error('Error fetching leads by campaign ID:', error.message);
+    res.status(500).json({ error: 'An error occurred while fetching leads.' });
+  }
+};
+
+
 
 
 
