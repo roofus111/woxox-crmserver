@@ -125,7 +125,7 @@ exports.AssignLeadEqual = async (req, res) => {
   try {
     // Fetch all users
     const {campaignid} = req.params;
-    const {users} = req.body;
+    const users = req.body;
     console.log(users);
 
     if (users.length === 0) throw new Error("No users found");
@@ -603,7 +603,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
     // Fetch leads from the database
     const leads = await Lead.find({ campaignid })
       .populate("assignedTo", "_id firstName lastName")
-      // .populate("campaignid")
+      .populate("campaignid", "_id name description") 
       .exec();
 
     // Check if leads exist

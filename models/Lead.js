@@ -84,7 +84,7 @@ const LeadSchema = new mongoose.Schema({
   email: { type: String },
   phone: { type: String, required: true },
   campaign: { type: String },
-  campaignid: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },
+  campaignid: { type: mongoose.Schema.Types.ObjectId, ref: 'campaign', required: true },
   status: { type: String, enum: ['New', 'Contacted', 'Interested', 'Not Interested', 'Converted', 'Pending', 'In Progress', 'Lost', 'Won'], default: 'New' },
   source: { type: String },
   Customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
