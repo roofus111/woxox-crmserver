@@ -454,7 +454,7 @@ exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
     const leadsToUnassign = await Lead.find({
       untouched: true, // Must be marked as untouched
       assignedTo: { $ne: null }, // Must have an assigned user
-      createdAt: { $lte: thirtyDaysAgo }, // Created more than 30 days ago
+      updatedAt: { $lte: thirtyDaysAgo }, // Created more than 30 days ago
     });
 
     console.log(`Found ${leadsToUnassign.length} leads to unassign.`);
@@ -470,7 +470,7 @@ exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
       {
         untouched: true,
         assignedTo: { $ne: null },
-        createdAt: { $lte: thirtyDaysAgo },
+        updatedAt: { $lte: thirtyDaysAgo },
       },
       { $set: { assignedTo: null } } // Set assignedTo to null
     );
@@ -650,17 +650,15 @@ exports.AssignLeadsToUsersByCampaign = async (req, res) => {
 
 exports.getLeadsByCampaignId = async (req, res) => {
   const { campaignid } = req.params;
-  
+
   try {
     // Validate campaignId
-    if (!mongoose.Schema.Types.ObjectId.isValid(campaignid)) {
+    if (!mongoose.Types.ObjectId.isValid(campaignid)) {
       return res.status(400).json({ error: 'Invalid campaign ID format.' });
     }
 
-    // Convert to ObjectId
-    const objectId = mongoose.Schema.Types.ObjectId(campaignid);
     // Fetch leads from the database
-    const leads = await Lead.find({ campaignid: objectId })
+    const leads = await Lead.find({ campaignid })
       .populate("assignedTo", "_id firstName lastName")
       .exec();
 
