@@ -50,7 +50,7 @@ router.get("/getleads/:campaign", leadsController.getCounsellorLeads);
 router.get("/getleadsfordoc", leadsController.getLeadsForDocs);
 router.get("/search", leadsController.searchLeads);
 router.post("/", leadsController.createLead);
-router.put("/assign", leadsController.AssignLeadEqual);
+router.put("/assign/:campaignid", leadsController.AssignLeadEqual);
 router.put("/updateprofile/:id", leadsController.UpdateLead);
 router.put("/assignlead/:leadId/:userId", leadsController.AssignUserToLead);
 router.put("/:leadId/status", leadsController.UpdateLeadStatus);
@@ -58,7 +58,6 @@ router.put("/:leadId/stages", leadsController.UpdateLeadStages);
 router.get('/leads/:id', leadsController.getLeadById);
 router.delete('/deleteall', leadsController.deleteLeadsByCompany);
 router.put('/putleads/:id',leadsController.updateLead);
-router.put('/distribute/:campaignid',leadsController.AssignLeadsToUsersByCampaign);
 router.get('/leadsbycampaign/:campaignid', leadsController.getLeadsByCampaignId);
 
 

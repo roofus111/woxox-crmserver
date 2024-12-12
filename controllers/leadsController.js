@@ -124,7 +124,8 @@ exports.searchLeads = async (req, res) => {
 exports.AssignLeadEqual = async (req, res) => {
   try {
     // Fetch all users
-    const users = req.body;
+    const {campaignid} = req.params;
+    const {users} = req.body;
     console.log(users);
 
     if (users.length === 0) throw new Error("No users found");
@@ -133,6 +134,7 @@ exports.AssignLeadEqual = async (req, res) => {
     const unassignedLeads = await Lead.find({
       company: req.user.company,
       assignedTo: null,
+      campaignid:campaignid
     });
     if (unassignedLeads.length === 0)
       throw new Error("No unassigned leads found");
@@ -162,49 +164,49 @@ const handleAsync = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-exports.UpdateLeadStatus = handleAsync(async (req, res) => {
-  const { leadId } = req.params;
-  const { status } = req.body;
+// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+//   const { leadId } = req.params;
+//   const { status } = req.body;
 
-  // Find the lead by ID and update the status
-  const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
-  if (!lead) {
-    return res.status(404).json({ message: "Lead not found" });
-  }
+//   // Find the lead by ID and update the status
+//   const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
+//   if (!lead) {
+//     return res.status(404).json({ message: "Lead not found" });
+//   }
 
-  // If the status is converted, create a new sales entry
-  if (status === "Converted") {
-    const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+//   // If the status is converted, create a new sales entry
+//   if (status === "Converted") {
+//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
 
-    // Count sales for the specific company in the current year
-    const salesCount = await Sales.countDocuments({
-      company: req.user.company._id, // Filter by company ID
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
-        $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
-      },
-    }) + 1;
+//     // Count sales for the specific company in the current year
+//     const salesCount = await Sales.countDocuments({
+//       company: req.user.company._id, // Filter by company ID
+//       createdAt: {
+//         $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
+//         $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
+//       },
+//     }) + 1;
 
-    // Generate SalesId
-    const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+//     // Generate SalesId
+//     const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
 
-    // Create a new sales document
-    const newSales = new Sales({
-      SalesId: salesId,
-      LeadId: lead._id,
-      company: req.user.company._id, // Associate with the company
-    });
+//     // Create a new sales document
+//     const newSales = new Sales({
+//       SalesId: salesId,
+//       LeadId: lead._id,
+//       company: req.user.company._id, // Associate with the company
+//     });
 
-    const savedSales = await newSales.save();
-    console.log(savedSales);
-  }
+//     const savedSales = await newSales.save();
+//     console.log(savedSales);
+//   }
 
-  // Respond with success message
-  return res.status(200).json({
-    message: "Lead status updated successfully",
-    lead,
-  });
-});
+//   // Respond with success message
+//   return res.status(200).json({
+//     message: "Lead status updated successfully",
+//     lead,
+//   });
+// });
 
 exports.AssignUserToLead = async (req, res) => {
   const { leadId, userId } = req.params;
@@ -538,7 +540,7 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
 
 exports.createLead = async (req, res) => {
   const { name, phone, email, campaignid } = req.body; // Extract relevant fields from the request
-console.log(campaignid);
+
 
   // Validate required fields
   if (!name || !phone || !campaignid) {
@@ -588,65 +590,6 @@ console.log(campaignid);
     res.status(500).json({ message: "Failed to create lead. Please try again later." });
   }
 };
-exports.AssignLeadsToUsersByCampaign = async (req, res) => {
-  const { campaignid } = req.params;
-  const { userAssignments } = req.body;  // Expecting an object { userId: [leadIds] }
-
-  try {
-    // Validate userAssignments
-    if (!userAssignments || typeof userAssignments !== 'object') {
-      return res.status(400).json({ message: "Invalid userAssignments format." });
-    }
-
-    // Check if the campaign exists
-    const campaign = await Campaign.findById(campaignid);
-    if (!campaign) {
-      return res.status(404).json({ message: "Campaign not found." });
-    }
-    
-    const userIds = Object.keys(userAssignments);
-    
-    // Check if users exist
-    const users = await User.find({ '_id': { $in: userIds } });
-    if (users.length !== userIds.length) {
-      return res.status(404).json({ message: "Some users not found." });
-    }
-
-    // Flatten all leadIds from the assignments and check if they exist
-    const allLeadIds = [].concat(...Object.values(userAssignments));
-    const leads = await Lead.find({ '_id': { $in: allLeadIds }, campaignid: campaignid });
-    if (leads.length !== allLeadIds.length) {
-      return res.status(404).json({ message: "Some leads not found in the specified campaign." });
-    }
-
-    // Assign the leads to the respective users
-    const updatePromises = [];
-
-    for (const [userId, leadsid] of Object.entries(userAssignments)) {
-      updatePromises.push(
-        Lead.updateMany(
-          { _id: { $in: leadsid }, campaignid: campaignid }, // Match leads in the given campaign
-          { assignedTo: userId } // Assign to the current user
-        )
-      );
-    }
-
-    // Execute the update operations
-    await Promise.all(updatePromises);
-
-    // Optionally, you can fetch the updated leads with populated user data
-    const updatedLeads = await Lead.find({ _id: { $in: allLeadIds } })
-      .populate('assignedTo', '_id firstName lastName');
-
-    res.status(200).json({
-      message: `Leads successfully assigned to users.`,
-      leads: updatedLeads,
-    });
-  } catch (error) {
-    console.error(error);  // Log the error for debugging
-    res.status(500).json({ message: "Error assigning leads to users.", error: error.message });
-  }
-};
 
 exports.getLeadsByCampaignId = async (req, res) => {
   const { campaignid } = req.params;
@@ -660,6 +603,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
     // Fetch leads from the database
     const leads = await Lead.find({ campaignid })
       .populate("assignedTo", "_id firstName lastName")
+      .populate("campaignid")
       .exec();
 
     // Check if leads exist
@@ -674,6 +618,68 @@ exports.getLeadsByCampaignId = async (req, res) => {
     res.status(500).json({ error: 'An error occurred while fetching leads.' });
   }
 };
+exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+  const { leadId } = req.params;
+  const { status } = req.body;
+
+  // Find the lead by ID and update the status
+  const lead = await Lead.findById(leadId);
+  if (!lead) {
+    return res.status(404).json({ message: "Lead not found" });
+  }
+
+  // If the status is converted and no customerId exists, create a new customer
+  if (status === "Converted") {
+    if (!lead.Customer) {
+      // Create a new customer using lead details
+      const newCustomer = new Customer({
+        name: lead.name, // Assuming 'name' is a field in the Lead document
+        contact: lead.contact, // Assuming 'contact' is a field in the Lead document
+        company: req.user.company._id, // Associate with the user's company
+        // Add other relevant fields for customer creation
+      });
+
+      const savedCustomer = await newCustomer.save();
+      // Store the new customer ID in the lead document
+      lead.Customer = savedCustomer._id;
+      await lead.save();
+    }
+
+    const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+
+    // Count sales for the specific company in the current year
+    const salesCount = await Sales.countDocuments({
+      company: req.user.company._id, // Filter by company ID
+      createdAt: {
+        $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
+        $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
+      },
+    }) + 1;
+
+    // Generate SalesId
+    const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+
+    // Create a new sales document
+    const newSales = new Sales({
+      SalesId: salesId,
+      LeadId: lead._id,
+      company: req.user.company._id, // Associate with the company
+    });
+
+    const savedSales = await newSales.save();
+    console.log(savedSales);
+  }
+
+  // Update the lead status to 'Converted' (or the status passed in the request body)
+  lead.status = status;
+  await lead.save();
+
+  // Respond with success message
+  return res.status(200).json({
+    message: "Lead status updated successfully",
+    lead,
+  });
+});
 
 
 
