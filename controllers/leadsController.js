@@ -603,7 +603,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
     // Fetch leads from the database
     const leads = await Lead.find({ campaignid })
       .populate("assignedTo", "_id firstName lastName")
-      .populate("campaignid")
+      // .populate("campaignid")
       .exec();
 
     // Check if leads exist
