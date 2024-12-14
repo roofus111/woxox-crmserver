@@ -633,8 +633,9 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
     if (!lead.Customer) {
       // Create a new customer using lead details
       const newCustomer = new Customer({
-        name: lead.name, // Assuming 'name' is a field in the Lead document
-        contact: lead.contact, // Assuming 'contact' is a field in the Lead document
+        firstName: lead.name, // Assuming 'name' is a field in the Lead document
+        phone: lead.phone, // Assuming 'contact' is a field in the Lead document
+        email:lead.email,
         company: req.user.company._id, // Associate with the user's company
         // Add other relevant fields for customer creation
       });
