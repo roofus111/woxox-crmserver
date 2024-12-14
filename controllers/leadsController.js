@@ -618,68 +618,137 @@ exports.getLeadsByCampaignId = async (req, res) => {
     res.status(500).json({ error: 'An error occurred while fetching leads.' });
   }
 };
+// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+//   const { leadId } = req.params;
+//   const { status } = req.body;
+
+//   // Find the lead by ID and update the status
+//   const lead = await Lead.findById(leadId);
+//   if (!lead) {
+//     return res.status(404).json({ message: "Lead not found" });
+//   }
+
+//   // If the status is converted and no customerId exists, create a new customer
+//   if (status === "Converted") {
+//     if (!lead.Customer) {
+//       // Create a new customer using lead details
+//       const newCustomer = new Customer({
+//         firstName: lead.name, // Assuming 'name' is a field in the Lead document
+//         phone: lead.phone, // Assuming 'contact' is a field in the Lead document
+//         email:lead.email,
+//         company: req.user.company._id, // Associate with the user's company
+//         // Add other relevant fields for customer creation
+//       });
+
+//       const savedCustomer = await newCustomer.save();
+//       // Store the new customer ID in the lead document
+//       lead.Customer = savedCustomer._id;
+//       await lead.save();
+//     }
+
+//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+
+//     // Count sales for the specific company in the current year
+//     const salesCount = await Sales.countDocuments({
+//       company: req.user.company._id, // Filter by company ID
+//       createdAt: {
+//         $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
+//         $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
+//       },
+//     }) + 1;
+
+//     // Generate SalesId
+//     const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+
+//     // Create a new sales document
+//     const newSales = new Sales({
+//       SalesId: salesId,
+//       LeadId: lead._id,
+//       company: req.user.company._id, // Associate with the company
+//     });
+
+//     const savedSales = await newSales.save();
+//     console.log(savedSales);
+//   }
+
+//   // Update the lead status to 'Converted' (or the status passed in the request body)
+//   lead.status = status;
+//   await lead.save();
+
+//   // Respond with success message
+//   return res.status(200).json({
+//     message: "Lead status updated successfully",
+//     lead,
+//   });
+// });
+
+
 exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
 
-  // Find the lead by ID and update the status
-  const lead = await Lead.findById(leadId);
-  if (!lead) {
-    return res.status(404).json({ message: "Lead not found" });
+  const validStatuses = ["Converted", "In Progress", "Closed"];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
   }
 
-  // If the status is converted and no customerId exists, create a new customer
-  if (status === "Converted") {
-    if (!lead.Customer) {
-      // Create a new customer using lead details
-      const newCustomer = new Customer({
-        firstName: lead.name, // Assuming 'name' is a field in the Lead document
-        phone: lead.phone, // Assuming 'contact' is a field in the Lead document
-        email:lead.email,
-        company: req.user.company._id, // Associate with the user's company
-        // Add other relevant fields for customer creation
-      });
-
-      const savedCustomer = await newCustomer.save();
-      // Store the new customer ID in the lead document
-      lead.Customer = savedCustomer._id;
-      await lead.save();
+  try {
+    const lead = await Lead.findById(leadId);
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
     }
 
-    const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
+    const company = await Company.findById(req.user.company._id); // Fetch the company details
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
 
-    // Count sales for the specific company in the current year
-    const salesCount = await Sales.countDocuments({
-      company: req.user.company._id, // Filter by company ID
-      createdAt: {
-        $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
-        $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
-      },
-    }) + 1;
+    if (status === "Converted") {
+      if (!lead.Customer) {
+        // Create a new customer
+        const newCustomer = new Customer({
+          firstName: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          company: req.user.company._id,
+        });
 
-    // Generate SalesId
-    const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+        const savedCustomer = await newCustomer.save();
+        lead.Customer = savedCustomer._id;
+      }
 
-    // Create a new sales document
-    const newSales = new Sales({
-      SalesId: salesId,
-      LeadId: lead._id,
-      company: req.user.company._id, // Associate with the company
+      // Only create a sales request if financeModule is enabled
+      if (company.finance) {
+        const year = new Date().getFullYear().toString().slice(-2);
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+
+        const salesCount = await Sales.countDocuments({
+          company: req.user.company._id,
+          createdAt: { $gte: startOfYear, $lte: endOfYear },
+        }) + 1;
+
+        const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
+        const newSales = new Sales({
+          SalesId: salesId,
+          LeadId: lead._id,
+          company: req.user.company._id,
+        });
+
+        await newSales.save();
+      }
+    }
+
+    lead.status = status;
+    await lead.save();
+
+    return res.status(200).json({
+      message: "Lead status updated successfully",
+      lead,
     });
-
-    const savedSales = await newSales.save();
-    console.log(savedSales);
+  } catch (error) {
+    return res.status(500).json({ message: "An error occurred", error: error.message });
   }
-
-  // Update the lead status to 'Converted' (or the status passed in the request body)
-  lead.status = status;
-  await lead.save();
-
-  // Respond with success message
-  return res.status(200).json({
-    message: "Lead status updated successfully",
-    lead,
-  });
 });
 
 
