@@ -558,6 +558,7 @@ exports.createLead = async (req, res) => {
 
     // Check for duplicates based on phone or email
     const existingLead = await Lead.findOne({
+      campaignid, // Include the campaign ID as a filter
       $or: [{ phone }, { email }],
     });
 
