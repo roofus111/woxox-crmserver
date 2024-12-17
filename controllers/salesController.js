@@ -5,11 +5,11 @@ const Lead = require("../models/Lead");
 // Create a new sales entry
 exports.createSales = async (req, res) => {
   try {
-    const { SalesId, LeadId, CustomerId } = req.body;
+    const { SalesId, LeadId, Customer } = req.body;
     const newSales = new Sales({
       SalesId,
       LeadId,
-      CustomerId,
+      Customer,
       company: req.user.company._id,
     });
 

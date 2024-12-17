@@ -41,28 +41,27 @@ exports.getInvoices = async (req, res) => {
     const formattedInvoices = invoices.map((invoice) => ({
       id: invoice.invoiceNumber,
       issuedDate: invoice.dateIssued,
-      address: invoice.customer?.phone, 
-      company: invoice.customer?.name, 
-      companyEmail: invoice.customer?.email, 
-      country: invoice.customer?.profile.countryOfInterest, 
-      contact: invoice.customer?.phone, 
-      name: invoice.customer?.name, 
-      service: "Some Service", 
-      total: invoice.grandTotal, 
-      avatar: "", 
-      avatarColor: "primary", 
-      invoiceStatus: invoice.status, 
-      balance: invoice?.grandTotal - invoice?.paid, 
+      address: invoice.customer?.profile?.address, // Ensure safe access
+      company: invoice.customer?.name,
+      companyEmail: invoice.customer?.email,
+      country: invoice.customer?.profile?.countryOfInterest, // Fix here
+      contact: invoice.customer?.phone,
+      name: invoice.customer?.name,
+      service: "Some Service",
+      total: invoice.grandTotal,
+      avatar: "",
+      avatarColor: "primary",
+      invoiceStatus: invoice.status,
+      balance: invoice?.grandTotal - invoice?.paid,
       dueDate: invoice.dueDate,
       items: invoice.items,
-      address: invoice.customer?.profile.address,
       paid: invoice.paid,
       subtotal: invoice.totalAmount,
       taxRate: invoice.taxRate,
       gst: invoice.gst,
       refId: invoice._id,
-      leadId:invoice.customer?._id,
-      _id:invoice._id
+      leadId: invoice.customer?._id,
+      _id: invoice._id
     }));
 
     res.status(200).json(formattedInvoices);

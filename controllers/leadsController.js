@@ -558,7 +558,6 @@ exports.createLead = async (req, res) => {
 
     // Check for duplicates based on phone or email
     const existingLead = await Lead.findOne({
-      campaignid, // Include the campaign ID as a filter
       $or: [{ phone }, { email }],
     });
 
@@ -737,9 +736,9 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
           company: req.user.company._id,
         });
 
-        await newSales.save();
+        await newSales.save();   
       }
-    }
+    }   
 
     lead.status = status;
     await lead.save();

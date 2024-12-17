@@ -237,8 +237,11 @@ exports.getCustomerDetails = async (req, res) => {
     }
 
     // Fetch Sales and Leads as arrays
-    const sales = await Sales.find({ Customer: customer._id });
+    const sales = await Sales.find({ CustomerId: customer._id });
     const leads = await Lead.find({ Customer: customer._id });
+console.log(sales);
+console.log(leads);
+
 
     // Extract IDs as arrays
     const salesIds = sales.map((sale) => sale._id);

@@ -8,7 +8,7 @@ router.use(authenticateUser);
 router.post('/', invoiceController.createInvoice);
 
 // Get all invoices
-router.get('/', invoiceController.getInvoices);
+router.get('/get', invoiceController.getInvoices);
 
 // Get a specific invoice by ID
 router.get('/:id', invoiceController.getInvoiceById);
