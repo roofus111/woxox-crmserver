@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
 const Customer = require("../models/Customer"); // Adjust the path as needed
-
+const Sales = require("../models/sales")
+const Lead = require("../models/Lead")
 exports.createCustomer = async (req, res) => {
   try {
     // Extract customer data from the request body
@@ -78,34 +80,34 @@ exports.getAllCustomers = async (req, res) => {
 };
 
 // Get a single customer by ID
-exports.getCustomerById = async (req, res) => {
-  try {
-    const { customerId } = req.params;
+// exports.getCustomerById = async (req, res) => {
+//   try {
+//     const { customerId } = req.params;
 
-    // Validate ID format
-    if (!customerId || !customerId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ error: 'Invalid customer ID' });
-    }
+//     // Validate ID format
+//     if (!customerId || !customerId.match(/^[0-9a-fA-F]{24}$/)) {
+//       return res.status(400).json({ error: 'Invalid customer ID' });
+//     }
 
-    // Fetch the customer by ID
-    const customer = await Customer.findById(customerId);
+//     // Fetch the customer by ID
+//     const customer = await Customer.findById(customerId);
 
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
-    }
+//     if (!customer) {
+//       return res.status(404).json({ error: 'Customer not found' });
+//     }
 
-    res.status(200).json({
-      message: 'Customer retrieved successfully',
-      customer
-    });
-  } catch (error) {
-    console.error('Error fetching customer by ID:', error);
-    res.status(500).json({
-      error: 'An error occurred while retrieving the customer',
-      details: error.message
-    });
-  }
-};
+//     res.status(200).json({
+//       message: 'Customer retrieved successfully',
+//       customer
+//     });
+//   } catch (error) {
+//     console.error('Error fetching customer by ID:', error);
+//     res.status(500).json({
+//       error: 'An error occurred while retrieving the customer',
+//       details: error.message
+//     });
+//   }
+// };
 
 exports.updateCustomer = async (req, res) => {
   try {
@@ -171,6 +173,88 @@ exports.deleteCustomer = async (req, res) => {
     res.status(500).json({
       error: 'An error occurred while deleting the customer',
       details: error.message
+    });
+  }
+};
+
+// Controller to get customer, salesId, and leadId by customer ID
+// exports.getCustomerById = async (req, res) => {
+//   try {
+//     const { customerId } = req.params;
+
+//     // Validate Customer ID
+//     if (!mongoose.Types.ObjectId.isValid(customerId)) {
+//       return res.status(400).json({ error: 'Invalid customer ID format' });
+//     }
+
+//     // Fetch Customer
+//     const customer = await Customer.findById(customerId);
+//     if (!customer) {
+//       return res.status(404).json({ error: 'Customer not found' });
+//     }
+
+//     // Fetch Sales and Lead IDs
+//     const sales = await Sales.findOne({ CustomerId: customer._id });
+//     const lead = await Lead.findOne({ Customer: customer._id });
+
+//     // Debugging Logs
+//     console.log('Customer:', customer);
+//     console.log('Sales Query Result:', sales);
+//     console.log('Lead Query Result:', lead);
+
+//     // Extract IDs
+//     const salesId = sales ? sales._id : null;
+//     const leadId = lead ? lead._id : null;
+
+//     // Response
+//     res.status(200).json({
+//       message: 'Customer details retrieved successfully',
+//       customer,
+//       salesId,
+//       leadId,
+//     });
+//   } catch (error) {
+//     console.error('Error fetching customer details:', error);
+//     res.status(500).json({
+//       error: 'An error occurred while retrieving the customer details',
+//     });
+//   }
+// };
+
+exports.getCustomerDetails = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Validate Customer ID
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: 'Invalid customer ID format' });
+    }
+
+    // Fetch Customer
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Fetch Sales and Leads as arrays
+    const sales = await Sales.find({ Customer: customer._id });
+    const leads = await Lead.find({ Customer: customer._id });
+
+    // Extract IDs as arrays
+    const salesIds = sales.map((sale) => sale._id);
+    const leadIds = leads.map((lead) => lead._id);
+
+    // Response
+    res.status(200).json({
+      message: 'Customer details retrieved successfully',
+      customer,
+      salesIds,
+      leadIds,
+    });
+  } catch (error) {
+    console.error('Error fetching customer details:', error);
+    res.status(500).json({
+      error: 'An error occurred while retrieving the customer details',
     });
   }
 };

@@ -10,6 +10,11 @@ const salesSchema = new mongoose.Schema({
         ref: 'Lead', // Make sure 'Lead' is correctly defined and used elsewhere in your app
         required: true // If a sale must be linked to a lead, mark this as required
     },
+    CustomerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Customer', // Make sure 'Lead' is correctly defined and used elsewhere in your app
+        required: true
+    },
     company: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Company', 

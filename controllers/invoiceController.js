@@ -17,7 +17,7 @@ exports.createInvoice = async (req, res) => {
   try {
     const invoiceData = req.body;
 
-    const count = await getTotalInvoiceCount(req.user.company);
+    const count = await getTotalInvoiceCount(req.user.company); 
 
     const invoice = new Invoice({
       ...invoiceData,
@@ -61,7 +61,8 @@ exports.getInvoices = async (req, res) => {
       taxRate: invoice.taxRate,
       gst: invoice.gst,
       refId: invoice._id,
-      leadId:invoice.customer?._id
+      leadId:invoice.customer?._id,
+      _id:invoice._id
     }));
 
     res.status(200).json(formattedInvoices);
