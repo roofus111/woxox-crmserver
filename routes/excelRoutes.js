@@ -148,7 +148,7 @@ console.log(existingCustomer);
       }
 
       // Check for duplicate lead in the leads collection
-      const existingLead = await Lead.findOne({ phone: leadData.phone });
+      const existingLead = await Lead.findOne({ phone: leadData.phone, companyId: req.body.campaignid  });
 
       if (existingLead) {
         duplicateLeads.push(leadData);
