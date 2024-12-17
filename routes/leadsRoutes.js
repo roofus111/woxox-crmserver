@@ -53,7 +53,7 @@ router.post("/", leadsController.createLead);
 router.put("/assign/:campaignid", leadsController.AssignLeadEqual);
 router.put("/updateprofile/:id", leadsController.UpdateLead);
 router.put("/assignlead/:leadId/:userId", leadsController.AssignUserToLead);
-router.put("/status/:leadId", leadsController.UpdateLeadStatus);
+router.put("/:leadId/status", leadsController.UpdateLeadStatus);
 router.put("/:leadId/stages", leadsController.UpdateLeadStages);
 router.get('/leads/:id', leadsController.getLeadById);
 router.delete('/deleteall', leadsController.deleteLeadsByCompany);
