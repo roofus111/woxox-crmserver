@@ -374,6 +374,7 @@ exports.getCounsellorLeads = async (req, res) => {
     // Query to find leads with pagination
     const leads = await Lead.find({ company: req.user.company,campaign:req.params.campaign,assignedTo:req.user._id })
       .populate("assignedTo", "_id firstName lastName")
+      .populate("campaignid")
       .skip(skip)
       .limit(limit);
 
