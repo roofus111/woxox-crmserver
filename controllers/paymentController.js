@@ -84,7 +84,9 @@ exports.getPaymentsByLeads = async (req, res) => {
 // Get a single payment by ID
 exports.getPaymentById = async (req, res) => {
   try {
-    const payment = await Payment.findById(req.params.id);
+    const payment = await Payment.findById(req.params.id).populate(
+      "leadId"
+    ).populate("invoice");
     if (!payment) {
       return res.status(404).send();
     }

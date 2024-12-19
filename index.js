@@ -18,6 +18,7 @@ const Task = require("./routes/taskRoutes");
 const Pipeline =require("./routes/pipelineRoutes")
 const Campaign =require("./routes/campaignRoutes")
 const Customer=require("./routes/customerRoutes")
+const Ticket=require("./routes/TicketRoutes")
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -66,6 +67,7 @@ app.use("/api/tasks", Task);
 app.use("/api/pipelines",Pipeline)
 app.use("/api/campaign",Campaign)
 app.use("/api/customer",Customer)
+app.use("/api/ticket",Ticket)
 
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {

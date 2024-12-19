@@ -41,7 +41,7 @@ exports.getAllLeads = async (req, res) => {
   }
 };
 
-exports.getLeadById = async (req, res) => {
+exports.getLeadById = async (req, res) => {  
   try {
     const leadId = req.params.id; // Get the ID from the request parameters
 
