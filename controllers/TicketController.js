@@ -3,7 +3,8 @@ const Ticket = require('../models/Ticket');
 const Customer = require('../models/Customer');
 const User = require('../models/User');
 const { v4: uuidv4 } = require('uuid'); // For generating unique file names
-
+const {S3} = require("@aws-sdk/client-s3")
+const s3Client = require("../config/s3")
 // Configure AWS S3
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -16,10 +17,14 @@ exports.createTicket = async (req, res) => {
   try {
     const {
       customerId,
-      issueDetails,
       assignedTo,
       notes,
       sla,
+      subject,
+      description,
+      category,
+      sub_category,
+      priority,
     } = req.body;
 
     const files = req.files; // Assuming you're using a middleware like multer for file handling
@@ -64,11 +69,11 @@ exports.createTicket = async (req, res) => {
     const newTicket = new Ticket({
       customer: customerId,
       issue_details: {
-        subject: issueDetails?.subject,
-        description: issueDetails?.description,
-        category: issueDetails?.category,
-        sub_category: issueDetails?.sub_category || null,
-        priority: issueDetails?.priority,
+        subject: subject,
+        description: description,
+        category:category,
+        sub_category: sub_category || null,
+        priority:priority,
         attachments: uploadedFiles,
       },
       assignedTo: assignedTo || null,
@@ -91,3 +96,116 @@ exports.createTicket = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+// Get tickets (with filters or by ID)
+exports.getTickets = async (req, res) => {
+  try {
+    const { ticketId, customerId, assignedTo, status, priority } = req.query;
+
+    // If a specific ticket ID is provided, fetch the ticket by ID
+    if (ticketId) {
+      const ticket = await Ticket.findById(ticketId)
+        .populate('customer') // Populate customer details
+        .populate('assignedTo'); // Populate assigned user details
+
+      if (!ticket) {
+        return res.status(404).json({ message: 'Ticket not found' });
+      }
+
+      return res.status(200).json(ticket);
+    }
+
+    // Build a query object for filtering
+    const query = {};
+    if (customerId) query.customer = customerId;
+    if (assignedTo) query.assignedTo = assignedTo;
+    if (status) query['history.status'] = status;
+    if (priority) query['issue_details.priority'] = priority;
+
+    // Fetch tickets with applied filters
+    const tickets = await Ticket.find(query)
+      .populate('customer') // Populate customer details
+      .populate('assignedTo'); // Populate assigned user details
+
+    if (tickets.length === 0) {
+      return res.status(404).json({ message: 'No tickets found' });
+    }
+
+    return res.status(200).json(tickets);
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Get a specific ticket by ID
+exports.getTicketById = async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+
+    // Find the ticket by ID and populate related fields
+    const ticket = await Ticket.findById(ticketId)
+      .populate('customer') // Populate customer details
+      .populate('assignedTo'); // Populate assigned user details
+
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    return res.status(200).json(ticket);
+  } catch (error) {
+    console.error('Error fetching ticket:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Function to handle fetching file from ticket attachments
+exports.getAttachmentById = async (req, res) => {
+  try {
+    const { ticketId, attachmentId } = req.params;
+
+    // Find the ticket by ID
+    const ticket = await Ticket.findById(ticketId);
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    // Find the attachment by ID within the ticket
+    const attachment = ticket.issue_details.attachments.id(attachmentId);
+
+    if (!attachment) {
+      return res.status(404).json({ error: "Attachment not found" });
+    }
+
+    // S3 parameters
+    const params = {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: "ticketdoc/" + attachment.fileUrl.split("/").pop(), // Extract the key from the file URL
+    };
+
+    // Create an instance of S3 client
+    // const s3 =new AWS.S3();
+    const aws = new S3({client:s3Client});
+
+    // Get the file from S3
+    const data = await aws.getObject(params)
+
+    // Set the response headers
+    res.setHeader("Content-Type", attachment.fileType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${attachment.fileName}"`
+    );
+
+    // Pipe the data to the response
+    data.Body.pipe(res);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
+
+

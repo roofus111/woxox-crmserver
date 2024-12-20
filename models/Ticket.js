@@ -3,35 +3,35 @@ const mongoose = require('mongoose');
 // Sub-schema for Attachments
 const AttachmentSchema = new mongoose.Schema({
   fileName: { type: String, 
-    // required: true 
+    required: true 
 },
   fileType:{ type: String},
   fileUrl: { type: String, 
-    // required: true
+    required: true
  },
 });
 
 // Sub-schema for Notes
 const NoteSchema = new mongoose.Schema({
   note_id: { type: String,
-    //  required: true 
+     required: true 
     },
   author: { type: String, 
-    // required: true
+    required: true
  },
   timestamp: { type: Date, default: Date.now },
   content: { type: String, 
-    // required: true 
+    required: true 
 },
 });
 
 // Sub-schema for History
 const HistorySchema = new mongoose.Schema({
   status: { type: String, default: "Open",
-    // required: true,
+    required: true,
      enum: ['Open', 'In Progress', 'Resolved', 'Closed'] },
   changed_by: { type: String,
-    //  required: true 
+     required: true 
     },
   timestamp: { type: Date, default: Date.now },
 });
@@ -39,26 +39,26 @@ const HistorySchema = new mongoose.Schema({
 // Main Ticket Schema
 const TicketSchema = new mongoose.Schema({
   ticket_id: { type: String,
-    //  required: true,
+     required: true,
       unique: true, default: () => `TICKET-${new Date().getTime()}` }, // Auto-generated
-Customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
+      customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
   issue_details: {
     subject: { type: String, 
-        // required: true 
+        required: true 
     },
     description: { type: String,
-        //  required: true 
+         required: true 
         },
     category: { type: String,
-        //  required: true
+         required: true
          },
     sub_category: { type: String, 
-        // required: false 
+        required: false 
     },
     priority: { type: String, 
-        // required: true,
+        required: true,
          enum: ['Low', 'Medium', 'High', 'Critical'] },
-    status: { type: String, required: false, enum: ['Open', 'In Progress', 'Resolved', 'Closed'], default: 'Open' },
+    status: { type: String, required: true, enum: ['Open', 'In Progress', 'Resolved', 'Closed'], default: 'Open' },
     attachments: [AttachmentSchema],
   },
   timestamps: {
