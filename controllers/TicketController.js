@@ -206,6 +206,144 @@ exports.getAttachmentById = async (req, res) => {
   }
 };
 
+// Create a new note for a ticket
+exports.createNote = async (req, res) => {
+  try {
+    const {ticketId, author, content } = req.body;
+
+    // Validate input
+    if (!author || !content) {
+      return res.status(400).json({ message: 'Author and content are required.' });
+    }
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
+
+    // Add a new note
+    const newNote = { note_id: `${Date.now()}`, author, content };
+    ticket.notes.push(newNote);
+    await ticket.save();
+
+    res.status(201).json({ message: 'Note added successfully.', note: newNote });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred.', error: error.message });
+  }
+};
+
+// Get all notes for a ticket
+exports.getNotes = async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+
+    const ticket = await Ticket.findById(ticketId).select('notes');
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
+
+    res.status(200).json({ notes: ticket.notes });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred.', error: error.message });
+  }
+};
+
+// Update a note
+exports.updateNote = async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const { ticketId,content } = req.body;
+
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
+
+    const note = ticket.notes.id(noteId);
+    if (!note) {
+      return res.status(404).json({ message: 'Note not found.' });
+    }
+
+    if (content) {
+      note.content = content;
+    }
+    await ticket.save();
+
+    res.status(200).json({ message: 'Note updated successfully.', note });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred.', error: error.message });
+  }
+};
+
+// Delete a note
+const mongoose = require('mongoose');
+
+exports.deleteNote = async (req, res) => {
+  try {
+    const { noteId } = req.params;
+    const { ticketId } = req.body;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(ticketId) || !mongoose.Types.ObjectId.isValid(noteId)) {
+      return res.status(400).json({ message: 'Invalid ID format.' });
+    }
+
+    // Find the ticket
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found.' });
+    }
+
+    // Find the note index in the notes array
+    const noteIndex = ticket.notes.findIndex((note) => note._id.toString() === noteId);
+    if (noteIndex === -1) {
+      return res.status(404).json({ message: 'Note not found.' });
+    }
+
+    // Remove the note from the notes array
+    ticket.notes.splice(noteIndex, 1);
+    await ticket.save();
+
+    res.status(200).json({ message: 'Note deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred.', error: error.message });
+  }
+};
+
+// Update History Status
+exports.updateHistoryStatus = async (req, res) => {
+  try {
+    const { status, changed_by,ticketId } = req.body; // New status and the user making the change from request body
+
+    // Validate status
+    const allowedStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status provided.' });
+    }
+
+    // Find the ticket
+    const ticket = await Ticket.findOne({ ticket_id: ticketId });
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found.' });
+    }
+
+    // Update ticket status and add to history
+    ticket.issue_details.status = status;
+    ticket.history.push({
+      status,
+      changed_by,
+      timestamp: new Date(),
+    });
+
+    // Save changes
+    await ticket.save();
+
+    return res.status(200).json({ message: 'History updated successfully.', ticket });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'An error occurred while updating the history.' });
+  }
+};
 
 
 

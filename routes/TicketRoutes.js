@@ -12,5 +12,15 @@ router.get('/gettickets', ticketController.getTickets);
 router.get('/gettickets/:ticketId', ticketController.getTicketById);
 // Get an attachment file URL
 router.get('/tickets/:ticketId/attachments/:attachmentId', ticketController.getAttachmentById);
+router.put('/notes/:noteId', ticketController.updateNote)
+
+//notes
+router.post('/createnotes', ticketController.createNote);
+router.get('/getnotes/:ticketId', ticketController.getNotes);
+router.put('/updatenotes/:noteId', ticketController.updateNote);
+router.delete('/deletenotes/:noteId', ticketController.deleteNote);
+
+//history
+router.put('/updatehistory', ticketController.updateHistoryStatus);
 
 module.exports = router;
