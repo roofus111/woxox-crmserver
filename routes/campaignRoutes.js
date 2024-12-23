@@ -11,10 +11,7 @@ router.get('/getcampaign', campaignController.getCampaign);
 router.put('/updatecampaign/:campaignid', campaignController.updateCampaign);
 router.delete('/deletecampaign/:campaignid', campaignController.deleteCampaign);
 router.put('/assignpipeline/:campaignId', campaignController.updatePipelineInCampaign);
-// router.put('/campaigns/:campaignid/add-pipeline',campaignController.addPipelineToCampaign);
 
-// // Route to get campaigns by pipeline ID
-// router.get('/campaigns/pipeline/:pipelineid', campaignController.getCampaignsByPipelineId);
 
 module.exports = router;
 

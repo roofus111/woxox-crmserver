@@ -36,6 +36,24 @@ const FormSchema = new mongoose.Schema({
   hscScore: {
     type: Number,
   },
+  UGJoinYear :{
+    type: Number,
+  },
+  UGPassOutYear:{
+    type: Number,
+  },
+  UG_CGPA:{
+    type: Number,
+  },
+  PGJoinYear:{
+    type: Number,
+  },
+  PGPassOutYear:{
+    type: Number,
+  },
+  PG_CGPA:{
+    type: Number,
+  },
   ieltsScore: {
     type: Number,
   },
@@ -79,6 +97,18 @@ const FormSchema = new mongoose.Schema({
     type: Number,
   }
 });
+const NoteSchema = new mongoose.Schema({
+  note_id: { type: String,
+     required: true 
+    },
+  author: { type: String, 
+    required: true
+ },
+  timestamp: { type: Date, default: Date.now },
+  content: { type: String, 
+    required: true 
+},
+});
 const LeadSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String },
@@ -95,7 +125,7 @@ const LeadSchema = new mongoose.Schema({
     default: null  // This specifies that the default value can be null.
   },
   untouched:{type:Boolean,default:true},
-
+  notes: [NoteSchema],
   createdAt: { type: Date, default: Date.now },
   profile: FormSchema,
   stages: { type: String, enum: [null, 'Pending', 'In Progress', 'Document Collected', 'Pending Documents', 'Application Submitted', 'Interview Scheduled', 'Offer letter Received', 'Offer letter Rejected', 'Visa Documentation In Progress', 'Visa Documentation Success', 'Visa Approved', 'Visa Rejected'], default: null },

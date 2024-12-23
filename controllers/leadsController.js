@@ -109,20 +109,6 @@ exports.searchLeads = async (req, res) => {
   }
 };
 
-// // Create a new lead
-// exports.createLead = async (req, res) => {
-//   const lead = new Lead({
-//     ...req.body,
-//     company: req.user.company._id,
-//   });
-
-//   try {
-//     const newLead = await lead.save();
-//     res.status(201).json(newLead);
-//   } catch (err) {
-//     res.status(400).json({ message: err.message });
-//   }
-// };
 
 exports.AssignLeadEqual = async (req, res) => {
   try {
@@ -167,49 +153,6 @@ const handleAsync = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
-//   const { leadId } = req.params;
-//   const { status } = req.body;
-
-//   // Find the lead by ID and update the status
-//   const lead = await Lead.findByIdAndUpdate(leadId, { status }, { new: true });
-//   if (!lead) {
-//     return res.status(404).json({ message: "Lead not found" });
-//   }
-
-//   // If the status is converted, create a new sales entry
-//   if (status === "Converted") {
-//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
-
-//     // Count sales for the specific company in the current year
-//     const salesCount = await Sales.countDocuments({
-//       company: req.user.company._id, // Filter by company ID
-//       createdAt: {
-//         $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
-//         $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
-//       },
-//     }) + 1;
-
-//     // Generate SalesId
-//     const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
-
-//     // Create a new sales document
-//     const newSales = new Sales({
-//       SalesId: salesId,
-//       LeadId: lead._id,
-//       company: req.user.company._id, // Associate with the company
-//     });
-
-//     const savedSales = await newSales.save();
-//     console.log(savedSales);
-//   }
-
-//   // Respond with success message
-//   return res.status(200).json({
-//     message: "Lead status updated successfully",
-//     lead,
-//   });
-// });
 
 exports.AssignUserToLead = async (req, res) => {
   const { leadId, userId } = req.params;
@@ -271,6 +214,12 @@ exports.UpdateLead = async (req, res) => {
             hscJoinYear: updateData.hscJoinYear,
             hscPassOutYear: updateData.hscPassOutYear,
             hscScore: updateData.hscScore,
+            UGJoinYear: updateData.UGJoinYear,
+            UGPassOutYear: updateData.UGPassOutYear,
+            UG_CGPA: updateData.UG_CGPA,
+            PGJoinYear: updateData.PGJoinYear,
+            PGPassOutYear: updateData.PGPassOutYear,
+            PG_CGPA: updateData.PG_CGPA,
             ieltsScore: updateData.ieltsScore,
             pteToeflScore: updateData.pteToeflScore,
             germanScore: updateData.germanScore,
@@ -561,7 +510,7 @@ exports.createLead = async (req, res) => {
     // Check for duplicates based on phone or email
     const existingLead = await Lead.findOne({
       campaignid, // Include the campaign ID as a filter
-      $or: [{ phone }, { email }],
+      $or: [{ phone }, { email }], 
     });
 
     if (existingLead) {
@@ -623,69 +572,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
     res.status(500).json({ error: 'An error occurred while fetching leads.' });
   }
 };
-// exports.UpdateLeadStatus = handleAsync(async (req, res) => {
-//   const { leadId } = req.params;
-//   const { status } = req.body;
 
-//   // Find the lead by ID and update the status
-//   const lead = await Lead.findById(leadId);
-//   if (!lead) {
-//     return res.status(404).json({ message: "Lead not found" });
-//   }
-
-//   // If the status is converted and no customerId exists, create a new customer
-//   if (status === "Converted") {
-//     if (!lead.Customer) {
-//       // Create a new customer using lead details
-//       const newCustomer = new Customer({
-//         firstName: lead.name, // Assuming 'name' is a field in the Lead document
-//         phone: lead.phone, // Assuming 'contact' is a field in the Lead document
-//         email:lead.email,
-//         company: req.user.company._id, // Associate with the user's company
-//         // Add other relevant fields for customer creation
-//       });
-
-//       const savedCustomer = await newCustomer.save();
-//       // Store the new customer ID in the lead document
-//       lead.Customer = savedCustomer._id;
-//       await lead.save();
-//     }
-
-//     const year = new Date().getFullYear().toString().slice(-2); // Get last two digits of the year
-
-//     // Count sales for the specific company in the current year
-//     const salesCount = await Sales.countDocuments({
-//       company: req.user.company._id, // Filter by company ID
-//       createdAt: {
-//         $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
-//         $lte: new Date(new Date().getFullYear(), 11, 31), // End of the year
-//       },
-//     }) + 1;
-
-//     // Generate SalesId
-//     const salesId = `${year}-${salesCount.toString().padStart(5, '0')}`;
-
-//     // Create a new sales document
-//     const newSales = new Sales({
-//       SalesId: salesId,
-//       LeadId: lead._id,
-//       company: req.user.company._id, // Associate with the company
-//     });
-
-//     const savedSales = await newSales.save();
-//     console.log(savedSales);
-//   }
-
-//   // Update the lead status to 'Converted' (or the status passed in the request body)
-//   lead.status = status;
-//   await lead.save();
-
-//   // Respond with success message
-//   return res.status(200).json({
-//     message: "Lead status updated successfully",
-//     lead,
-//   });
-// });
 exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
@@ -755,12 +642,57 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   }
 });
 
+exports.addNoteToLead = async (req, res) => {
+  const { leadId } = req.params; // Assuming leadId is passed as a URL parameter
+  const { author, content } = req.body; // Note details from the request body
 
 
+  try {
+    // Update the lead by adding a note
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      { $push: { notes: { author, content } } }, // Push the new note into the notes array
+      { new: true } // Return the updated document
+    );
 
+    if (!updatedLead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
 
+    return res.status(200).json({ message: 'Note added successfully', lead: updatedLead });
+  } catch (error) {
+    console.error('Error adding note:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+exports.deleteNoteFromLead = async (req, res) => {
+  const { leadId, noteId } = req.body; // Assuming leadId and noteId are passed as URL parameters
 
+  try {
+    // Find the lead and remove the note from the notes array
+    const updatedLead = await Lead.findByIdAndUpdate(
+      leadId,
+      { $pull: { notes: { _id: noteId } } }, // Pull the note with the specified noteId from the notes array
+      { new: true } // Return the updated document
+    );
 
+    if (!updatedLead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    // Check if the note was actually removed
+    const noteRemoved = updatedLead.notes.some(note => note._id.toString() === noteId);
+
+    if (noteRemoved) {
+      return res.status(404).json({ message: 'Note not found' });
+    }
+
+    return res.status(200).json({ message: 'Note deleted successfully', lead: updatedLead });
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 
 
 

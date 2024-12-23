@@ -195,23 +195,6 @@ exports.updateFollowUp = async (req, res) => {
     });
   }
 };
-// Delete a follow-up
-// exports.deleteFollowUp = async (req, res) => {
-//   try {
-//     const { followUpId } = req.params;
-
-//     // Find and delete the follow-up
-//     const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId);
-
-//     if (!deletedFollowUp) {
-//       return res.status(404).json({ message: "Follow-up not found" });
-//     }
-
-//     res.status(200).json({ message: "Follow-up deleted successfully" });
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 //delete a follow up
 exports.deleteFollowUp = async (req, res) => {
