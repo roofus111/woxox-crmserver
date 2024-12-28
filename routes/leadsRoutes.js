@@ -1,3 +1,126 @@
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Lead:
+ *       type: object
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: Name of the lead.
+ *         email:
+ *           type: string
+ *           description: Email address of the lead.
+ *           example: johndoe@example.com
+ *         phone:
+ *           type: string
+ *           description: Phone number of the lead.
+ *           example: "+1234567890"
+ *         campaign:
+ *           type: string
+ *           description: Campaign name associated with the lead.
+ *           example: Summer Admissions Campaign
+ *         campaignid:
+ *           type: string
+ *           description: Campaign ID (reference to the Campaign collection).
+ *           example: 648f4c0b60f1e622946b6789
+ *         status:
+ *           type: string
+ *           description: Status of the lead.
+ *           enum: 
+ *             - New
+ *             - Contacted
+ *             - Interested
+ *             - Not Interested
+ *             - Converted
+ *             - Pending
+ *             - In Progress
+ *             - Lost
+ *             - Won
+ *           default: New
+ *         source:
+ *           type: string
+ *           description: Source of the lead.
+ *           example: Website
+ *         Customer:
+ *           type: string
+ *           description: Reference to the Customer collection.
+ *           example: 648f4c0b60f1e622946b6789
+ *         company:
+ *           type: string
+ *           description: Reference to the Company collection.
+ *           example: 648f4c0b60f1e622946b6789
+ *         assignedTo:
+ *           type: string
+ *           description: Reference to the User assigned to this lead.
+ *           example: 648f4c0b60f1e622946b6789
+ *         untouched:
+ *           type: boolean
+ *           description: Flag to indicate if the lead has been untouched.
+ *           default: true
+ *         notes:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Note'
+ *           description: List of notes associated with the lead.
+ *         profile:
+ *           $ref: '#/components/schemas/Form'
+ *         stages:
+ *           type: string
+ *           description: Current stage of the lead.
+ *           enum:
+ *             - null
+ *             - Pending
+ *             - In Progress
+ *             - Document Collected
+ *             - Pending Documents
+ *             - Application Submitted
+ *             - Interview Scheduled
+ *             - Offer letter Received
+ *             - Offer letter Rejected
+ *             - Visa Documentation In Progress
+ *             - Visa Documentation Success
+ *             - Visa Approved
+ *             - Visa Rejected
+ *           default: null
+ *         additionalFields:
+ *           type: object
+ *           additionalProperties: true
+ *           description: Flexible field for additional data.
+ */
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Note:
+ *       type: object
+ *       required:
+ *         - note_id
+ *         - author
+ *         - content
+ *       properties:
+ *         note_id:
+ *           type: string
+ *           description: Unique identifier for the note
+ *           example: "12345"
+ *         author:
+ *           type: string
+ *           description: Author of the note
+ *           example: "John Doe"
+ *         timestamp:
+ *           type: string
+ *           format: date-time
+ *           description: The time when the note was created
+ *           example: "2024-12-28T14:30:00Z"
+ *         content:
+ *           type: string
+ *           description: The content of the note
+ *           example: "This is an example note."
+ */
+
+
+
 const express = require("express");
 const router = express.Router();
 const leadsController = require("../controllers/leadsController");

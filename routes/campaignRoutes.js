@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const campaignController = require('../controllers/campaignController');
 const authenticateUser = require('../middleware/authenticateUser');
-
 router.use(authenticateUser);
 router.post('/createcampaign', campaignController.createCampaign);
 // Route to get all campaigns by pipeline ID
