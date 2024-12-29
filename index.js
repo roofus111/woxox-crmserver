@@ -166,5 +166,16 @@ cron.schedule('0 0 * * *', async () => {
 server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
-
+/**
+ * @swagger
+ * /:
+ * get:
+ *  summary: To get all campaigns from mongodb
+ *  description :this api is used to fetch data from mongodb
+ *  responses:
+ *       200: 
+ *          description:this api is used to fetch data from  mongodb
+ *            content:
+ *                application/json
+ */
 app.get("/", (req, res) => res.status(200).send("OK"));
