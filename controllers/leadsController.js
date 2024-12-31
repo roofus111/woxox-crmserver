@@ -9,6 +9,7 @@ const Company = require("../models/Company")
 
 
 
+
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
   try {
@@ -79,8 +80,10 @@ exports.searchLeads = async (req, res) => {
     if (assignedTo) {
       searchCriteria.assignedTo = assignedTo; // assuming assignedTo is an ID
     }
+    console.log(campaign);
+    
     if (campaign && campaign != 'undefined') {
-      searchCriteria.campaign = campaign ; // assuming assignedTo is an ID
+      {mongoose.Types.ObjectId.isValid(campaign) ? searchCriteria.campaignid = campaign : searchCriteria.campaign = campaign  }
     }
 
     if(req.user.role =='user'){
@@ -300,8 +303,17 @@ exports.getLeadsForDocs = async (req, res) => {
 exports.getCampaigns = async (req, res) => {
   try {
     const campaignNames = await Lead.distinct('campaign', { company: req.user.company, assignedTo:req.user._id});
+    const campaignid = await Lead.distinct('campaignid', {
+      company: req.user.company,
+      assignedTo: req.user._id,
+    })
+    const leads = await  Campaign.find({ _id: { $in: campaignid } });
+    const merged = [
+      ...campaignNames,                     // Include string IDs from camp1
+      ...leads  // Extract 'id' from each object in camp2
+    ];
     res.status(200).json({
-      campaign: campaignNames
+      campaign: merged
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
