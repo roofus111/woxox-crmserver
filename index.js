@@ -32,7 +32,7 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", // Allow requests from this origin and my frontend port = 5173
+    origin: "https://woxox.canbridge.in", // Allow requests from this origin and my frontend port = 5173
     methods: ["GET", "POST"], // Allow these HTTP methods
   },
 });
@@ -89,7 +89,7 @@ io.on("connection", (socket) => {
   });
 });
 
-cron.schedule("*/10 * * * * *", async () => {
+cron.schedule("0,30 * * * *", async () => {
   console.log("Running follow-up check");
   try {
     const now = new Date();
