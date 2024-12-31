@@ -2,6 +2,27 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const options={
+  swaggerDefinition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'My Express API',
+      version: '1.0.0',
+      description: 'API documentation for my Express server',
+    },
+    servers: [
+      {
+        url: 'http://localhost:8000',
+      },
+    ],
+  },
+  apis: ['./routes/*.js'], // Path to the API docs
+};
+
+
+const swaggerjsdoc = require("swagger-jsdoc");
+const swaggerui= require("swagger-ui-express")
+const spacs=swaggerjsdoc(options)
 const authRoutes = require("./routes/authRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const userProfileRoutes = require("./routes/userProfileRoutes");
@@ -28,7 +49,6 @@ const User = require("./models/User");
 const server = http.createServer(app);
 const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
-
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
@@ -68,6 +88,7 @@ app.use("/api/pipelines",Pipeline)
 app.use("/api/campaign",Campaign)
 app.use("/api/customer",Customer)
 app.use("/api/ticket",Ticket)
+app.use("/api-docs",swaggerui.serve,swaggerui.setup(spacs))
 
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
@@ -145,5 +166,16 @@ cron.schedule('0 0 * * *', async () => {
 server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
-
+/**
+ * @swagger
+ * /:
+ * get:
+ *  summary: To get all campaigns from mongodb
+ *  description :this api is used to fetch data from mongodb
+ *  responses:
+ *       200: 
+ *          description:this api is used to fetch data from  mongodb
+ *            content:
+ *                application/json
+ */
 app.get("/", (req, res) => res.status(200).send("OK"));
