@@ -123,7 +123,7 @@ cron.schedule("0,30 * * * *", async () => {
       status: { $in: ["Pending", "In Progress"] },
     })
       .populate("assignedTo")
-      .populate("leadId")
+      .populate("leadId") 
       .exec();
 
     if (upcomingFollowUps.length) {

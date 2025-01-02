@@ -589,7 +589,7 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ["Converted", "In Progress", "Closed","Pending"];
+  const validStatuses = ['New', 'Contacted', 'Interested', 'Not Interested', 'Converted', 'Pending', 'In Progress', 'Lost', 'Won'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status" });
   }

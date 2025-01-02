@@ -15,6 +15,7 @@ router.get('/gettickets/:ticketId', ticketController.getTicketById);
 // Get an attachment file URL
 router.get('/tickets/:ticketId/attachments/:attachmentId', ticketController.getAttachmentById);
 router.put('/notes/:noteId', ticketController.updateNote)
+router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
 
 //notes
 router.post('/createnotes', ticketController.createNote);

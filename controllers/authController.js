@@ -27,3 +27,41 @@ exports.login = async (req, res) => {
         res.status(500).json({ error: 'Error logging in user' });
     }
 };
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { _id: user_id } = req.user;
+// Assumes authentication middleware sets `req.user`
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "New passwords do not match" });
+    }
+
+    // Fetch user
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Verify current password
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    // Update password
+    user.password = newPassword; // Will be hashed by the `pre` save middleware
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error changing password", error: err.message });
+  }
+};
+

@@ -10,7 +10,7 @@ exports.createCustomer = async (req, res) => {
       lastName,
       email,
       phone,
-      address,
+      address, 
       dateOfBirth,
       gender,
       status,
