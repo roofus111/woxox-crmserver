@@ -585,7 +585,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
   }
 };
 
-exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+exports.UpdateLeadStatus = async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
 
@@ -652,7 +652,7 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: "An error occurred", error: error.message });
   }
-});
+};
 
 exports.addNoteToLead = async (req, res) => {
   const { leadId } = req.params; // Assuming leadId is passed as a URL parameter
