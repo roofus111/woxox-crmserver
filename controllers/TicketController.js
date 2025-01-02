@@ -313,7 +313,7 @@ exports.deleteNote = async (req, res) => {
 // Update History Status
 exports.updateHistoryStatus = async (req, res) => {
   try {
-    const { status, changed_by,ticketId } = req.body; // New status and the user making the change from request body
+    const { status,ticketId } = req.body; // New status and the user making the change from request body
 
     // Validate status
     const allowedStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
@@ -331,7 +331,6 @@ exports.updateHistoryStatus = async (req, res) => {
     ticket.issue_details.status = status;
     ticket.history.push({
       status,
-      changed_by,
       timestamp: new Date(),
     });
 
@@ -349,7 +348,7 @@ exports.updateHistoryStatus = async (req, res) => {
 exports.updateTicketStatus = async (req, res) => {
   try {
     const { ticketId } = req.params;
-    const { status, changed_by } = req.body;
+    const { status } = req.body;
 
     // Validate status input (ensuring it's a valid status)
     const validStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
@@ -371,7 +370,7 @@ exports.updateTicketStatus = async (req, res) => {
     // Track the status change in history
     const statusHistory = {
       status,  // New status
-      changed_by,  // The user who made the change
+      changed_by:req.user.company._id,  // The user who made the change
       timestamp: Date.now(),
     };
 
