@@ -81,7 +81,7 @@ exports.createTicket = async (req, res) => {
       history: [
         {
           status: 'Open',
-          changed_by: 'System', // Replace with logged-in user later
+          changed_by: req.user._id, // Replace with logged-in user later
           timestamp: new Date(),
         },
       ],
@@ -106,7 +106,8 @@ exports.getTickets = async (req, res) => {
     if (ticketId) {
       const ticket = await Ticket.findById(ticketId)
         .populate('customer') // Populate customer details
-        .populate('assignedTo'); // Populate assigned user details
+        .populate('assignedTo','firstName lastName role') // Populate assigned user details
+         .populate('history.changed_by', 'firstName lastName');
 
       if (!ticket) {
         return res.status(404).json({ message: 'Ticket not found' });
@@ -125,7 +126,8 @@ exports.getTickets = async (req, res) => {
     // Fetch tickets with applied filters
     const tickets = await Ticket.find(query)
       .populate('customer') // Populate customer details
-      .populate('assignedTo'); // Populate assigned user details
+      .populate('assignedTo','firstName lastName role')
+       .populate('history.changed_by', 'firstName lastName'); // Populate assigned user details
 
     if (tickets.length === 0) {
       return res.status(404).json({ message: 'No tickets found' });
@@ -146,8 +148,8 @@ exports.getTicketById = async (req, res) => {
     // Find the ticket by ID and populate related fields
     const ticket = await Ticket.findById(ticketId)
       .populate('customer') // Populate customer details
-      .populate('assignedTo'); // Populate assigned user details
-
+      .populate('assignedTo','firstName lastName role') // Populate assigned user details
+      .populate('');
     if (!ticket) {
       return res.status(404).json({ message: 'Ticket not found' });
     }
@@ -311,10 +313,41 @@ exports.deleteNote = async (req, res) => {
 };
 
 // Update History Status
+// exports.updateHistoryStatus = async (req, res) => {
+//   try {
+//     const { status,ticketId } = req.body; // New status and the user making the change from request body
+//     // Validate status
+//     const allowedStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
+//     if (!allowedStatuses.includes(status)) {
+//       return res.status(400).json({ error: 'Invalid status provided.' });
+//     }
+
+//     // Find the ticket
+//     const ticket = await Ticket.findById({_id: ticketId });
+//     if (!ticket) {
+//       return res.status(404).json({ error: 'Ticket not found.' });
+//     }
+
+//     // Update ticket status and add to history
+//     ticket.issue_details.status = status;
+//     ticket.history.push({
+//       status,
+//       changed_by:req.user._id,
+//       timestamp: new Date(),
+//     });
+    
+//     // Save changes
+//     await ticket.save();
+  
+//     return res.status(200).json({ message: 'History updated successfully.', ticket });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: 'An error occurred while updating the history.' });
+//   }
+// };
 exports.updateHistoryStatus = async (req, res) => {
   try {
-    const { status,ticketId } = req.body; // New status and the user making the change from request body
-
+    const { status, ticketId } = req.body; // New status and the user making the change from request body
     // Validate status
     const allowedStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
     if (!allowedStatuses.includes(status)) {
@@ -322,7 +355,7 @@ exports.updateHistoryStatus = async (req, res) => {
     }
 
     // Find the ticket
-    const ticket = await Ticket.findOne({ ticket_id: ticketId });
+    const ticket = await Ticket.findById(ticketId).populate('history.changed_by', 'firstName lastName'); // Populating user details
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found.' });
     }
@@ -331,18 +364,20 @@ exports.updateHistoryStatus = async (req, res) => {
     ticket.issue_details.status = status;
     ticket.history.push({
       status,
+      changed_by: req.user._id,  // Ensure this is correctly populated later
       timestamp: new Date(),
     });
 
     // Save changes
     await ticket.save();
-
+  
     return res.status(200).json({ message: 'History updated successfully.', ticket });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'An error occurred while updating the history.' });
   }
 };
+
 //update status of ticket
 
 exports.updateTicketStatus = async (req, res) => {
@@ -370,7 +405,7 @@ exports.updateTicketStatus = async (req, res) => {
     // Track the status change in history
     const statusHistory = {
       status,  // New status
-      changed_by:req.user.company._id,  // The user who made the change
+      changed_by:req.user._id,  // The user who made the change
       timestamp: Date.now(),
     };
 

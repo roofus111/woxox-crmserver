@@ -30,7 +30,8 @@ const HistorySchema = new mongoose.Schema({
   status: { type: String, default: "Open",
     required: true,
      enum: ['Open', 'In Progress', 'Resolved', 'Closed'] },
-  changed_by: { type: String,
+  changed_by: { type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
      required: true 
     },
   timestamp: { type: Date, default: Date.now },
