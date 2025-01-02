@@ -29,4 +29,5 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
+
 module.exports = authenticateUser; // Ensure it is exported as a middleware function

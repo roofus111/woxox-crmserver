@@ -31,7 +31,7 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", // Allow requests from this origin and my frontend port = 5173
+    origin: "https://bugfix.d33in9icixqoy6.amplifyapp.com", // Allow requests from this origin and my frontend port = 5173
     methods: ["GET", "POST"], // Allow these HTTP methods
   },
 });
@@ -88,7 +88,7 @@ io.on("connection", (socket) => {
   });
 });
 
-cron.schedule("*/10 * * * * *", async () => {
+cron.schedule("0,30 * * * *", async () => {
   console.log("Running follow-up check");
   try {
     const now = new Date();
@@ -144,5 +144,16 @@ cron.schedule('0 0 * * *', async () => {
 server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
-
+/**
+ * @swagger
+ * /:
+ * get:
+ *  summary: To get all campaigns from mongodb
+ *  description :this api is used to fetch data from mongodb
+ *  responses:
+ *       200: 
+ *          description:this api is used to fetch data from  mongodb
+ *            content:
+ *                application/json
+ */
 app.get("/", (req, res) => res.status(200).send("OK"));
