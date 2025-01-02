@@ -1,9 +1,9 @@
 const LeadActivity = require('../models/LeadActivity'); // Assuming the model is in the models folder
-
+const User=require('../models/User')
 // Controller to create a new lead activity log
 const createLeadActivity = async (req, res) => {
   const { leadId, action, details } = req.body;
-
+console.log(action)
   try {
     // Create the activity log
     const newActivity = new LeadActivity({
@@ -69,9 +69,10 @@ const deleteLeadActivities = async (req, res) => {
   }
 };
 
+
 module.exports = {
   createLeadActivity,
   getLeadActivities,
   getFilteredLeadActivities,
-  deleteLeadActivities,
+  deleteLeadActivities
 };

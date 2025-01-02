@@ -156,7 +156,7 @@ exports.updateFollowUp = async (req, res) => {
       leadId: updatedFollowUp.leadId,
       userId: req.user._id,
       action: "assigned",
-      details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-US")}`,
+      details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
     });
@@ -169,7 +169,7 @@ exports.updateFollowUp = async (req, res) => {
         leadId: updatedFollowUp.leadId,
         userId: req.user._id,
         action: "Rescheduled",
-        details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-US")}`,
+        details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-IN")}`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
       });
@@ -221,7 +221,7 @@ exports.deleteFollowUp = async (req, res) => {
       leadId: deletedFollowUp.leadId,
       userId: req.user._id,
       action: "deleted",
-      details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-US")}`,
+      details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
     });

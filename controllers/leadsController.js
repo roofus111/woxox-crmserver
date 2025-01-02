@@ -585,11 +585,11 @@ exports.getLeadsByCampaignId = async (req, res) => {
   }
 };
 
-exports.UpdateLeadStatus = handleAsync(async (req, res) => {
+exports.UpdateLeadStatus = async (req, res) => {
   const { leadId } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ["Converted", "In Progress", "Closed","Pending"];
+  const validStatuses = ['New', 'Contacted', 'Interested', 'Not Interested', 'Converted', 'Pending', 'In Progress', 'Lost', 'Won'];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status" });
   }
@@ -652,7 +652,7 @@ exports.UpdateLeadStatus = handleAsync(async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: "An error occurred", error: error.message });
   }
-});
+};
 
 exports.addNoteToLead = async (req, res) => {
   const { leadId } = req.params; // Assuming leadId is passed as a URL parameter

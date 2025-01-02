@@ -313,7 +313,7 @@ exports.deleteNote = async (req, res) => {
 // Update History Status
 exports.updateHistoryStatus = async (req, res) => {
   try {
-    const { status, changed_by,ticketId } = req.body; // New status and the user making the change from request body
+    const { status,ticketId } = req.body; // New status and the user making the change from request body
 
     // Validate status
     const allowedStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
@@ -331,7 +331,6 @@ exports.updateHistoryStatus = async (req, res) => {
     ticket.issue_details.status = status;
     ticket.history.push({
       status,
-      changed_by,
       timestamp: new Date(),
     });
 
@@ -344,6 +343,61 @@ exports.updateHistoryStatus = async (req, res) => {
     return res.status(500).json({ error: 'An error occurred while updating the history.' });
   }
 };
+//update status of ticket
+
+exports.updateTicketStatus = async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const { status } = req.body;
+
+    // Validate status input (ensuring it's a valid status)
+    const validStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    // Validate the ticketId format (Mongoose ObjectId)
+    if (!mongoose.Types.ObjectId.isValid(ticketId)) {
+      return res.status(400).json({ message: 'Invalid ticket ID format' });
+    }
+
+    // Find the ticket by ID
+    const ticket = await Ticket.findById(ticketId);
+    if (!ticket) {
+      return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    // Track the status change in history
+    const statusHistory = {
+      status,  // New status
+      changed_by:req.user.company._id,  // The user who made the change
+      timestamp: Date.now(),
+    };
+
+    // Add status change to ticket history
+    ticket.history.push(statusHistory);
+
+    // Update the ticket's status
+    ticket.issue_details.status = status;
+    ticket.timestamps.updated_at = Date.now();  // Update the timestamp for when the status was changed
+
+    // Save the ticket after update
+    await ticket.save();
+
+    return res.status(200).json({
+      message: 'Ticket status updated successfully',
+      data: ticket,
+    });
+  } catch (error) {
+    console.error('Error updating ticket status:', error);
+    return res.status(500).json({
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+};
+
+
 
 
 
