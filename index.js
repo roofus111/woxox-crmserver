@@ -31,8 +31,8 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: "https://bugfix.d33in9icixqoy6.amplifyapp.com", // Allow requests from this origin and my frontend port = 5173
-    methods: ["GET", "POST"], // Allow these HTTP methods
+    origin: "https://www.woxox.canbridge.in", // Allow requests from this origin and my frontend port = 5173
+    methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
 
