@@ -707,5 +707,58 @@ exports.deleteNoteFromLead = async (req, res) => {
 };
 
 
+exports.homeInsight = async (req,res) =>{
+  try {
+    const { assigneeId } = req.params; // Get assignee ID from request params
+    const companyId = req.user?.company?._id; // Get company ID from req.user
+
+    // Validate inputs
+    if (!mongoose.Types.ObjectId.isValid(assigneeId)) {
+      return res.status(400).json({ error: 'Invalid Assignee ID' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      return res.status(403).json({ error: 'Unauthorized: Invalid company information' });
+    }
+
+    // Possible statuses (include all enum values)
+    const possibleStatuses = [
+      'New',
+      'Contacted',
+      'Interested',
+      'Not Interested',
+      'Converted',
+      'Pending',
+      'In Progress',
+      'Lost',
+      'Won'
+    ];
+
+    // Aggregation pipeline to group leads by status and count them
+    const leadCounts = await Lead.aggregate([
+      { 
+        $match: { 
+          assignedTo: new mongoose.Types.ObjectId(assigneeId), // Use 'new' to instantiate ObjectId
+          company: new mongoose.Types.ObjectId(companyId),     // Use 'new' for company ID
+        } 
+      },
+      { $group: { _id: '$status', count: { $sum: 1 } } }, // Group by status and count
+    ]);
+
+    // Transform the result: Populate all possible statuses with zero counts if missing
+    const result = possibleStatuses.reduce((acc, status) => {
+      acc[status] = leadCounts.find((item) => item._id === status)?.count || 0;
+      return acc;
+    }, {});
+
+    // Respond with success
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error in getLeadCountByStatus:', error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+
+}
+
+
 
 

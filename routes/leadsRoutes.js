@@ -540,4 +540,7 @@ router.get("/docs/bylead/:leadId", async (req, res) => {
   }
 });
 
+
+router.get('/leadInsight/:assigneeId' ,leadsController.homeInsight);
+
 module.exports = router;
