@@ -1,7 +1,8 @@
 const LeadActivity = require('../models/LeadActivity'); // Assuming the model is in the models folder
-const User=require('../models/User')
+
+const User = require('../models/User');
 // Controller to create a new lead activity log
-const createLeadActivity = async (req, res) => {
+exports.createLeadActivity = async (req, res) => {
   const { leadId, action, details } = req.body;
 console.log(action)
   try {
@@ -23,7 +24,7 @@ console.log(action)
 };
 
 // Controller to get all activities for a specific lead
-const getLeadActivities = async (req, res) => {
+exports.getLeadActivities = async (req, res) => {
   const { leadId } = req.params;
 
   try {
@@ -37,7 +38,7 @@ const getLeadActivities = async (req, res) => {
 };
 
 // Controller to get activities with optional filters (by user or action)
-const getFilteredLeadActivities = async (req, res) => {
+exports.getFilteredLeadActivities = async (req, res) => {
   const { leadId } = req.params;
   const { userId, action } = req.query;
 
@@ -58,7 +59,7 @@ const getFilteredLeadActivities = async (req, res) => {
 };
 
 // Controller to delete all activities for a specific lead (optional)
-const deleteLeadActivities = async (req, res) => {
+exports.deleteLeadActivities = async (req, res) => {
   const { leadId } = req.params;
 
   try {
@@ -70,9 +71,29 @@ const deleteLeadActivities = async (req, res) => {
 };
 
 
-module.exports = {
-  createLeadActivity,
-  getLeadActivities,
-  getFilteredLeadActivities,
-  deleteLeadActivities
+// Controller to get LeadActivity with populated companyId
+exports.getLeadActivityInsight = async (req, res) => {
+  try {
+console.log("njn vannu");
+
+    // const { companyId } = req.user.company._id; // Assuming companyId is passed as a URL parameter
+    
+    // // Find activities for the company (assuming you can relate activities to company via userId)
+    // const activities = await LeadActivity.find({ 'userId.company': companyId })
+    //   .populate({
+    //     path: 'userId',
+    //     select: 'name email', // Populate userId with fields like name and email
+    //   })
+    //   .sort({ timestamp: -1 }); // Sort by most recent activity
+    
+    // if (!activities) {
+    //   return res.status(404).json({ message: 'No activities found for this company' });
+    // }
+
+    res.status(200).json({message:"hello"});  
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
 };
+

@@ -60,5 +60,7 @@ router.get('/', userProfileController.getAllProfiles);
  *         description: user added successfully.
  */
 router.post('/', userProfileController.createProfile);
-
+router.get("/:userid", userProfileController. getProfileById);
+router.put("/put/:userid", userProfileController.updateProfileById);
+router.delete("/delete/:userid", userProfileController. deleteProfileById);
 module.exports = router;

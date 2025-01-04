@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const LeadActivitySchema = new Schema({
-  leadId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Lead',
-    required: true,  // ID of the lead being managed
-  },
+  // leadId: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   ref: 'Lead',
+  // // ID of the lead being managed
+  // },
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true,  // User managing the lead
+ // User managing the lead
   },
   action: {
     type: String,
@@ -34,6 +34,6 @@ const LeadActivitySchema = new Schema({
   }
 });
 
-const LeadActivity = mongoose.model('LeadActivity', LeadActivitySchema);
+const LeadActivity = mongoose.model('templeadactivity', LeadActivitySchema);
 
 module.exports = LeadActivity;
