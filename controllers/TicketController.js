@@ -127,7 +127,7 @@ exports.getTickets = async (req, res) => {
     // Fetch tickets with applied filters
     const tickets = await Ticket.find(query)
       .populate('customer') // Populate customer details
-      .populate('notes','author')
+      .populate('notes.author','firstName lastName')
       .populate('assignedTo','firstName lastName role')
        .populate('history.changed_by', 'firstName lastName'); // Populate assigned user details
 

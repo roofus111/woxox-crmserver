@@ -16,10 +16,10 @@ const NoteSchema = new mongoose.Schema({
   note_id: { type: String,
      required: true 
     },
-  author: { type: String, 
+  author: { type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
- },
+     required: true 
+    },
   timestamp: { type: Date, default: Date.now },
   content: { type: String, 
     required: true 
