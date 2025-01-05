@@ -107,7 +107,7 @@ exports.getTickets = async (req, res) => {
       const ticket = await Ticket.findById(ticketId)
         .populate('customer') // Populate customer details
         .populate('assignedTo','firstName lastName role') // Populate assigned user details
-        .populate('notes.author','')
+        .populate('notes.author','firstName lastName')
          .populate('history.changed_by', 'firstName lastName');
 
       if (!ticket) {
@@ -151,7 +151,7 @@ exports.getTicketById = async (req, res) => {
     const ticket = await Ticket.findById(ticketId)
       .populate('customer') // Populate customer details
       .populate('assignedTo','firstName lastName role') // Populate assigned user details
-      .populate('');
+      .populate('notes.author','firstName lastName')
     if (!ticket) {
       return res.status(404).json({ message: 'Ticket not found' });
     }
