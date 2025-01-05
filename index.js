@@ -50,7 +50,7 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: "https://www.woxox.canbridge.in", // Allow requests from this origin and my frontend port = 5173
+    origin: ["https://www.woxox.canbridge.in", "https://app.woxox.com"],  // Allow requests from this origin and my frontend port = 5173
     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
