@@ -17,6 +17,7 @@ const NoteSchema = new mongoose.Schema({
      required: true 
     },
   author: { type: String, 
+    ref: 'User',
     required: true
  },
   timestamp: { type: Date, default: Date.now },

@@ -42,6 +42,7 @@ exports.createFollowUp = async (req, res) => {
 
     const newActivity = new LeadActivity({
       leadId,
+      company: req.user.company._id,
       userId: req.user._id,
       action: "followUp",
       details: `Created a new follow-up on ${followUpDate}`,
@@ -154,6 +155,7 @@ exports.updateFollowUp = async (req, res) => {
     // Log general update activity
     const generalActivity = new LeadActivity({
       leadId: updatedFollowUp.leadId,
+      company: req.user.company._id,
       userId: req.user._id,
       action: "assigned",
       details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
@@ -167,6 +169,7 @@ exports.updateFollowUp = async (req, res) => {
     if (nextFollowUpDate && nextFollowUpDate !== originalNextFollowUpDate?.toISOString()) {
       const nextFollowUpActivity = new LeadActivity({
         leadId: updatedFollowUp.leadId,
+        company: req.user.company._id,
         userId: req.user._id,
         action: "Rescheduled",
         details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-IN")}`,
@@ -220,6 +223,7 @@ exports.deleteFollowUp = async (req, res) => {
     const newActivity = new LeadActivity({
       leadId: deletedFollowUp.leadId,
       userId: req.user._id,
+      company: req.user.company._id,
       action: "deleted",
       details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
       ipAddress: req.ip,

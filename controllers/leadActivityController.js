@@ -4,12 +4,12 @@ const User = require('../models/User');
 // Controller to create a new lead activity log
 exports.createLeadActivity = async (req, res) => {
   const { leadId, action, details } = req.body;
-console.log(action)
   try {
     // Create the activity log
     const newActivity = new LeadActivity({
       leadId,
       userId: req.user._id, // Assuming user is authenticated and user ID is available in req.user
+      company: req.user.company._id,
       action,
       details,
       ipAddress: req.ip, // Getting IP address from request
@@ -23,12 +23,12 @@ console.log(action)
   }
 };
 
-// Controller to get all activities for a specific lead
+// // Controller to get all activities for a specific lead
 exports.getLeadActivities = async (req, res) => {
   const { leadId } = req.params;
 
   try {
-    const activities = await LeadActivity.find({ leadId })
+    const activities = await LeadActivity.find({ company: req.user.company._id,leadId })
       .populate('userId', 'name email') // Populating user details for clarity
       .sort({ timestamp: -1 }); // Sort by most recent activity
     res.status(200).json(activities);
@@ -37,12 +37,14 @@ exports.getLeadActivities = async (req, res) => {
   }
 };
 
+
+
 // Controller to get activities with optional filters (by user or action)
 exports.getFilteredLeadActivities = async (req, res) => {
   const { leadId } = req.params;
   const { userId, action } = req.query;
 
-  let filter = { leadId };
+  let filter = { leadId,company: req.user.company._id };
 
   if (userId) filter.userId = userId; // Filter by userId if provided
   if (action) filter.action = action; // Filter by action if provided
@@ -63,7 +65,7 @@ exports.deleteLeadActivities = async (req, res) => {
   const { leadId } = req.params;
 
   try {
-    await LeadActivity.deleteMany({ leadId });
+    await LeadActivity.deleteMany({ company: req.user.company._id,leadId });
     res.status(200).json({ message: 'Lead activities deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting lead activities', error });
@@ -71,29 +73,7 @@ exports.deleteLeadActivities = async (req, res) => {
 };
 
 
-// Controller to get LeadActivity with populated companyId
-exports.getLeadActivityInsight = async (req, res) => {
-  try {
-console.log("njn vannu");
 
-    // const { companyId } = req.user.company._id; // Assuming companyId is passed as a URL parameter
-    
-    // // Find activities for the company (assuming you can relate activities to company via userId)
-    // const activities = await LeadActivity.find({ 'userId.company': companyId })
-    //   .populate({
-    //     path: 'userId',
-    //     select: 'name email', // Populate userId with fields like name and email
-    //   })
-    //   .sort({ timestamp: -1 }); // Sort by most recent activity
-    
-    // if (!activities) {
-    //   return res.status(404).json({ message: 'No activities found for this company' });
-    // }
 
-    res.status(200).json({message:"hello"});  
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+
 

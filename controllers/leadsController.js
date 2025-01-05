@@ -80,7 +80,6 @@ exports.searchLeads = async (req, res) => {
     if (assignedTo) {
       searchCriteria.assignedTo = assignedTo; // assuming assignedTo is an ID
     }
-    console.log(campaign);
     
     if (campaign && campaign != 'undefined') {
       {mongoose.Types.ObjectId.isValid(campaign) ? searchCriteria.campaignid = campaign : searchCriteria.campaign = campaign  }
@@ -118,7 +117,6 @@ exports.AssignLeadEqual = async (req, res) => {
     // Fetch all users
     const {campaignid} = req.params;
     const users = req.body;
-    console.log(users);
 
     if (users.length === 0) throw new Error("No users found");
 
@@ -246,7 +244,7 @@ exports.UpdateLead = async (req, res) => {
     // If lead is not found, return a 404 error
     if (!updatedLead) {
       return res.status(404).json({ message: 'Lead not found' });
-    }
+    } 
 
     // Send the updated lead data as a response
     res.status(200).json(updatedLead);
