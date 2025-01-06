@@ -74,24 +74,38 @@ exports.updateProfileById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+const User = require('../models/User');
 
-// Controller to delete profile by ID
-exports.deleteProfileById = async (req, res) => {
+// Toggle User Activation
+exports.toggleUserActivation = async (req, res) => {
   try {
-    const { userid } = req.params;
+    const { userId } = req.params;
+    const { action } = req.body; // action can be 'activate' or 'deactivate'
 
-    // Find the profile to delete
-    const profile = await UserProfile.findOneAndDelete({
-      _id: userid,
-      company: req.user.company._id,
-    });
-
-    if (!profile) {
-      return res.status(404).json({ message: "Profile not found" });
+    // Validate action
+    if (!['activate', 'deactivate'].includes(action)) {
+      return res.status(400).json({ message: 'Invalid action. Use "activate" or "deactivate".' });
     }
 
-    res.status(200).json({ message: "Profile deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Set the isActive field based on the action
+    user.isActive = action === 'activate';
+
+    await user.save();
+
+    const status = user.isActive ? 'activated' : 'deactivated';
+    res.status(200).json({ message: `User ${status} successfully`, user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
+
+
+
+

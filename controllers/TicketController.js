@@ -104,7 +104,7 @@ exports.getTickets = async (req, res) => {
 
     // If a specific ticket ID is provided, fetch the ticket by ID
     if (ticketId) {
-      const ticket = await Ticket.findById(ticketId)
+      const ticket = await Ticket.findById({ company: req.user.company._id },ticketId)
         .populate('customer') // Populate customer details
         .populate('assignedTo','firstName lastName role') // Populate assigned user details
         .populate('notes.author','firstName lastName')
@@ -148,7 +148,7 @@ exports.getTicketById = async (req, res) => {
     const { ticketId } = req.params;
 
     // Find the ticket by ID and populate related fields
-    const ticket = await Ticket.findById(ticketId)
+    const ticket = await Ticket.findById({ company: req.user.company._id },ticketId)
       .populate('customer') // Populate customer details
       .populate('assignedTo','firstName lastName role') // Populate assigned user details
       .populate('notes.author','firstName lastName')
