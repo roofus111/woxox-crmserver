@@ -72,6 +72,83 @@ exports.deleteLeadActivities = async (req, res) => {
   }
 };
 
+const moment = require('moment'); // Ensure moment.js is installed
+
+exports.getLeadActivitiesByCompany = async (req, res) => {
+  try {
+    const {  sort = '-timestamp', startDate, endDate } = req.query;
+
+    if (!req.user || !req.user.company || !req.user.company._id) {
+      return res.status(403).json({ message: 'Unauthorized: Invalid company information in token' });
+    }
+
+    const companyId = req.user.company._id;
+
+    // Build the query filter
+    const dateFilter = {};
+    if (startDate) {
+      dateFilter.$gte = new Date(startDate); // Start date filter
+    }
+    if (endDate) {
+      dateFilter.$lte = new Date(endDate); // End date filter
+    }
+
+    const filter = { company: companyId };
+    if (startDate || endDate) {
+      filter.timestamp = dateFilter; // Add date filter to the query
+    }
+
+    // Query the database for activities
+    const activities = await LeadActivity.find(filter)
+      .populate('userId', 'name email') // Populating user details
+      .populate('leadId', 'name status') // Populating lead details
+      .sort(sort);
+
+    // Get the total count for pagination metadata
+    const totalActivities = await LeadActivity.countDocuments(filter);
+
+    // Group activities by userId -> action -> date
+    const groupedActivities = activities.reduce((acc, activity) => {
+      const userId = activity.userId._id.toString();
+      const userName = activity.userId.name;
+      const userEmail = activity.userId.email;
+      const action = activity.action;
+      const date = moment(activity.timestamp).format('YYYY-MM-DD'); // Format timestamp to a date
+
+      if (!acc[userId]) {
+        acc[userId] = {
+          user: { id: userId, name: userName, email: userEmail },
+          actions: {},
+        };
+      }
+
+      if (!acc[userId].actions[action]) {
+        acc[userId].actions[action] = {};
+      }
+
+      if (!acc[userId].actions[action][date]) {
+        acc[userId].actions[action][date] = [];
+      }
+
+      acc[userId].actions[action][date].push(activity);
+      return acc;
+    }, {});
+
+    // Send the response
+    res.status(200).json({
+      totalActivities,
+      groupedActivities: Object.values(groupedActivities),
+    });
+  } catch (error) {
+    console.error('Error fetching lead activities:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+
+
+
+
 
 
 

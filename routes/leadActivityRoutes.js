@@ -16,5 +16,5 @@ router.get('/filter/:leadId', leadActivityController.getFilteredLeadActivities);
 
 // Route to delete all activities for a lead (if needed)
 router.delete('/:leadId', leadActivityController.deleteLeadActivities);
-
+router.get('/get/insight',leadActivityController.getLeadActivitiesByCompany);
 module.exports = router;
