@@ -74,37 +74,38 @@ exports.updateProfileById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-const User = require('../models/User');
 
-// Toggle User Activation
-exports.toggleUserActivation = async (req, res) => {
+// Toggle user activity
+exports.toggleUserStatus = async (req, res) => {
+  const { userId } = req.params; // Assuming the userId is passed as a route parameter
+  const { isActive } = req.body; // The new status is sent in the request body
+
+  if (typeof isActive !== "boolean") {
+    return res.status(400).json({ message: "Invalid isActive value. Must be true or false." });
+  }
+
   try {
-    const { userId } = req.params;
-    const { action } = req.body; // action can be 'activate' or 'deactivate'
-
-    // Validate action
-    if (!['activate', 'deactivate'].includes(action)) {
-      return res.status(400).json({ message: 'Invalid action. Use "activate" or "deactivate".' });
-    }
-
-    const user = await User.findById(userId);
-
+    const user = await UserProfile.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found." });
     }
 
-    // Set the isActive field based on the action
-    user.isActive = action === 'activate';
-
+    user.isActive = isActive;
     await user.save();
 
-    const status = user.isActive ? 'activated' : 'deactivated';
-    res.status(200).json({ message: `User ${status} successfully`, user });
+    res.status(200).json({
+      message: `User is now ${isActive ? "active" : "inactive"}.`,
+      user: { id: user._id, isActive: user.isActive },
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: "Error toggling user status.", error });
   }
 };
+
+
+
+
 
 
 

@@ -14,39 +14,54 @@ exports.register = async (req, res) => {
     }
   };
 
-exports.login = async (req, res) => {
+  exports.login = async (req, res) => {
     const { email, password } = req.body;
+
     try {
-        const user = await User.findOne({ email });
-        if (!user || !(await user.comparePassword(password))) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password are required' });
         }
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET,  { expiresIn: '10h' } );
-        res.status(200).json({ token, role: user.role,id:user._id,user: user.firstName+" "+user.lastName});
+
+        // Find user by email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // Check if user is active
+        if (user.isActive === false) {
+            return res.status(403).json({ message: 'User account is inactive' });
+        }
+
+        // Verify password
+        const isPasswordValid = await user.comparePassword(password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '10h' }
+        );
+
+        // Respond with user info and token
+        res.status(200).json({
+            token,
+            user: {
+                id: user._id,
+                fullName: `${user.firstName} ${user.lastName}`,
+                role: user.role
+            }
+        });
     } catch (err) {
-        res.status(500).json({ error: 'Error logging in user' });
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'An error occurred while processing your request' });
     }
 };
-// exports.login = async (req, res) => {
-//   const { email, password } = req.body;
-//   try {
-//     const user = await User.findOne({ email, active: true });
-      
-//       if (!user || !(await user.comparePassword(password))) {
-//           return res.status(401).json({ message: 'Invalid email or password' });
-//       }
 
-//       // Check if the user is active
-//       if (!user.active) {
-//           return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
-//       }
-
-//       const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '10h' });
-//       res.status(200).json({ token, role: user.role, id: user._id, user: user.firstName + " " + user.lastName });
-//   } catch (err) {
-//       res.status(500).json({ error: 'Error logging in user' });
-//   }
-// };
 
 exports.changePassword = async (req, res) => {
   try {

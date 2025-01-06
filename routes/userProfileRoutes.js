@@ -62,5 +62,5 @@ router.get('/', userProfileController.getAllProfiles);
 router.post('/', userProfileController.createProfile);
 router.get("/:userid", userProfileController. getProfileById);
 router.put("/put/:userid", userProfileController.updateProfileById);
-// router.put('/toggle-activation/:userId', userProfileController.toggleUserActivation);
+router.put("/:userId/toggle-status", userProfileController.toggleUserStatus);
 module.exports = router;
