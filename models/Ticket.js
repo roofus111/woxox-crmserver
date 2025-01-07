@@ -73,9 +73,11 @@ assignedTo: {
     ref: 'User',
     default: null  // This specifies that the default value can be null.
   },
-    company: 
-    { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
-  
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: true,
+  },
   notes: [NoteSchema],
   history: [HistorySchema],
   sla: {

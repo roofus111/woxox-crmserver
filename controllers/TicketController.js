@@ -68,6 +68,7 @@ exports.createTicket = async (req, res) => {
     // Create the new ticket
     const newTicket = new Ticket({
       customer: customerId,
+      company:req.user.company?._id,
       issue_details: {
         subject: subject,
         description: description,
