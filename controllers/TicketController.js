@@ -119,7 +119,7 @@ exports.getTickets = async (req, res) => {
     }
 
     // Build a query object for filtering
-    const query = {};
+    const query = {company: req.user.company._id};
     if (customerId) query.customer = customerId;
     if (assignedTo) query.assignedTo = assignedTo;
     if (status) query['history.status'] = status;
