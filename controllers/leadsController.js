@@ -502,7 +502,7 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
 
 
 exports.createLead = async (req, res) => {
-  const { name, phone, email, campaignid } = req.body; // Extract relevant fields from the request
+  const { name, phone, email, campaignid,district } = req.body; // Extract relevant fields from the request
 
 
   // Validate required fields
@@ -520,7 +520,7 @@ exports.createLead = async (req, res) => {
     // Check for duplicates based on phone or email
     const existingLead = await Lead.findOne({
       campaignid, // Include the campaign ID as a filter
-      $or: [{ phone }, { email }], 
+      $or: [{ phone }], 
     });
 
     if (existingLead) {
@@ -530,7 +530,7 @@ exports.createLead = async (req, res) => {
     // Check if customer already exists based on phone or email
     let customerId = null;
     const existingCustomer = await Customer.findOne({
-      $or: [{ phone }, { email }],
+      $or: [{ phone }],
     });
 
     if (existingCustomer) {
@@ -540,6 +540,7 @@ exports.createLead = async (req, res) => {
     // Create a new lead
     const lead = new Lead({
       name,
+      district,
       phone,
       email,
       campaignid: campaignid, // Associate lead with the campaign ID

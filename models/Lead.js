@@ -111,6 +111,7 @@ const NoteSchema = new mongoose.Schema({
 });
 const LeadSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  district: { type: String },
   email: { type: String },
   phone: { type: String, required: true },
   campaign: { type: String },
