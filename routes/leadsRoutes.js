@@ -16,6 +16,7 @@ const { S3 } = require("@aws-sdk/client-s3");
 const { v4: uuidv4 } = require("uuid");
 const File = require("../models/document"); // Import the File model
 const s3Client = require("../config/s3"); // Import the S3 client
+const Lead = require('../models/Lead')
 // Set up multer for S3
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -491,6 +492,20 @@ router.put('/notes/:leadId', leadsController.addNoteToLead);
 *         description: Data is deleted.
 */
 router.delete('/deletenotes', leadsController.deleteNoteFromLead);
+
+router.delete('/deleteMultiLeads', async (req, res) => {
+  try {
+    const { ids } = req.body; // Expecting an array of IDs in the request body
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ message: 'IDs must be an array' });
+    }
+    const result = await Lead.deleteMany({ _id: { $in: ids } });
+    res.status(200).json({ message: 'Items deleted successfully', result });
+  } catch (error) {
+    console.error('Error deleting items:', error);
+    res.status(500).json({ message: 'Failed to delete items' });
+  }
+});
 
 router.put('/assign-multiple/:userId',leadsController.AssignMultipleLeadsToUser);
 router.post("/upload", upload.single("file"), async (req, res) => {
