@@ -105,7 +105,7 @@ exports.getTickets = async (req, res) => {
 
     // If a specific ticket ID is provided, fetch the ticket by ID
     if (ticketId) {
-      const ticket = await Ticket.findById({ company: req.user.company._id },ticketId)
+      const ticket = await Ticket.findById(ticketId)
         .populate('customer') // Populate customer details
         .populate('assignedTo','firstName lastName role') // Populate assigned user details
         .populate('notes.author','firstName lastName')
@@ -149,20 +149,20 @@ exports.getTicketById = async (req, res) => {
     const { ticketId } = req.params;
 
     // Find the ticket by ID and populate related fields
-    const ticket = await Ticket.findById({ company: req.user.company._id },ticketId)
+    const ticket = await Ticket.findById(ticketId)
       .populate('customer') // Populate customer details
       .populate('assignedTo','firstName lastName role') // Populate assigned user details
       .populate('notes.author','firstName lastName')
     if (!ticket) {
       return res.status(404).json({ message: 'Ticket not found' });
     }
-
     return res.status(200).json(ticket);
   } catch (error) {
     console.error('Error fetching ticket:', error);
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 // Function to handle fetching file from ticket attachments
 exports.getAttachmentById = async (req, res) => {
