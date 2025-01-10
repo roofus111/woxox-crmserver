@@ -50,10 +50,11 @@ router.post(
             data["Phone Number"],
           status: "New",
           source: req.body.source,
-          campaign: req.body.campaignid,
+          campaign: req.body.campaign,
           campaignid: req.body.campaignid,
           company: req.user.company._id,
           assignedTo: null,
+          district:data.District ,
           additionalFields: {
             // Add additional fields here
           },
@@ -94,7 +95,7 @@ router.post(
         const existingLead = await Lead.findOne({
           phone: leadData.phone,
           company: req.user.company._id,
-          campaignid: leadData.campaign,
+          campaignid: leadData.campaignid,
         });
         console.log("no null", existingLead);
 
