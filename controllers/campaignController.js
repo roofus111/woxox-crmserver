@@ -23,7 +23,10 @@ exports.getCampaign = async (req, res) => {
     }
   };
   exports.updateCampaign = async (req, res) => {
+    console.log(req.body);
+    
     try { 
+      console.log(req)
       const { campaignid } = req.params;
       const updatedCampaign = await Campaign.findByIdAndUpdate(
         campaignid,
