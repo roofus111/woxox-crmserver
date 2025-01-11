@@ -5,6 +5,7 @@ const ticketController = require('../controllers/TicketController'); // Adjust t
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 const authenticateUser = require('../middleware/authenticateUser');
+
 router.use(authenticateUser)
 // POST route to create a new ticket
 router.post('/create', upload.array('attachments'),ticketController.createTicket);
