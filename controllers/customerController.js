@@ -167,7 +167,8 @@ exports.getCustomerDetails = async (req, res) => {
     // Fetch Sales and Leads as arrays
     const sales = await Sales.find({ CustomerId: customer._id });
     const leads = await Lead.find({ Customer: customer._id }).populate("assignedTo", "_id firstName lastName")
-
+                                                             .populate("campaignid","name")
+    
     // Extract IDs as arrays
     const salesIds = sales;
     const leadIds = leads;
