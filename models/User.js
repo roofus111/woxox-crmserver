@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
   socketId: { type: String },
   role: {
     type: String,
-    enum: ["admin", "manager", "user", "guest","hr","docteam","finance", "pipeline"],
+    enum: ["admin", "manager", "user", "guest","hr","docteam","finance",'pipeline'],
     default: "guest",
   },
   company: {
