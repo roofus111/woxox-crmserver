@@ -502,7 +502,7 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
 
 
 exports.createLead = async (req, res) => {
-  const { name, phone, email, campaignid,district } = req.body; // Extract relevant fields from the request
+  const { name, phone, email, campaignid,district,assignedTo } = req.body; // Extract relevant fields from the request
 
 
   // Validate required fields
@@ -543,6 +543,7 @@ exports.createLead = async (req, res) => {
       district,
       phone,
       email,
+      assignedTo: assignedTo || null,
       campaignid: campaignid, // Associate lead with the campaign ID
       Customer: customerId, // Associate the lead with the existing customer (if found)
       company: req.user.company._id, // Associate with the user's company
@@ -787,8 +788,14 @@ exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
           contacted: {
             $sum: { $cond: [{ $eq: ["$status", "Contacted"] }, 1, 0] }  // Count 'Contacted' leads
           },
+          Converted: {
+            $sum: { $cond: [{ $eq: ["$status", "Converted"] }, 1, 0] }  // Count 'Converted' leads
+          },
           inProgress: {
             $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] }  // Count 'In Progress' leads
+          },
+          Interested: {
+            $sum: { $cond: [{ $eq: ["$status", "Interested"] }, 1, 0] }  // Count 'Interested' leads
           },
           won: {
             $sum: { $cond: [{ $eq: ["$status", "Won"] }, 1, 0] }  // Count 'Won' leads
@@ -804,8 +811,10 @@ exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
           totalLeads: 1,      // Include the total leads count
           unassigned: 1,      // Include the unassigned leads count
           new: 1,             // Include the new leads count
-          contacted: 1,       // Include the contacted leads count
-          inProgress: 1,      // Include the in progress leads count
+          contacted: 1,          // Include the contacted leads count
+          Converted:1,      
+          inProgress: 1,
+          Interested:1,      // Include the in progress leads count
           won: 1,             // Include the won leads count
           lost: 1,            // Include the lost leads count
           _id: 0              // Exclude the default '_id' field

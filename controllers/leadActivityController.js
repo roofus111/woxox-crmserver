@@ -23,17 +23,51 @@ exports.createLeadActivity = async (req, res) => {
   }
 };
 
-// // Controller to get all activities for a specific lead
+// Controller to get all activities for a specific lead
+// exports.getLeadActivities = async (req, res) => {
+//   const { leadId } = req.params;
+
+//   try {
+//     const activities = await LeadActivity.find({ company: req.user.company._id,leadId })
+//       .populate('userId', 'name email') // Populating user details for clarity
+//       .sort({ timestamp: -1 }); // Sort by most recent activity
+//     res.status(200).json(activities);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error fetching lead activities', error });
+//   }
+// };
+// Controller to assign a lead to a user
 exports.getLeadActivities = async (req, res) => {
-  const { leadId } = req.params;
+  const { leadId, userId } = req.body;
 
   try {
-    const activities = await LeadActivity.find({ company: req.user.company._id,leadId })
-      .populate('userId', 'name email') // Populating user details for clarity
-      .sort({ timestamp: -1 }); // Sort by most recent activity
-    res.status(200).json(activities);
+    // Find the lead and update the assigned user
+    const lead = await LeadActivity.findOneAndUpdate(
+      { _id: leadId, company: req.user.company._id },
+      { assignedTo: userId },
+      { new: true }
+    );
+
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    // Create an activity for the assignment
+    const activity = new LeadActivity({
+      leadId,
+      company: req.user.company._id,
+      userId: req.user._id, // The user performing the assignment
+      action: 'assigned',
+      assignedTo: userId,
+      timestamp: new Date(),
+    });
+
+    await activity.save();
+
+    res.status(200).json({ message: 'Lead assigned successfully', lead });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching lead activities', error });
+    console.error('Error assigning lead:', error);
+    res.status(500).json({ message: 'Error assigning lead', error });
   }
 };
 
