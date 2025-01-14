@@ -6,7 +6,7 @@ const Sales = require('../models/sales');
 const Campaign = require("../models/Campaign")
 const Customer = require("../models/Customer")
 const Company = require("../models/Company")
-
+const LeadActivity=require("../models/LeadActivity")
 
 
 
@@ -155,6 +155,33 @@ const handleAsync = (fn) => (req, res, next) => {
 };
 
 
+// exports.AssignUserToLead = async (req, res) => {
+//   const { leadId, userId } = req.params;
+
+//   try {
+//     // Check if the user exists
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     // Find the lead and update it
+//     const updatedLead = await Lead.findByIdAndUpdate(
+//       leadId,
+//       { assignedTo: user._id },
+//       { new: true } // Return the updated object and run validation
+//     ) .populate("assignedTo", "_id firstName lastName")
+
+//     if (!updatedLead) {
+//       return res.status(404).json({ message: 'Lead not found' });
+//     }
+
+//     res.status(200).json(updatedLead);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error assigning user to lead', error: error.message });
+//   }
+// };
+
 exports.AssignUserToLead = async (req, res) => {
   const { leadId, userId } = req.params;
 
@@ -164,7 +191,11 @@ exports.AssignUserToLead = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
+     const creator=await User.findById(req.user._id)
+     console.log(creator);
+     if (!creator) {
+      return res.status(404).json({ message: 'creator not found' });
+    }
     // Find the lead and update it
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
@@ -175,13 +206,25 @@ exports.AssignUserToLead = async (req, res) => {
     if (!updatedLead) {
       return res.status(404).json({ message: 'Lead not found' });
     }
-
+  // Create an activity log for this assignment
+  const activity = new LeadActivity({
+    leadId: leadId,
+    user: userId,
+    company:req.user.company._id,
+    details: `Lead is assigned to ${user.firstName} ${user.lastName} by ${creator.name} `,  // Assigned by is the person making the assignment
+    action: 'assigned',
+    timestamp: new Date(),
+    ipAddress: req.ip, // Capture the IP address from the request object
+    userAgent: req.get('User-Agent'),
+  });
+  
+  // Save the activity log to the database
+  await activity.save();
     res.status(200).json(updatedLead);
   } catch (error) {
     res.status(500).json({ message: 'Error assigning user to lead', error: error.message });
   }
 };
-
 // Update Lead by ID controller
 exports.UpdateLead = async (req, res) => {
   try {

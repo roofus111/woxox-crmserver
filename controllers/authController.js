@@ -52,7 +52,8 @@ exports.register = async (req, res) => {
             token,
             user: {
                 id: user._id,
-                fullName: `${user.firstName} ${user.lastName}`,
+                name: `${user.firstName} ${user.lastName}`,
+                email:`${user.email}` ,
                 role: user.role
             }
         });
