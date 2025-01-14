@@ -242,17 +242,17 @@
  *     description: This API is used to get lead data in MongoDB.
  *     parameters:
  *       - in: path
- *         name: leads
+ *         name: id
  *         required: true
  *         description: get leads byid 
  *         schema:
- *           type: integer
+ *           type: intewger
  *     requestBody:
- *       required: true
+ *       required: false
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Lead'
+ *             type: integer
   *     security:
  *       - bearerAuth: []
  *     responses:
@@ -264,6 +264,7 @@
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Lead'
+ * 
  */
 /**
  * @swagger
@@ -499,9 +500,10 @@
 *         required: true
 *         description: Numeric ID required
 *         schema:
-*           type: integer
- *     security:
- *       - bearerAuth: []
+*          type: string
+
+*     security:
+*       - bearerAuth: []
 *     responses:
 *       200:
 *         description: Successfully fetched campaigns from MongoDB.
@@ -2464,15 +2466,15 @@
 
 // SWAGGER FOR NOTESROUTE
 
-// /**
-//  * @swagger
-//  * components:
-//  *   securitySchemes:
-//  *     bearerAuth:
-//  *       type: http
-//  *       scheme: bearer
-//  *       bearerFormat: JWT
-//  */
+/**
+ * @swagger
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
 
 /**
  * @swagger
