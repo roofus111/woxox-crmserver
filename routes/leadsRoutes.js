@@ -143,5 +143,5 @@ router.get("/docs/bylead/:leadId", async (req, res) => {
 
 
 router.get('/leadInsight/:assigneeId' ,leadsController.homeInsight);
-
+router.get('/count-by-campaign',leadsController. getLeadsCountByCampaignAndStatus);
 module.exports = router;

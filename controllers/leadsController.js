@@ -758,6 +758,77 @@ exports.homeInsight = async (req,res) =>{
 
 }
 
+exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
+  try {
+    const company = req.user.company._id; // Ensure this is correct
+
+    // Build the filter object to apply in the $match stage
+    let matchCondition = {};
+    if (company) {
+      matchCondition.company = new mongoose.Types.ObjectId(company); // Convert to ObjectId if needed
+    }
+
+    console.log("Match Condition:", matchCondition);
+    // Aggregate to group leads by campaign and their status
+    const leadsCount = await Lead.aggregate([
+      {
+        $match: matchCondition,  // Filter by company if applicable
+      },
+      {
+        $group: {
+          _id: "$campaignid",   // Group by the 'campaign' field
+          totalLeads: { $sum: 1 },  // Count the total number of leads in each campaign
+          unassigned: {
+            $sum: { $cond: [{ $eq: ["$assignedTo", null] }, 1, 0] }  // Count unassigned leads
+          },
+          new: {
+            $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] }  // Count 'New' leads
+          },
+          contacted: {
+            $sum: { $cond: [{ $eq: ["$status", "Contacted"] }, 1, 0] }  // Count 'Contacted' leads
+          },
+          inProgress: {
+            $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] }  // Count 'In Progress' leads
+          },
+          won: {
+            $sum: { $cond: [{ $eq: ["$status", "Won"] }, 1, 0] }  // Count 'Won' leads
+          },
+          lost: {
+            $sum: { $cond: [{ $eq: ["$status", "Lost"] }, 1, 0] }  // Count 'Lost' leads
+          }
+        }
+      },
+      {
+        $project: {
+          campaignid: "$_id",   // Rename '_id' to 'campaign'
+          totalLeads: 1,      // Include the total leads count
+          unassigned: 1,      // Include the unassigned leads count
+          new: 1,             // Include the new leads count
+          contacted: 1,       // Include the contacted leads count
+          inProgress: 1,      // Include the in progress leads count
+          won: 1,             // Include the won leads count
+          lost: 1,            // Include the lost leads count
+          _id: 0              // Exclude the default '_id' field
+        }
+      }
+    ]);
+
+    // Respond with the aggregated data
+    return res.status(200).json({ success: true, data: leadsCount });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+
+
+
+
 
 
 
