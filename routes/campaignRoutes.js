@@ -1,12 +1,3 @@
-// /**
-//  * @swagger
-//  * components:
-//  *   securitySchemes:
-//  *     bearerAuth:
-//  *       type: http
-//  *       scheme: bearer
-//  *       bearerFormat: JWT
-//  */
 
 const express = require('express');
 const router = express.Router();
@@ -15,10 +6,10 @@ const authenticateUser = require('../middleware/authenticateUser');
 router.use(authenticateUser);
 
 
-
 router.post('/createcampaign', campaignController.createCampaign);
+// Route to get all campaigns by pipeline ID
 
-router.get('/campaigns/pipeline/:pipelineId', campaignController.getCampaignsByPipelineId);
+router.get('/campaigns/pipeline/:pipelineId',campaignController.getCampaignsByPipelineId);
 
 
 router.get('/getcampaign', campaignController.getCampaign);

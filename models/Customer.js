@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
 const customerSchema = new mongoose.Schema({
-  firstName: { type: String, required: true, trim: true, maxlength: 50 },
+  firstName: { type: String, trim: true, maxlength: 50 },
   // lastName: { type: String, required: true, trim: true, maxlength: 50 },
-  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
-  phone: { type: String, trim: true },
+  email: { type: String,unique: true, trim: true, lowercase: true },
+  phone: { type: String, required: true,trim: true },
   address: {
     street: { type: String, trim: true },
     city: { type: String, trim: true },
