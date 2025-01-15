@@ -10,11 +10,11 @@ const authenticateUser = require('../middleware/authenticateUser');
 router.use(authenticateUser); // Apply authentication to all routes
 
 router.post('/', leadFollowUpController.createFollowUp);
-
+ 
 router.get('/:leadId', leadFollowUpController.getFollowUpsByLead);
 // Get all follow-ups for a lead
 router.get('/', leadFollowUpController.getAllfollowUps);
-
+router.get('/myfollow/get', leadFollowUpController.getMyfollowUps);
 // Get a specific follow-up by ID
 router.get('/byId/:followUpId', leadFollowUpController.getFollowUpById);
 

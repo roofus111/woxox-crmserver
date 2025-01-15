@@ -89,6 +89,22 @@ exports.getAllfollowUps = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+exports.getMyfollowUps = async (req, res) => {
+  try {
+    let searchCriteria = {}
+    searchCriteria = { assignedTo : req.user._id, company: req.user.company}
+   
+    const followUp = await LeadFollowUp.find(
+      searchCriteria
+    )
+      .populate("leadId")
+      .populate("assignedTo",'name')
+      .populate("createdBy",'name');
+    res.status(200).json(followUp);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 // Get all follow-ups for a specific lead
 exports.getFollowUpsByLead = async (req, res) => {
