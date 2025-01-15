@@ -155,32 +155,6 @@ const handleAsync = (fn) => (req, res, next) => {
 };
 
 
-// exports.AssignUserToLead = async (req, res) => {
-//   const { leadId, userId } = req.params;
-
-//   try {
-//     // Check if the user exists
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
-
-//     // Find the lead and update it
-//     const updatedLead = await Lead.findByIdAndUpdate(
-//       leadId,
-//       { assignedTo: user._id },
-//       { new: true } // Return the updated object and run validation
-//     ) .populate("assignedTo", "_id firstName lastName")
-
-//     if (!updatedLead) {
-//       return res.status(404).json({ message: 'Lead not found' });
-//     }
-
-//     res.status(200).json(updatedLead);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error assigning user to lead', error: error.message });
-//   }
-// };
 
 exports.AssignUserToLead = async (req, res) => {
   const { leadId, userId } = req.params;
@@ -500,6 +474,7 @@ exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
     }
   }
 };
+
 exports.AssignMultipleLeadsToUser = async (req, res) => {
   const { userId } = req.params;
   const { leadIds } = req.body; // Expect an array of lead IDs in the request body

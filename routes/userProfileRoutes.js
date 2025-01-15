@@ -21,4 +21,5 @@ router.post('/', userProfileController.createProfile);
 router.get("/:userid", userProfileController. getProfileById);
 router.put("/put/:userid", userProfileController.updateProfileById);
 router.put("/:userId/toggle-status", userProfileController.toggleUserStatus);
+router.get("/users/active", userProfileController.getPublicUsers);
 module.exports = router;

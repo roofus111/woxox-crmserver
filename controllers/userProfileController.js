@@ -103,6 +103,31 @@ exports.toggleUserStatus = async (req, res) => {
   }
 };
 
+// Controller to fetch active user details
+exports.getPublicUsers = async (req, res) => {
+  try {
+    // Fetch all active users
+    const activeUsers = await UserProfile.find({ company:req.user.company._id,isActive: true }).select(
+      "email name firstName lastName phone role company createdAt"
+    ).populate('company', 'name'); // Populate company name if needed
+
+    // Respond with active users
+    res.status(200).json({
+      success: true,
+      data: activeUsers,
+    });
+  } catch (error) {
+    // Handle errors
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch active users",
+      error: error.message,
+    });
+  }
+};
+
+
+
 
 
 
