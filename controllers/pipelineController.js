@@ -22,6 +22,24 @@ exports.getPipelines = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+exports.getPipelineById = async (req, res) => {
+  try {
+    const { id } = req.params; // Extract pipeline ID from the request parameters
+
+    // Find the pipeline by ID and populate the user field
+    const pipeline = await Pipeline.findById(id)
+
+    // Check if the pipeline exists
+    if (!pipeline) {
+      return res.status(404).json({ message: 'Pipeline not found' });
+    }
+
+    res.status(200).json(pipeline);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.updatePipeline = async (req, res) => {
   try {
     const { pipelineid } = req.params;
