@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const customerSchema = new mongoose.Schema({
   firstName: { type: String, trim: true, maxlength: 50 },
   // lastName: { type: String, required: true, trim: true, maxlength: 50 },
-  email: { type: String,unique: true, trim: true, lowercase: true },
+  email: { type: String,trim: true, lowercase: true },
   phone: { type: String, required: true,trim: true },
   address: {
     street: { type: String, trim: true },
