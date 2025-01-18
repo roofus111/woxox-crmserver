@@ -74,6 +74,7 @@ router.delete('/deleteall', leadsController.deleteLeadsByCompany);
 router.put('/putleads/:id',leadsController.updateLead);
 
 router.get('/leadsbycampaign/:campaignid', leadsController.getLeadsByCampaignId);
+router.get('/getworkflowLeads/:Pipeline', leadsController.getworkflowLeads);
 
 router.put('/notes/:leadId', leadsController.addNoteToLead);
 

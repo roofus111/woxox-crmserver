@@ -98,16 +98,9 @@ const FormSchema = new mongoose.Schema({
   }
 });
 const NoteSchema = new mongoose.Schema({
-  note_id: { type: String,
-     required: true 
-    },
-  author: { type: String, 
-    required: true
- },
+  author: { type: String},
   timestamp: { type: Date, default: Date.now },
-  content: { type: String, 
-    required: true 
-},
+  content: { type: String},
 });
 const LeadSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -129,7 +122,7 @@ const LeadSchema = new mongoose.Schema({
   notes: [NoteSchema],
   createdAt: { type: Date, default: Date.now },
   profile: FormSchema,
-  stages: { type: String, enum: [null, 'Pending', 'In Progress', 'Document Collected', 'Pending Documents', 'Application Submitted', 'Interview Scheduled', 'Offer letter Received', 'Offer letter Rejected', 'Visa Documentation In Progress', 'Visa Documentation Success', 'Visa Approved', 'Visa Rejected'], default: null },
+  stages: { type: Number, default: null },
   additionalFields: { type: mongoose.Schema.Types.Mixed } 
 });
 
