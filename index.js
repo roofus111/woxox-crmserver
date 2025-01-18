@@ -2,25 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const options={
-  swaggerDefinition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'My Express API',
-      version: '1.0.0',
-      description: 'API documentation for my Express server',
-    },
-    servers: [
-      {
-        url: 'https://app.canbridge.in',
-      },
-    ],
-  },
-  apis: ['./routes/*.js'], // Path to the API docs
-};
-const swaggerjsdoc = require("swagger-jsdoc");
-const swaggerui= require("swagger-ui-express")
-const spacs=swaggerjsdoc(options)
+const swaggerjsdoc=require("swagger-jsdoc")
+const swaggerui=require("swagger-ui-express")
 const authRoutes = require("./routes/authRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const userProfileRoutes = require("./routes/userProfileRoutes"); 
@@ -86,7 +69,6 @@ app.use("/api/pipelines",Pipeline)
 app.use("/api/campaign",Campaign)
 app.use("/api/customer",Customer)
 app.use("/api/ticket",Ticket)
-app.use("/api-docs",swaggerui.serve,swaggerui.setup(spacs))
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
   return io.sockets.adapter.rooms.get(userId)?.size > 0;
@@ -159,20 +141,30 @@ cron.schedule('0 0 * * *', async () => {
   console.log('Running scheduled task: unassign untouched leads after 30 days...');
   await unassignUntouchedLeadsAfter30Days();
 });
+const options={
+  definition:{
+    openapi:"3.0.0",
+    info:{
+      title: "CRM documentation",
+      version:"0.1.0",
+      description:"API documentation made with express and node.js documented with swagger",
+    },
+    servers:[{
+      url:"http://localhost:8000",
+    },
+  ],
+  },
+  apis:["./routes/*.js"],
+};
+const spacs=swaggerjsdoc(options)
+app.use(
+  "/api-docs",
+  swaggerui.serve,
+  swaggerui.setup(spacs)
+)
 // Start server
 server.listen(8000, () => {
   console.log("Server running on http://localhost:8000");
 });
-/**
- * @swagger
- * /:
- * get:
- *  summary: To get all campaigns from mongodb
- *  description :this api is used to fetch data from mongodb
- *  responses:
- *       200: 
- *          description:this api is used to fetch data from  mongodb
- *            content:
- *                application/json
- */
+
 app.get("/", (req, res) => res.status(200).send("OK"));
