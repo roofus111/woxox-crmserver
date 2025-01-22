@@ -663,23 +663,14 @@ router.put('/notes/:noteId', ticketController.updateNote)
  */
 
 router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
-
-//notes
 /**
  * @swagger
  * /api/ticket/createnotes:
  *   post:
  *     summary: Add a note to a ticket
- *     description: Adds a new note to the specified ticket.
+ *     description: This endpoint allows users to add a note to an existing ticket by providing the ticket ID.
  *     tags:
  *       - Tickets
- *     parameters:
- *       - in: path
- *         name: ticketId
- *         required: true
- *         schema:
- *           type: string
- *         description: The unique ID of the ticket to which the note will be added.
  *     requestBody:
  *       required: true
  *       content:
@@ -687,16 +678,17 @@ router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
  *           schema:
  *             type: object
  *             properties:
+ *               ticketId:
+ *                 type: string
+ *                 example: "63bfc2c46f529f7b4c8eaf1b"                
  *               author:
  *                 type: string
- *                 format: ObjectId
- *                 description: The ID of the user adding the note.
- *                 example: "64d34f8c55b9b6238db1d3e9"
+ *                 example: "63bfc2b46f529f7b4c8eaf1a"                
  *               content:
  *                 type: string
  *                 description: The content of the note.
- *                 example: "This is a note about the ticket."
  *             required:
+ *               - ticketId
  *               - author
  *               - content
  *     responses:
@@ -715,19 +707,15 @@ router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
  *                   properties:
  *                     note_id:
  *                       type: string
- *                       example: "123e4567-e89b-12d3-a456-426614174000"
+ *                       example: "1674509283478"
  *                     author:
  *                       type: string
- *                       example: "64d34f8c55b9b6238db1d3e9"
+ *                       example: "userId123"
  *                     content:
  *                       type: string
- *                       example: "This is a note about the ticket."
- *                     timestamp:
- *                       type: string
- *                       format: date-time
- *                       example: "2023-01-01T12:00:00Z"
+ *                       example: "This is a new note on the ticket."
  *       400:
- *         description: Validation error.
+ *         description: Bad request, missing required fields.
  *         content:
  *           application/json:
  *             schema:
@@ -735,7 +723,7 @@ router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Author and content are required."
+ *                   example: "Ticket ID, author, and content are required."
  *       404:
  *         description: Ticket not found.
  *         content:
@@ -755,10 +743,10 @@ router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "An error occurred."
+ *                   example: "An error occurred while adding the note."
  *                 error:
  *                   type: string
- *                   example: "Detailed error message"
+ *                   example: "Error details..."
  *     security:
  *       - bearerAuth: []
  * components: 
@@ -769,12 +757,355 @@ router.put('/tickets/:ticketId/status',ticketController. updateTicketStatus);
  *       bearerFormat: JWT
  */
 
+
 router.post('/createnotes', ticketController.createNote);
+/**
+ * @swagger
+ * /api/ticket/getnotes/{ticketId}:
+ *   get:
+ *     summary: Get all notes of a ticket
+ *     description: This endpoint retrieves all notes associated with a specific ticket by the ticket's ID.
+ *     tags:
+ *       - Tickets
+ *     parameters:
+ *       - name: ticketId
+ *         in: path
+ *         required: true
+ *         description: The unique ID of the ticket to retrieve notes for.
+ *         schema:
+ *           type: string
+ *           example: "60e63b30e9f5b22b7a47b8d9"
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved the notes for the ticket.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 notes:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       note_id:
+ *                         type: string
+ *                         example: "1674509283478"
+ *                       author:
+ *                         type: string
+ *                         example: "userId123"
+ *                       content:
+ *                         type: string
+ *                         example: "This is a note on the ticket."
+ *       400:
+ *         description: Invalid ticket ID format.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid ticket ID format."
+ *       404:
+ *         description: Ticket not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Ticket not found."
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "An error occurred while retrieving notes."
+ *                 error:
+ *                   type: string
+ *                   example: "Error details..."
+ *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.get('/getnotes/:ticketId', ticketController.getNotes);
+/**
+ * @swagger
+ * /api/ticket/updatenotes/{noteId}:
+ *   put:
+ *     summary: Update a specific note on a ticket
+ *     description: This endpoint updates a note on a ticket identified by `ticketId` and `noteId`.
+ *     tags:
+ *       - Tickets
+ *     parameters:
+ *       - name: noteId
+ *         in: path
+ *         required: true
+ *         description: The unique ID of the note to update.
+ *         schema:
+ *           type: string
+ *           example: "1674509283478"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+  *               ticketId:
+ *                 type: string
+ *                 example: "63bfc2c46f529f7b4c8eaf1b"                
+ *               content:
+ *                 type: string
+ *                 description: The updated content for the note.
+ *             required:
+ *               - ticketId
+ *               - content
+ *     responses:
+ *       200:
+ *         description: Successfully updated the note.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Note updated successfully."
+ *                 note:
+ *                   type: object
+ *                   properties:
+ *                     note_id:
+ *                       type: string
+ *                       example: "1674509283478"
+ *                     content:
+ *                       type: string
+ *                       example: "Updated note content."
+ *       400:
+ *         description: Invalid ticket ID or note ID format.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid ticket ID format."
+ *       404:
+ *         description: Ticket or Note not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Ticket not found."
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "An error occurred while updating the note."
+ *                 error:
+ *                   type: string
+ *                   example: "Error details..."
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.put('/updatenotes/:noteId', ticketController.updateNote);
+/**
+ * @swagger
+ * /api/ticket/deletenotes/{noteId}:
+ *   delete:
+ *     summary: Delete a specific note from a ticket
+ *     description: Deletes a note associated with a ticket based on the provided `ticketId` and `noteId`.
+ *     tags:
+ *       - Tickets
+ *     parameters:
+ *       - name: noteId
+ *         in: path
+ *         required: true
+ *         description: The unique ID of the note to delete.
+ *         schema:
+ *           type: string
+ *           example: "64f8c0b8a1a2c36d34e3c71d"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ticketId:
+ *                 type: string
+ *                 description: The ID of the ticket containing the note.
+ *                 example: "60e63b30e9f5b22b7a47b8d9"
+ *     responses:
+ *       200:
+ *         description: Successfully deleted the note.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Note deleted successfully."
+ *       400:
+ *         description: Invalid ticket ID or note ID format.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid ticket ID format."
+ *       404:
+ *         description: Ticket or Note not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Ticket not found."
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "An error occurred while deleting the note."
+ *                 error:
+ *                   type: string
+ *                   example: "Error details..."
+ *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.delete('/deletenotes/:noteId', ticketController.deleteNote);
 
 //history
+/**
+ * @swagger
+ * /api/ticket/updatehistory:
+ *   put:
+ *     summary: Update the status of a ticket and add an entry to the history
+ *     description: Updates the ticket's status and appends a history record with the status change.
+ *     tags:
+ *       - Tickets
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 description: The new status for the ticket.
+ *                 example: "Resolved"
+ *                 enum:
+ *                   - Open
+ *                   - In Progress
+ *                   - Resolved
+ *                   - Closed
+ *               ticketId:
+ *                 type: string
+ *                 description: The unique ID of the ticket to update.
+ *                 example: "60e63b30e9f5b22b7a47b8d9"
+ *     responses:
+ *       200:
+ *         description: Successfully updated the ticket status and history.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "History updated successfully."
+ *                 ticket:
+ *                   type: object
+ *                   description: The updated ticket object.
+ *       400:
+ *         description: Bad request due to invalid data.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid status provided."
+ *       404:
+ *         description: Ticket not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Ticket not found."
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "An error occurred while updating the history."
+ *                 error:
+ *                   type: string
+ *                   example: "Error details..."
+   *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.put('/updatehistory', ticketController.updateHistoryStatus);
 
 module.exports = router;  
