@@ -17,6 +17,92 @@ const upload = multer({
 });
 
 // module.exports = router;
+/**
+ * @swagger
+ * /upload:
+ *   post:
+ *     summary: Upload an Excel file to process leads
+ *     description: Upload an Excel file, process the lead data, check for duplicates and existing customers, and save the leads to the database.
+ *     tags:
+ *       - LeadExcel
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               source:
+ *                 type: string
+ *                 description: The source of the lead (e.g., 'LinkedIn', 'Referral')
+ *                 example: 'LinkedIn'
+ *               campaign:
+ *                 type: string
+ *                 description: Campaign name associated with the leads
+ *                 example: 'New Year Campaign'
+ *               campaignid:
+ *                 type: string
+ *                 description: The ID of the campaign
+ *                 example: '60b8d295f7f8a73a7457be85'
+  *               file:
+ *                 type: string
+ *                 format: binary
+  *                 description: Excel file to upload
+ *     responses:
+ *       200:
+ *         description: Successfully processed the leads
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Leads processed successfully
+ *                 duplicates:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       phone:
+ *                         type: string
+ *       400:
+ *         description: Bad request - No file uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: No file uploaded
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: An error occurred while processing the file
+ *     consumes:
+ *       - multipart/form-data
+ *     produces:
+ *       - application/json
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
 router.post(
   "/upload",
   authenticateUser,

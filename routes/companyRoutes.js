@@ -1,3 +1,63 @@
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Company:
+ *       type: object
+ *       required:
+ *         - name
+ *         - email
+ *       properties:
+ *         name:
+ *           type: string
+ *           description: The name of the company
+ *         website:
+ *           type: string
+ *           description: The website of the company
+ *         address:
+ *           type: string
+ *           description: The address of the company
+ *         phone:
+ *           type: string
+ *           description: The phone number of the company
+ *         email:
+ *           type: string
+ *           description: The email of the company (must be unique)
+ *         industry:
+ *           type: string
+ *           description: The industry the company belongs to
+ *         employees:
+ *           type: integer
+ *           description: The number of employees in the company
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: The date the company was created
+ *         Module:
+ *           type: object
+ *           properties:
+ *             Customer:
+ *               type: boolean
+ *               default: false
+ *               description: Indicates if the customer module is enabled
+ *             lead:
+ *               type: boolean
+ *               default: false
+ *               description: Indicates if the lead module is enabled
+ *             pipeline:
+ *               type: boolean
+ *               default: false
+ *               description: Indicates if the pipeline module is enabled
+ *             finance:
+ *               type: boolean
+ *               default: false
+ *               description: Indicates if the finance module is enabled
+ *             documentation:
+ *               type: boolean
+ *               default: false
+ *               description: Indicates if the documentation module is enabled
+ */
 const express = require('express');
 const router = express.Router();
 const Company=require("../models/Company")
@@ -6,13 +66,455 @@ const authenticateUser = require('../middleware/authenticateUser');
 const authorizeCompanyAccess = require('../middleware/authorizeCompanyAccess');
 
 router.use(authenticateUser); // Apply authentication to all routes
+/**
+ * @swagger
+ * /api/companies/:
+ *   get:
+ *     summary: Get a specific company by ID
+ *     description: Retrieves the company associated with the authenticated user.
+ *     tags:
+ *       - Company
+ *     responses:
+ *       200:
+ *         description: Company retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Company'
+ *             example:
+ *               _id: "60d21b4667d0d8992e610c85"
+ *               name: "Tech Innovations Inc."
+ *               website: "https://www.techinnovations.com"
+ *               address: "123 Tech Street, Silicon Valley, CA"
+ *               phone: "+1 (123) 456-7890"
+ *               email: "contact@techinnovations.com"
+ *               industry: "Technology"
+ *               employees: 250
+ *               createdAt: "2025-01-22T08:00:00Z"
+ *       404:
+ *         description: Company not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Company not found"
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.get('/', companyController.getCompanyById);
+/**
+ * @swagger
+ * /api/companies/getall:
+ *   get:
+ *     summary: Get all companies
+ *     description: Retrieves all companies from the database.
+ *     tags:
+ *       - Company
+ *     responses:
+ *       200:
+ *         description: List of companies retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Company'
+ *             example:
+ *               - _id: "60d21b4667d0d8992e610c85"
+ *                 name: "Tech Innovations Inc."
+ *                 website: "https://www.techinnovations.com"
+ *                 address: "123 Tech Street, Silicon Valley, CA"
+ *                 phone: "+1 (123) 456-7890"
+ *                 email: "contact@techinnovations.com"
+ *                 industry: "Technology"
+ *                 employees: 250
+ *                 createdAt: "2025-01-22T08:00:00Z"
+ *               - _id: "60d21b4667d0d8992e610c86"
+ *                 name: "Design Studios Ltd."
+ *                 website: "https://www.designstudios.com"
+ *                 address: "456 Creative Ave, New York, NY"
+ *                 phone: "+1 (987) 654-3210"
+ *                 email: "info@designstudios.com"
+ *                 industry: "Design"
+ *                 employees: 150
+ *                 createdAt: "2025-01-22T08:00:00Z"
+ *       404:
+ *         description: No companies found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "No companies found"
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
+ *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.get('/getall', companyController.getAllCompanies);
+/**
+ * @swagger
+ * /api/companies/:
+ *   post:
+ *     summary: Create a new company and associate an admin user.
+ *     description: Creates a new company and automatically updates the authenticated user as an 'admin' of that company.
+ *     tags:
+ *       - Company
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: The name of the company.
+ *                 example: "Tech Innovations Inc."
+ *               website:
+ *                 type: string
+ *                 description: The website of the company.
+ *                 example: "https://www.techinnovations.com"
+ *               address:
+ *                 type: string
+ *                 description: The address of the company.
+ *                 example: "123 Tech Street, Silicon Valley, CA"
+ *               phone:
+ *                 type: string
+ *                 description: The phone number of the company.
+ *                 example: "+1 (123) 456-7890"
+ *               email:
+ *                 type: string
+ *                 description: The email of the company (must be unique).
+ *                 example: "contact@techinnovations.com"
+ *               industry:
+ *                 type: string
+ *                 description: The industry the company belongs to.
+ *                 example: "Technology"
+ *               employees:
+ *                 type: integer
+ *                 description: The number of employees in the company.
+ *                 example: 250
+ *     responses:
+ *       201:
+ *         description: Company created successfully and user role updated.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message.
+ *                   example: "Company created successfully"
+ *                 newCompany:
+ *                   $ref: '#/components/schemas/Company'
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       description: User ID.
+ *                       example: "60d21b4667d0d8992e610c85"
+ *                     role:
+ *                       type: string
+ *                       description: User role (set to 'admin').
+ *                       example: "admin"
+ *                     company:
+ *                       type: string
+ *                       description: Company ID associated with the user.
+ *                       example: "60d21b4667d0d8992e610c86"
+ *       400:
+ *         description: Bad request (validation failed).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Error message.
+ *                   example: "Company name and email are required"
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Error message.
+ *                   example: "User not found"
+ *       500:
+ *         description: Server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Error message.
+ *                   example: "Server error. Please try again later."
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+
 router.post('/', companyController.createCompany);
+/**
+ * @swagger
+ * /api/companies/:
+ *   put:
+ *     summary: Update a company
+ *     description: Updates the company associated with the authenticated user.
+ *     tags:
+ *       - Company
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: The name of the company
+ *                 example: "Tech Innovations Ltd."
+ *               website:
+ *                 type: string
+ *                 description: The website URL of the company
+ *                 example: "https://www.techinnovationsltd.com"
+ *               address:
+ *                 type: string
+ *                 description: The new address of the company
+ *                 example: "456 Tech Avenue, Silicon Valley, CA"
+ *               phone:
+ *                 type: string
+ *                 description: The new phone number of the company
+ *                 example: "+1 (123) 987-6543"
+ *               email:
+ *                 type: string
+ *                 description: The new email of the company
+ *                 example: "support@techinnovationsltd.com"
+ *               industry:
+ *                 type: string
+ *                 description: The updated industry type of the company
+ *                 example: "Technology"
+ *               employees:
+ *                 type: integer
+ *                 description: The updated number of employees in the company
+ *                 example: 300
+ *     responses:
+ *       200:
+ *         description: Company updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Company'
+ *             example:
+ *               _id: "60d21b4667d0d8992e610c85"
+ *               name: "Tech Innovations Ltd."
+ *               website: "https://www.techinnovationsltd.com"
+ *               address: "456 Tech Avenue, Silicon Valley, CA"
+ *               phone: "+1 (123) 987-6543"
+ *               email: "support@techinnovationsltd.com"
+ *               industry: "Technology"
+ *               employees: 300
+ *               createdAt: "2025-01-22T08:00:00Z"
+ *       400:
+ *         description: Invalid request or bad data.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid data provided"
+ *       404:
+ *         description: Company not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Company not found"
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.put('/', authorizeCompanyAccess, companyController.updateCompany);
+/**
+ * @swagger
+ * /api/companies/modules/{id}:
+ *   put:
+ *     summary: Update the modules for a company
+ *     description: Updates the module settings (e.g., Customer, Lead, Pipeline, etc.) for a given company by its ID.
+ *     tags:
+ *       - Company
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: The ID of the company whose modules are being updated.
+ *         schema:
+ *           type: string
+ *           example: "60d21b4667d0d8992e610c85"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               Module:
+ *                 type: object
+ *                 properties:
+ *                   Customer:
+ *                     type: boolean
+ *                     description: Enable or disable the Customer module
+ *                     example: true
+ *                   lead:
+ *                     type: boolean
+ *                     description: Enable or disable the Lead module
+ *                     example: false
+ *                   pipeline:
+ *                     type: boolean
+ *                     description: Enable or disable the Pipeline module
+ *                     example: true
+ *                   finance:
+ *                     type: boolean
+ *                     description: Enable or disable the Finance module
+ *                     example: false
+ *                   documentation:
+ *                     type: boolean
+ *                     description: Enable or disable the Documentation module
+ *                     example: true
+ *     responses:
+ *       200:
+ *         description: Module updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Module updated successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/Company'
+ *       400:
+ *         description: Invalid data provided.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid data provided"
+ *       404:
+ *         description: Company not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Company not found"
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+
 router.put('/modules/:id',companyController.updateModule);
 
 // PATCH endpoint to update selected module values
+
+
 router.put('/company/:id', async (req, res) => {
   const { id } = req.params;  // Company ID from URL
   const { Customer, lead, pipeline, finance, documentation } = req.body;  // Extract module values from request body
