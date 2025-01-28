@@ -154,6 +154,7 @@ router.post(
               "what_job_are_you_looking_for_in_luxembourg?",
               "how_many_years_of_minimum_experience_you_have_in_the_same_field?",
               "what_is_your_highest_educational_qualification?",
+              "country_of_interest"
             ].includes(key)
           ) {
             leadData.additionalFields[key] = data[key];
