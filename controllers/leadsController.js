@@ -755,7 +755,7 @@ exports.UpdateLeadStatus = async (req, res) => {
       //   });
       //   await newSales.save();
       // }  
-      lead.stages = 1;
+      lead.stages = 0;
     }
 
     lead.status = status;
