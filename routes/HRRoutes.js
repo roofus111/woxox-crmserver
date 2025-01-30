@@ -176,9 +176,15 @@ router.use(authenticateUser)
  * @swagger
  * /api/hr/create:
  *   post:
- *     summary: Create a new employee with optional file uploads
+ *     summary: Create a new employee
+ *     description: This endpoint is used to create a new employee in the system, including file uploads (e.g., resume or profile picture).
+ *     operationId: createEmployee
  *     tags:
- *       - Employees
+ *       - Employee
+ *     consumes:
+ *       - multipart/form-data
+ *     produces:
+ *       - application/json
  *     requestBody:
  *       required: true
  *       content:
@@ -189,63 +195,36 @@ router.use(authenticateUser)
  *               firstName:
  *                 type: string
  *                 description: First name of the employee
- *                 example: John
  *               lastName:
  *                 type: string
  *                 description: Last name of the employee
- *                 example: Doe
  *               email:
  *                 type: string
  *                 format: email
- *                 description: Email of the employee
- *                 example: john.doe@example.com
+ *                 description: Email address of the employee
  *               phoneNumber:
  *                 type: string
  *                 description: Phone number of the employee
- *                 example: +1234567890
  *               dateOfBirth:
  *                 type: string
  *                 format: date
  *                 description: Date of birth of the employee
- *                 example: 1990-01-01
  *               gender:
  *                 type: string
  *                 enum: [Male, Female, Other]
  *                 description: Gender of the employee
  *                 example: Male
  *               address:
- *                 type: object
- *                 properties:
- *                   street:
- *                     type: string
- *                     description: Street address
- *                     example: 123 Main St
- *                   city:
- *                     type: string
- *                     description: City
- *                     example: New York
- *                   state:
- *                     type: string
- *                     description: State
- *                     example: NY
- *                   zipCode:
- *                     type: string
- *                     description: ZIP Code
- *                     example: 10001
- *                   country:
- *                     type: string
- *                     description: Country
- *                     example: USA
+ *                 type: string
+ *                 description: Home address of the employee
  *               startDate:
  *                 type: string
  *                 format: date
- *                 description: Employment start date
- *                 example: 2023-01-01
+ *                 description: Start date of the employee
  *               endDate:
  *                 type: string
  *                 format: date
- *                 description: Employment end date
- *                 example: 2025-01-01
+ *                 description: End date of the employee (optional)
  *               status:
  *                 type: string
  *                 enum: [Active, Inactive, On Leave]
@@ -254,26 +233,27 @@ router.use(authenticateUser)
  *               jobTitle:
  *                 type: string
  *                 description: Job title of the employee
- *                 example: Software Engineer
  *               department:
  *                 type: string
- *                 description: Department the employee belongs to
- *                 example: IT
+ *                 description: Department of the employee
  *               role:
  *                 type: string
  *                 enum: [Admin, Salesperson, Manager, Support]
  *                 description: Role of the employee
  *                 example: Manager
+ *               supervisor:
+ *                 type: string
+ *                 description: ID of the supervisor (optional)
+ *                 example: "63bfc2c46f529f7b4c8eaf1b"
  *               salary:
  *                 type: number
  *                 description: Salary of the employee
- *                 example: 50000
- *               files:
+ *               attachments:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: Array of files to upload
+ *                 description: File upload field for resume or profile picture
  *     responses:
  *       201:
  *         description: Employee created successfully
@@ -284,14 +264,12 @@ router.use(authenticateUser)
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Employee created successfully
  *                 employee:
- *                   type: object
- *                   description: Newly created employee details
+ *                   $ref: '#/components/schemas/Employee'
  *       400:
- *         description: Bad request (validation error)
+ *         description: Bad request
  *       404:
- *         description: Supervisor not found
+ *         description: Supervisor not found (if supervisor is provided)
  *       500:
  *         description: Internal server error
   *     security:
@@ -306,9 +284,287 @@ router.use(authenticateUser)
 
 
 router.post('/create', upload.array('attachments'),HRController.createEmployee);
+/**
+ * @swagger
+ * /api/hr/getemployees:
+ *   get:
+ *     summary: Fetch employees
+ *     tags:
+ *       - Employee
+ *     description: Fetch a single employee by ID or a list of employees with optional filters and pagination.
+ *     responses:
+ *       200:
+ *         description: Successfully fetched employee(s)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 employees:
+ *                   type: array  
+ *                   items:
+ *                     $ref: '#/components/schemas/Employee'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of employees.
+ *                 page:
+ *                   type: integer
+ *                   description: Current page.
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of employees per page.
+ *       404:
+ *         description: Employee not found.
+ *       500:
+ *         description: Internal server error.
+ *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.get('/getemployees', HRController.getEmployee);
+/**
+ * @swagger
+ * /api/hr/getemployees/{EmployeeId}:
+ *   get:
+ *     summary: Get Employee by ID
+ *     description: Fetch details of a specific employee using their unique ID.
+ *     tags:
+ *       - Employee
+ *     parameters:
+ *       - in: path
+ *         name: EmployeeId
+ *         required: true
+ *         description: Unique identifier of the employee
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Employee details fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 employee:
+ *                   type: object
+ *                   description: Employee details
+ *       404:
+ *         description: Employee not found
+ *       500:
+ *         description: Internal server error
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
 router.get('/getemployees/:EmployeeId', HRController.getEmployee);
+/**
+ * @swagger
+ * /api/hr/putemployees/{employeeId}:
+ *   put:
+ *     summary: Update an employee's details
+ *     description: Update specific fields of an employee using their ID.
+ *     tags:
+ *       - Employee
+ *     parameters:
+ *       - name: employeeId
+ *         in: path
+ *         description: The ID of the employee to update
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Fields to update for the employee
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *                 description: Employee's name
+ *               position:
+ *                 type: string
+ *                 description: Employee's position
+ *               department:
+ *                 type: string
+ *                 description: Employee's department
+ *               salary:
+ *                 type: number
+ *                 description: Employee's salary
+ *             example:
+ *               firstName: Jane Doe
+ *               position: Developer
+ *               department: Engineering
+ *               salary: 85000
+ *     responses:
+ *       200:
+ *         description: Employee updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Employee updated successfully
+ *                 employee:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: 63a1d42fbd1f4b43f4e7345a
+ *                     firstName:
+ *                       type: string
+ *                       example: Jane Doe
+ *                     position:
+ *                       type: string
+ *                       example: Developer
+ *                     department:
+ *                       type: string
+ *                       example: Engineering
+ *                     salary:
+ *                       type: number
+ *                       example: 85000
+ *       400:
+ *         description: Invalid input or employee ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Invalid employee ID
+ *       404:
+ *         description: Employee not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Employee not found
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
 router.put('/putemployees/:employeeId',HRController.updateEmployee);
+/**
+ * @swagger
+ * /api/hr/employees/{employeeId}/status:
+ *   put:
+ *     summary: Update employee status
+ *     description: Update the status of an employee (Active or Inactive).
+  *    tags:
+ *       - Employee
+ *     parameters:
+ *       - name: employeeId
+ *         in: path
+ *         description: The ID of the employee to update
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *         description: The new status of the employee
+ *         required: true
+  *       content:
+ *         application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             status:
+ *               type: string
+ *               enum: [Active, Inactive]
+ *               description: The status to update the employee to (Active or Inactive).
+ *               example: Active
+ *     responses:
+ *       200:
+ *         description: Employee status successfully updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Employee status updated to Active
+ *                 employee:
+ *                   $ref: '#/components/schemas/Employee'
+ *       400:
+ *         description: Invalid status provided
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid status. Must be Active or Inactive."
+ *       404:
+ *         description: Employee not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Employee not found
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
+ *                 error:
+ *                   type: string
+ *                   example: Error message details
+  *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
+
+
+
+
 router.put('/employees/:employeeId/status', HRController.updateEmployeeStatus);
 router.get('/employees/status', HRController.getEmployeesByStatus);
 
@@ -322,5 +578,6 @@ router.delete('/employee/:employeeId/attachment/:attachmentId',HRController.dele
 //attendance
 router.post('/addattendance', HRController.addAttendance)
 router.get('/getattendence/:employeeId', HRController.getAttendancebyid);
+router.get('/getattendenceid/:employeeId', HRController.getAttendanceByIdStatus);
 
 module.exports = router;

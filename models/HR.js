@@ -35,7 +35,7 @@ const AttachmentSchema = new mongoose.Schema({
     date: { type: Date, required: false },
     checkInTime: { type: Date },
     checkOutTime: { type: Date },
-    status: { type: String, enum: ['Present', 'Absent', 'On Leave'], required: false },
+    status: { type: String, enum: ['Present', 'Absent', 'On Leave', 'HalfDay', 'Late'], required: true },
     leaves:[LeaveSchema],
     createdAt: { type: Date, default: Date.now },
   });
@@ -102,7 +102,7 @@ const AttachmentSchema = new mongoose.Schema({
     },
     startDate: { type: Date, required: false },
     endDate: { type: Date },
-    status: { type: String, enum: ['Active', 'Inactive', 'On Leave'], default: 'Active' },
+    status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     jobTitle: { type: String, required: false },
     department: { type: String, required: false }, // E.g., "Sales", "Marketing", "Support"
     role: { type: String, enum: ['Admin', 'Salesperson', 'Manager', 'Support'], required: false },

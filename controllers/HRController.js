@@ -216,7 +216,7 @@ exports.updateEmployeeStatus = async (req, res) => {
 };
 exports.getEmployeesByStatus = async (req, res) => {
   try {
-    const { status } = req.query; // Status filter from query params
+    const { status } = req.body; // Status filter from query params
 
     // Validate the status
     if (!['Active', 'Inactive'].includes(status)) {
@@ -225,9 +225,13 @@ exports.getEmployeesByStatus = async (req, res) => {
 
     // Find employees by status
     const employees = await Employee.find({ status });
+    if (employees.length === 0) {
+      return res.status(404).json({ message: `No ${status} employees found.` });
+    }
 
     return res.status(200).json({
       message: `List of ${status} employees`,
+      count: employees.length,
       employees,
     });
   } catch (error) {
@@ -383,11 +387,11 @@ exports.deleteAttachment = async (req, res) => {
 // Create Attendance Record
 exports.addAttendance = async (req, res) => {
   try {
-    const { employeeId, date, checkInTime, checkOutTime, status, leaves } = req.body;
+    const { employeeId, checkInTime, checkOutTime, status, leaves } = req.body;
 
     // Validate required fields
-    if (!employeeId || !date) {
-      return res.status(400).json({ message: 'Employee ID and Date are required.' });
+    if (!employeeId) {
+      return res.status(400).json({ message: 'Employee ID is required.' });
     }
 
     // Find the employee
@@ -396,12 +400,29 @@ exports.addAttendance = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found.' });
     }
 
+    // Automatically set the date to today if not provided
+    const todayDate = new Date().toISOString().split('T')[0];
+    const date = req.body.date || todayDate;
+
+    // Check if attendance already exists for the same date
+    const existingAttendance = employee.attendence.find((attendance) =>
+      new Date(attendance.date).toISOString().split('T')[0] === date
+    );
+    if (existingAttendance) {
+      return res.status(400).json({ message: 'Attendance record already exists for this date.' });
+    }
+
+    // Validate check-in and check-out times
+    if (checkOutTime <= checkInTime) {
+      return res.status(400).json({ message: 'Check-out time must be after check-in time.' });
+    }
+
     // Add new attendance record
     const newAttendance = {
       date,
       checkInTime,
       checkOutTime,
-      status,
+      status: status || null, // Default status
       leaves,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -413,12 +434,16 @@ exports.addAttendance = async (req, res) => {
     // Save the employee document
     await employee.save();
 
-    return res.status(201).json({ message: 'Attendance record added successfully.', attendance: newAttendance });
+    return res.status(201).json({ 
+      message: 'Attendance record added successfully.', 
+      attendance: newAttendance 
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Internal server error.', error: error.message });
   }
 };
+
 
 // Get Attendance Records
 exports.getAttendancebyid = async (req, res) => {
@@ -460,6 +485,90 @@ exports.getAttendancebyid = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error.', error: error.message });
   }
 };
+exports.getAttendanceByIdStatus = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { startDate, endDate, status } = req.body;
+
+    // Example list of holidays (can be fetched from a database or configuration file)
+    const holidays = [];
+
+    // Validate employeeId
+    if (!employeeId) {
+      return res.status(400).json({ message: "Employee ID is required." });
+    }
+
+    // Validate status if provided
+    if (status && !["Present", "Absent", "On Leave"].includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status. Must be Present, Absent, or On Leave."
+      });
+    }
+
+    // Find the employee
+    const employee = await Employee.findById(employeeId).populate("attendence.leaves");
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found." });
+    }
+
+    // Filter attendance records
+    let filteredAttendance = employee.attendence;
+
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : new Date("1970-01-01");
+      const end = endDate ? new Date(endDate) : new Date();
+
+      filteredAttendance = filteredAttendance.filter((record) => {
+        const recordDate = new Date(record.date);
+        return recordDate >= start && recordDate <= end;
+      });
+    }
+
+    // Filter by status if provided
+    if (status) {
+      filteredAttendance = filteredAttendance.filter((record) => record.status === status);
+    }
+
+    // Count attendance by status
+    const statusCounts = filteredAttendance.reduce(
+      (counts, record) => {
+        counts[record.status] = (counts[record.status] || 0) + 1;
+        return counts;
+      },
+      { Present: 0, Absent: 0, "On Leave": 0 }
+    );
+
+    // Filter holidays within the date range
+    const start = startDate ? new Date(startDate) : new Date("1970-01-01");
+    const end = endDate ? new Date(endDate) : new Date();
+    const filteredHolidays = holidays.filter((holiday) => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate >= start && holidayDate <= end;
+    });
+
+    // Return filtered records with counts
+    return res.status(200).json({
+      message: "Attendance records retrieved successfully.",
+      attendance: filteredAttendance,
+      holidays: filteredHolidays,
+      counts: {
+        present: statusCounts.Present,
+        absent: statusCounts.Absent,
+        onLeave: statusCounts["On Leave"],
+        holidays: filteredHolidays.length
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Internal server error.",
+      error: error.message
+    });
+  }
+};
+
+
 
 
 
