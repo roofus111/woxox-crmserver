@@ -673,7 +673,10 @@ exports.getworkflowLeads = async (req, res) => {
     }
     let leads = await Promise.all(
       campaign.map(async (item) => {
-        return await Lead.find({ campaignid: item._id,status:"Converted" });
+        return await Lead.find({ campaignid: item._id,status:"Converted" })
+        .populate("assignedTo", "_id firstName lastName")
+        .populate("campaignid", "_id name description")
+        .exec();
       })
     );
     
