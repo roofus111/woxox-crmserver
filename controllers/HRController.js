@@ -444,6 +444,55 @@ exports.addAttendance = async (req, res) => {
   }
 };
 
+// Get Attendance of All Employees
+exports.getAllAttendances = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body;
+
+    // Fetch all employees and their attendance records
+    let employees = await Employee.find({})
+      .select('firstName lastName attendence') // Select only relevant fields
+      .populate('attendence.leaves'); // Populate leave details if needed
+
+    if (!employees.length) {
+      return res.status(404).json({ message: 'No employees found.' });
+    }
+
+    // Filter attendance records for each employee by date range
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : new Date('1970-01-01');
+      const end = endDate ? new Date(endDate) : new Date();
+
+      employees = employees.map(employee => {
+        const filteredAttendance = employee.attendence.filter(record => {
+          const recordDate = new Date(record.date);
+          return recordDate >= start && recordDate <= end;
+        });
+
+        return {
+          employeeId: employee._id,
+          name: `${employee.firstName} ${employee.lastName}`,
+          attendance: filteredAttendance,
+        };
+      });
+    } else {
+      // If no date range is provided, return all attendance records
+      employees = employees.map(employee => ({
+        employeeId: employee._id,
+        name: `${employee.firstName} ${employee.lastName}`,
+        attendance: employee.attendence,
+      }));
+    }
+
+    return res.status(200).json({
+      message: 'Attendance records retrieved successfully.',
+      data: employees,
+    });
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+  }
+};
 
 // Get Attendance Records
 exports.getAttendancebyid = async (req, res) => {
@@ -565,6 +614,45 @@ exports.getAttendanceByIdStatus = async (req, res) => {
       message: "Internal server error.",
       error: error.message
     });
+  }
+};
+exports.updateAttendanceById = async (req, res) => {
+  try {
+    const { employeeId, attendanceId } = req.params; // Employee and Attendance IDs from params
+    const updateData = req.body; // Updated fields in the request body
+
+    // Validate required parameters
+    if (!employeeId || !attendanceId) {
+      return res.status(400).json({ message: 'Employee ID and Attendance ID are required.' });
+    }
+
+    // Find the employee
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found.' });
+    }
+
+    // Find the specific attendance record
+    const attendanceRecord = employee.attendence.id(attendanceId);
+    if (!attendanceRecord) {
+      return res.status(404).json({ message: 'Attendance record not found.' });
+    }
+
+    // Update the fields in the attendance record
+    Object.keys(updateData).forEach((key) => {
+      attendanceRecord[key] = updateData[key];
+    });
+
+    // Save the updated employee document
+    await employee.save();
+
+    return res.status(200).json({
+      message: 'Attendance record updated successfully.',
+      updatedAttendance: attendanceRecord,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Internal server error.', error: error.message });
   }
 };
 

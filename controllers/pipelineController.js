@@ -16,7 +16,8 @@ exports.createPipeline = async (req, res) => {
 };
 exports.getPipelines = async (req, res) => {
   try {
-    const pipelines = await Pipeline.find({ company: req.user.company._id }).populate('User', 'name email'); // Populate user data
+    const pipelines = await Pipeline.find({ company: req.user.company._id })
+    .populate('User', 'name email'); // Populate user data
     res.status(200).json(pipelines);
   } catch (error) {
     res.status(500).json({ error: error.message });

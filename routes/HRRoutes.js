@@ -577,7 +577,8 @@ router.delete('/employee/:employeeId/attachment/:attachmentId',HRController.dele
 
 //attendance
 router.post('/addattendance', HRController.addAttendance)
+router.get('/getallattendence', HRController.getAllAttendances);
 router.get('/getattendence/:employeeId', HRController.getAttendancebyid);
 router.get('/getattendenceid/:employeeId', HRController.getAttendanceByIdStatus);
-
+router.put('/updateattendance/:employeeId/:attendanceId', HRController.updateAttendanceById);
 module.exports = router;
