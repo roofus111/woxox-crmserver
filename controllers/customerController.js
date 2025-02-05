@@ -64,7 +64,7 @@ exports.createCustomer = async (req, res) => {
 exports.getAllCustomers = async (req, res) => {
   try {
     // Fetch all customers from the database
-    const customers = await Customer.find();
+    const customers = await Customer.find({ company: req.user.company._id });
 
     res.status(200).json({
       message: 'Customers retrieved successfully',

@@ -4,10 +4,11 @@ const User = require('../models/User');
 const { v4: uuidv4 } = require('uuid'); // For generating unique file names
 const {S3} = require("@aws-sdk/client-s3")
 const s3Client = require("../config/s3")
+const { isValid, parseISO, format } = require('date-fns');
 const mongoose =require("mongoose")
 // Configure AWS S3
 const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID, 
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
 });
@@ -99,6 +100,17 @@ exports.createEmployee = async (req, res) => {
   
       // Save the employee to the database
       const savedEmployee = await newEmployee.save();
+          // Add a history entry for employee creation
+    const historyEntry = {
+      activityType: 'Status Update', // Or a more specific type like "Employee Created"
+      description: `Employee ${firstName} ${lastName} was created by ${req.user.name}`,
+      changedBy: req.user._id, // The user who created the employee
+      changedAt: new Date()
+    };
+
+    // Add the history entry to the employee's history array
+    savedEmployee.history.push(historyEntry);
+    await savedEmployee.save();
       return res.status(201).json({ message: 'Employee created successfully', employee: savedEmployee });
     } catch (error) {
       console.error('Error creating employee:', error);
@@ -160,13 +172,18 @@ exports.getEmployee = async (req, res) => {
 };
 
 
-// Update Employee Controller
 exports.updateEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params; // Employee ID from request params
     const updates = req.body; // Fields to update from the request body
 
-    // Find and update the employee
+    // Find the employee and get the old data
+    const oldEmployeeData = await Employee.findById(employeeId);
+    if (!oldEmployeeData) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Update the employee
     const updatedEmployee = await Employee.findByIdAndUpdate(
       employeeId,
       { $set: updates }, // Use `$set` for partial updates
@@ -176,6 +193,31 @@ exports.updateEmployee = async (req, res) => {
     if (!updatedEmployee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
+
+    // Determine which fields were changed
+    const changedFields = [];
+    for (const key in updates) {
+      if (oldEmployeeData[key] !== updatedEmployee[key]) {
+        changedFields.push(key);
+      }
+    }
+
+    // If no fields were changed, return early
+    if (changedFields.length === 0) {
+      return res.status(200).json({ message: 'No changes detected', employee: updatedEmployee });
+    }
+
+    // Create a history entry for the update
+    const historyEntry = {
+      activityType: 'Employee Updated', // Specific activity type
+      description: `Employee ${updatedEmployee.firstName} ${updatedEmployee.lastName}'s data changed by ${req.user.name || req.user.email}: ${changedFields.join(', ')}`,
+      changedBy: req.user._id, // The user who made the changes
+      changedAt: new Date()
+    };
+
+    // Add the history entry to the employee's history array
+    updatedEmployee.history.push(historyEntry);
+    await updatedEmployee.save();
 
     return res.status(200).json({ message: 'Employee updated successfully', employee: updatedEmployee });
   } catch (error) {
@@ -194,16 +236,36 @@ exports.updateEmployeeStatus = async (req, res) => {
       return res.status(400).json({ message: 'Invalid status. Must be Active or Inactive.' });
     }
 
-    // Find and update the employee's status
+    // Find the employee and get the old data
+    const oldEmployeeData = await Employee.findById(employeeId);
+    if (!oldEmployeeData) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Update the employee's status
     const updatedEmployee = await Employee.findByIdAndUpdate(
       employeeId,
-      { status },
-      { new: true }
+      { status }, // Update the status
+      { new: true } // Return the updated document
     );
 
     if (!updatedEmployee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
+
+    // Create a history entry for the status update
+    const historyEntry = {
+      activityType: 'Status Update', // Specific activity type
+      description: `Employee ${updatedEmployee.firstName} ${updatedEmployee.lastName}'s status changed from ${oldEmployeeData.status} to ${status} by ${req.user.name || req.user.email}.`, // Include employee name, old status, new status, and user
+      changedBy: req.user._id, // The user who made the change
+      changedAt: new Date(),
+      oldValue: oldEmployeeData.status, // Old status
+      newValue: status, // New status
+    };
+
+    // Add the history entry to the employee's history array
+    updatedEmployee.history.push(historyEntry);
+    await updatedEmployee.save();
 
     return res.status(200).json({
       message: `Employee status updated to ${status}`,
@@ -224,7 +286,7 @@ exports.getEmployeesByStatus = async (req, res) => {
     }
 
     // Find employees by status
-    const employees = await Employee.find({ status });
+    const employees = await Employee.find({  company: req.user.company._id ,status });
     if (employees.length === 0) {
       return res.status(404).json({ message: `No ${status} employees found.` });
     }
@@ -384,26 +446,36 @@ exports.deleteAttachment = async (req, res) => {
 
 //attendance
 
-// Create Attendance Record
-exports.addAttendance = async (req, res) => {
+
+// Create a new attendance record with leave details
+exports.Addattendance = async (req, res) => {
   try {
-    const { employeeId, checkInTime, checkOutTime, status, leaves } = req.body;
-
-    // Validate required fields
-    if (!employeeId) {
-      return res.status(400).json({ message: 'Employee ID is required.' });
+    const { employeeId, date, checkInTime, checkOutTime, status, leaves } = req.body;
+      // Validate date format
+    // Validate date format (YYYY-MM-DD)
+    const parsedDate = parseISO(date);
+    if (!isValid(parsedDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use YYYY-MM-DD.",
+      });
     }
-
-    // Find the employee
+        // Validate time format (basic check)
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:MM format
+    if (!timeRegex.test(checkInTime) || !timeRegex.test(checkOutTime)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid time format. Use HH:MM.",
+      });
+    }
+    // Find the employee by ID
     const employee = await Employee.findById(employeeId);
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found.' });
+    if (!employee) { 
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
     }
-
-    // Automatically set the date to today if not provided
-    const todayDate = new Date().toISOString().split('T')[0];
-    const date = req.body.date || todayDate;
-
     // Check if attendance already exists for the same date
     const existingAttendance = employee.attendence.find((attendance) =>
       new Date(attendance.date).toISOString().split('T')[0] === date
@@ -416,34 +488,51 @@ exports.addAttendance = async (req, res) => {
     if (checkOutTime <= checkInTime) {
       return res.status(400).json({ message: 'Check-out time must be after check-in time.' });
     }
-
-    // Add new attendance record
+    // Create a new attendance record
     const newAttendance = {
+      company:req.user.company?._id, 
       date,
       checkInTime,
       checkOutTime,
-      status: status || null, // Default status
-      leaves,
+      status,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    // Push to the attendance array in the employee schema
+    // If leaveDetails are provided, add them to the attendance record
+    if (leaves) {
+      newAttendance.leaves = [leaves];
+    }
+
+    // Add the attendance record to the employee's attendance array
     employee.attendence.push(newAttendance);
+    const historyRecord = new AttendanceHistory({
+      activityType: 'Attendance Added', // Or a more specific type like "Employee Created"
+      description: `Employee ${firstName} ${lastName} attendance was posted by ${req.user.name}`,
+      changedBy: req.user._id, // The user who created the employee
+      changedAt: new Date()
+    });
 
-    // Save the employee document
-    await employee.save();
+    // Save the history record
+    await historyRecord.save()
+    // Save the updated employee document
+    const updatedEmployee = await employee.save();
 
-    return res.status(201).json({ 
-      message: 'Attendance record added successfully.', 
-      attendance: newAttendance 
+    // Respond with the updated employee data
+    res.status(201).json({
+      success: true,
+      message: "Attendance record created successfully",
+      data: updatedEmployee,
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+    console.error("Error creating attendance record:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create attendance record",
+      error: error.message,
+    });
   }
 };
-
 // Get Attendance of All Employees
 exports.getAllAttendances = async (req, res) => {
   try {
