@@ -11,7 +11,7 @@ router.use(authenticateUser)
 
 // Route to upload and share file
 router.post('/upload', upload.array('files'), fileController.createFile);
-router.get('/getfiles', fileController.getFiles);
+router.get("/getfiles/:parentId", fileController.getFilesAndFoldersByParentId);
 module.exports = router;
 
 
