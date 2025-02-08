@@ -18,11 +18,21 @@ const SharedSchema = new mongoose.Schema({
 });
 
 const FileSchema = new mongoose.Schema({
-   leadId: {
-     type: mongoose.Schema.Types.ObjectId,
-     ref: "Lead", // Assuming you have a Lead model already
-     required: true,
-   },
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: true,
+  },
+  User: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User", // Assuming you have a User model for sales representatives
+    // required: true,
+  },
+  leadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Lead", // Assuming you have a Lead model already
+    required: true,
+  },
   docName: {
     type: String,
     required: true,

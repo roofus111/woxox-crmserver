@@ -17,6 +17,16 @@ const SharedSchema = new mongoose.Schema({
   },
 });
 const FolderSchema = new mongoose.Schema({
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: true,
+  },
+  User: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User", // Assuming you have a User model for sales representatives
+    // required: true,
+  },
   folderName: {
     type: String,
   },
