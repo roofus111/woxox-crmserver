@@ -13,7 +13,7 @@ const salesSchema = new mongoose.Schema({
     CustomerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Customer', // Make sure 'Lead' is correctly defined and used elsewhere in your app
-        required: true
+
     },
     company: { 
         type: mongoose.Schema.Types.ObjectId, 
@@ -24,7 +24,17 @@ const salesSchema = new mongoose.Schema({
         type: Date, 
         default: Date.now // Automatically set to the current date/time when a new document is created
     },
+    invoice: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Invoice", // This references the Invoice model
+      }],
+      accepted: {
+        type: Boolean,
+        default: false
+      }
 });
+
+
 
 const Sales = mongoose.model('Sales', salesSchema);
 

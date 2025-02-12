@@ -24,7 +24,13 @@ exports.createSales = async (req, res) => {
 exports.getAllSalesByCompany = async (req,res) => {
   try {
     const salesData = await Sales.find({ company: req.user.company._id })
-      .populate("LeadId").sort({ createdAt: -1 }) // Populates details of the lead(s)
+    .populate({
+      path: "LeadId",
+      populate: {
+        path: "campaignid",
+        select: "name", // Select only the `name` field from `campaignid`
+      },
+    }).sort({ createdAt: -1 }).populate("invoice") // Populates details of the lead(s)
     //   .populate("company", "name"); // Populates only the name of the company
 
     res.status(200).json({
@@ -41,7 +47,7 @@ exports.getAllSalesByCompany = async (req,res) => {
 // Get a specific sales entry by ID
 exports.getSalesById = async (req, res) => {
   try {
-    const sales = await Sales.findById(req.params.id).populate("LeadId");
+    const sales = await Sales.findById(req.params.id).populate("LeadId").populate("LeadId","campaignid");
     if (!sales) {
       return res.status(404).json({ message: "Sales entry not found" });
     }
@@ -93,3 +99,42 @@ exports.deleteSales = async (req, res) => {
     res.status(500).json({ message: "Error deleting sales entry" });
   }
 };
+
+exports.acceptSales = async (req, res) => {
+  try {
+    const { SalesId } = req.body;
+
+    const updatedSales = await Sales.findByIdAndUpdate(
+      SalesId,
+      { accepted: true },
+      { new: true }
+    );
+    if (!updatedSales) {
+      return res.status(404).json({ message: "Sales entry not found" });
+    }
+    res.status(200).json(updatedSales);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error accepting sales entry" });
+  }
+};
+
+
+exports.closeSales = async (req, res) => {
+  try {
+    const { SalesId } = req.body;
+
+    const updatedSales = await Sales.findByIdAndUpdate(
+      SalesId,
+      { closed: true },
+      { new: true }
+    );
+    if (!updatedSales) {
+      return res.status(404).json({ message: "Sales entry not found" });
+    }
+    res.status(200).json(updatedSales);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error closing sales entry" });
+  }
+}

@@ -735,26 +735,25 @@ exports.UpdateLeadStatus = async (req, res) => {
       // }
 
       // Only create a sales request if financeModule is enabled
-      // if (company.Module.finance) {
-      //   const year = new Date().getFullYear().toString().slice(-2);
-      //   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-      //   const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+      if (company.Module.finance) {
+        const year = new Date().getFullYear().toString().slice(-2);
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        const endOfYear = new Date(new Date().getFullYear(), 11, 31);
 
-      //   const salesCount =
-      //     (await Sales.countDocuments({
-      //       company: req.user.company._id,
-      //       createdAt: { $gte: startOfYear, $lte: endOfYear },
-      //     })) + 1;
+        const salesCount =
+          (await Sales.countDocuments({
+            company: req.user.company._id,
+            createdAt: { $gte: startOfYear, $lte: endOfYear },
+          })) + 1;
 
-      //   const salesId = `${year}-${salesCount.toString().padStart(5, "0")}`;
-      //   const newSales = new Sales({
-      //     SalesId: salesId,
-      //     LeadId: lead._id,
-      //     CustomerId: lead.Customer,
-      //     company: req.user.company._id,
-      //   });
-      //   await newSales.save();
-      // }  
+        const salesId = `${year}-${salesCount.toString().padStart(5, "0")}`;
+        const newSales = new Sales({
+          SalesId: salesId,
+          LeadId: lead._id,
+          company: req.user.company._id,
+        });
+        await newSales.save();
+      }  
       lead.stages = 0;
     }
 
