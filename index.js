@@ -68,7 +68,7 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
-app.use("/api/pipelines",Pipeline)
+app.use("/api/pipelines",Pipeline) 
 app.use("/api/campaign",Campaign)
 app.use("/api/customer",Customer)
 app.use("/api/ticket",Ticket)

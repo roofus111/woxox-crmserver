@@ -1,3 +1,67 @@
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     File:
+ *       type: object
+ *       required:
+ *         - company
+ *         - leadId
+ *         - docName
+ *       properties:
+ *         company:
+ *           type: string
+ *           format: ObjectId
+ *           description: Reference to the Company ID
+ *         user:
+ *           type: string
+ *           format: ObjectId
+ *           description: Reference to the User ID (sales representative)
+ *         leadId:
+ *           type: string
+ *           format: ObjectId
+ *           description: Reference to the Lead ID
+ *         docName:
+ *           type: string
+ *           description: Name of the document
+ *         fileName:
+ *           type: string
+ *           description: File name stored in the system
+ *         fileType:
+ *           type: string
+ *           description: Type of the file (e.g., pdf, docx)
+ *         fileUrl:
+ *           type: string
+ *           description: URL to access the file
+ *         root:
+ *           type: boolean
+ *           default: false
+ *           description: Indicates if the file is a root file
+ *         uploadedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Timestamp of when the file was uploaded
+ *         createdBy:
+ *           type: string
+ *           format: ObjectId
+ *           description: User ID of the file creator
+ *         parent:
+ *           type: string
+ *           format: ObjectId
+ *           description: Reference to the parent folder
+ *         access:
+ *           type: string
+ *           enum: [public, private, restricted]
+ *           default: private
+ *           description: Access level of the file
+ *         shared:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/File'
+ *           description: List of shared users with their access levels
+ */
+
+
 const express = require("express");
 const router = express.Router();
 const fileController = require("../controllers/FileHandlerController"); // Adjust path as necessary
@@ -8,16 +72,217 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 router.use(authenticateUser)
 
-
-// Route to upload and share file
+/**
+ * @swagger
+ * /api/files/upload:
+ *   post:
+ *     tags:
+ *       - File
+ *     summary: Upload multiple files
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Files uploaded successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 router.post('/upload', upload.array('files'), fileController.createFile);
+
+/**
+ * @swagger
+ * /api/files/getfiles/{parentId}:
+ *   get:
+ *     tags:
+ *       - File
+ *     summary: Get files and folders by parent ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: parentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of files and folders
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 router.get("/getfiles/:parentId", fileController.getFilesAndFoldersByParentId);
+
+/**
+ * @swagger
+ * /api/files/file/{fileId}:
+ *   put:
+ *     tags:
+ *       - File
+ *     summary: Update file name
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               newName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: File name updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
+ */
 router.put("/file/:fileId", fileController.updateFileName);
+
+/**
+ * @swagger
+ * /api/files/copy:
+ *   post:
+ *     tags:
+ *       - File
+ *     summary: Copy a file
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fileId:
+ *                 type: string
+ *               destinationParentId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: File copied successfully
+ *       401:
+ *         description: Unauthorized
+ */
 router.post("/copy", fileController.copyFile);
+
+/**
+ * @swagger
+ * /api/files/move:
+ *   post:
+ *     tags:
+ *       - File
+ *     summary: Move a file
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fileId:
+ *                 type: string
+ *               destinationParentId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: File moved successfully
+ *       401:
+ *         description: Unauthorized
+ */
 router.post("/move",fileController. moveFile);
+
+/**
+ * @swagger
+ * /api/files/file/{fileId}:
+ *   delete:
+ *     tags:
+ *       - File
+ *     summary: Delete a file
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: File deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: File not found
+ */
 router.delete("/file/:fileId", fileController.deleteFile);
+
+/**
+ * @swagger
+ * /api/files/files/{leadId}:
+ *   get:
+ *     tags:
+ *       - File
+ *     summary: Get files by lead ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of files for the lead
+ *       401:
+ *         description: Unauthorized
+ */
 router.get("/files/:leadId", fileController.getFilesByLeadId);
+
+/**
+ * @swagger
+ * /api/files/leads:
+ *   get:
+ *     tags:
+ *       - File
+ *     summary: List all leads from files and folders
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of all leads
+ *       401:
+ *         description: Unauthorized
+ */
 router.get("/leads", fileController.listAllLeadsFromFilesAndFolders);
 module.exports = router;
+
 
 
