@@ -289,6 +289,8 @@ exports.copyFile = async (req, res) => {
       parent: parent || file.parent, // Retain original parent or use provided one
       access: file.access,
       shared: file.shared,
+      company: file.company || req.user.companyId, // Example fallback
+
     });
 
     await newFile.save();
