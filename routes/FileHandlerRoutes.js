@@ -59,6 +59,20 @@
  *           items:
  *             $ref: '#/components/schemas/File'
  *           description: List of shared users with their access levels
+ *     SharedAccess:
+ *       type: object
+ *       required:
+ *         - userId
+ *         - accessLevel
+ *       properties:
+ *         userId:
+ *           type: string
+ *           format: ObjectId
+ *           description: The ID of the user to share with
+ *         accessLevel:
+ *           type: string
+ *           enum: [read, write, admin]
+ *           description: The access level for the shared user
  */
 
 
@@ -76,11 +90,10 @@ router.use(authenticateUser)
  * @swagger
  * /api/files/upload:
  *   post:
+ *     summary: Upload and create a file
+ *     description: Uploads a file to S3, stores metadata in the database, and associates it with a lead and company.
  *     tags:
  *       - File
- *     summary: Upload multiple files
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -88,18 +101,62 @@ router.use(authenticateUser)
  *           schema:
  *             type: object
  *             properties:
+ *               company:
+ *                 type: string
+ *                 format: ObjectId
+ *                 example: 67811b31f1015aeef357c172
+ *               leadId:
+ *                 type: string
+ *                 format: ObjectId
+ *                 example: 6787a35d04ba8691d3718eca
+ *                 description: The ID of the lead associated with the file.
+ *               docName:
+ *                 type: string
+ *                 description: The document name.
  *               files:
- *                 type: array
- *                 items:
- *                   type: string
- *                   format: binary
+ *                 type: string
+ *                 format: binary
+ *                 description: The file to upload.
+ *               parent:
+ *                 type: string
+ *                 format: ObjectId
+ *                 example: 67ac4d4254bb790de365809e
+ *                 description: The parent folder ID.
+ *               access:
+ *                 type: string
+ *                 enum: [public, private, restricted]
+ *                 description: The access level of the file.
+ *               root:
+ *                 type: boolean
+ *                 description: Indicates if the file is at the root level.
+ *                 default: false
  *     responses:
- *       200:
- *         description: Files uploaded successfully
- *       401:
- *         description: Unauthorized
+ *       201:
+ *         description: File created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: File created successfully
+ *                 file:
+ *                   $ref: '#/components/schemas/File'
+ *       400:
+ *         description: No files uploaded or invalid request.
+ *       403:
+ *         description: Unauthorized - User must belong to a company.
  *       500:
- *         description: Server error
+ *         description: Internal server error.
+ *     security:
+ *       - bearerAuth: []
+ * components: 
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
  */
 router.post('/upload', upload.array('files'), fileController.createFile);
 

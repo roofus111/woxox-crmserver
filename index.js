@@ -156,7 +156,7 @@ const options={
       description:"API documentation made with express and node.js documented with swagger",
     },
     servers:[{
-      url:"https://app.canbridge.in",
+      url:"http://app.canbridge.in",
     },
   ],
   },
