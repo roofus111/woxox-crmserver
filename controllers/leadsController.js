@@ -324,28 +324,69 @@ exports.getLeadsForDocs = async (req, res) => {
   }
 };
 
+// exports.getCampaigns = async (req, res) => {
+//   try {
+//     const campaignNames = await Lead.distinct("campaign", {
+//       company: req.user.company,
+//       assignedTo: req.user._id,
+//     });
+//     const campaignid = await Lead.distinct("campaignid", {
+//       company: req.user.company,
+//       assignedTo: req.user._id,
+//     });
+//     const leads = await Campaign.find({ _id: { $in: campaignid } });
+//     const merged = [
+//       ...campaignNames, // Include string IDs from camp1
+//       ...leads, // Extract 'id' from each object in camp2
+//     ];
+//     res.status(200).json({
+//       campaign: merged,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
 exports.getCampaigns = async (req, res) => {
   try {
-    const campaignNames = await Lead.distinct("campaign", {
-      company: req.user.company,
-      assignedTo: req.user._id,
+    // Get all campaigns from the Campaign collection
+    const campaigns = await Campaign.find();
+
+    // Get lead counts for all campaigns
+    const leadCounts = await Lead.aggregate([
+      {
+        $group: {
+          _id: "$campaignid",
+          totalLeads: { $sum: 1 }, // Count all leads
+          newLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] }, // Count only 'New' leads
+          },
+        },
+      },
+    ]);
+
+    // Merge campaign details with lead counts
+    const mergedCampaigns = campaigns.map(campaign => {
+      const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
+        totalLeads: 0,
+        newLeads: 0,
+      };
+
+      return {
+        id: campaign._id,
+        name: campaign.name,
+        totalLeads: leadData.totalLeads,
+        newLeads: leadData.newLeads,
+        details: campaign, // Include all campaign details
+      };
     });
-    const campaignid = await Lead.distinct("campaignid", {
-      company: req.user.company,
-      assignedTo: req.user._id,
-    });
-    const leads = await Campaign.find({ _id: { $in: campaignid } });
-    const merged = [
-      ...campaignNames, // Include string IDs from camp1
-      ...leads, // Extract 'id' from each object in camp2
-    ];
-    res.status(200).json({
-      campaign: merged,
-    });
+
+    res.status(200).json({ campaigns: mergedCampaigns });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 exports.getCounsellorLeads = async (req, res) => {
   try {

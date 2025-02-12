@@ -76,6 +76,24 @@ const AttachmentSchema = new mongoose.Schema({
     employees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
     createdAt: { type: Date, default: Date.now },
   });
+  // **History Schema**
+const HistorySchema = new mongoose.Schema({
+  activityType: { 
+    type: String, 
+    enum: ['Employee Updated', 'Job Title Change', 'Department Change', 'Status Update', 'Attendance Added','Attendance Update', 'Salary Update', 'Leave Change', 'Performance Update', 'Training Added'], 
+    required: true 
+  },
+  description: { type: String, required: true },
+  changedBy: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', // Referring to the user who made the change (e.g., HR or Admin)
+    required: true 
+  },
+  changedAt: { type: Date, default: Date.now },
+  oldValue: { type: String }, // Store old value before the change (optional, can be null)
+  newValue: { type: String }, // Store new value after the change
+});
+
   const EmployeeSchema = new mongoose.Schema({
     company: {
         type: mongoose.Schema.Types.ObjectId,
@@ -113,6 +131,7 @@ const AttachmentSchema = new mongoose.Schema({
     performance:[PerformanceSchema],
     training:[TrainingSchema],
     salary: { type: Number },
+    history: [HistorySchema],
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   });
