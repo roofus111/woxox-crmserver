@@ -381,7 +381,7 @@ exports.getCampaigns = async (req, res) => {
       };
     });
 
-    res.status(200).json({ campaigns: mergedCampaigns });
+    res.status(200).json({ campaign: mergedCampaigns });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
