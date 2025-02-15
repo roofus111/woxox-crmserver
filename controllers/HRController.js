@@ -444,307 +444,64 @@ exports.deleteAttachment = async (req, res) => {
   }
 };
 
-//attendance
 
-
-// Create a new attendance record with leave details
-exports.Addattendance = async (req, res) => {
+exports.renameAttachment = async (req, res) => {
   try {
-    const { employeeId, date, checkInTime, checkOutTime, status, leaves } = req.body;
-      // Validate date format
-    // Validate date format (YYYY-MM-DD)
-    const parsedDate = parseISO(date);
-    if (!isValid(parsedDate)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format. Use YYYY-MM-DD.",
-      });
-    }
-        // Validate time format (basic check)
-    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:MM format
-    if (!timeRegex.test(checkInTime) || !timeRegex.test(checkOutTime)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid time format. Use HH:MM.",
-      });
-    }
-    // Find the employee by ID
-    const employee = await Employee.findById(employeeId);
-    if (!employee) { 
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found",
-      });
-    }
-    // Check if attendance already exists for the same date
-    const existingAttendance = employee.attendence.find((attendance) =>
-      new Date(attendance.date).toISOString().split('T')[0] === date
-    );
-    if (existingAttendance) {
-      return res.status(400).json({ message: 'Attendance record already exists for this date.' });
-    }
+    const { employeeId, attachmentId } = req.params;
+    const { newFileName } = req.body;
 
-    // Validate check-in and check-out times
-    if (checkOutTime <= checkInTime) {
-      return res.status(400).json({ message: 'Check-out time must be after check-in time.' });
-    }
-    // Create a new attendance record
-    const newAttendance = {
-      company:req.user.company?._id, 
-      date,
-      checkInTime,
-      checkOutTime,
-      status,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    // If leaveDetails are provided, add them to the attendance record
-    if (leaves) {
-      newAttendance.leaves = [leaves];
-    }
-
-    // Add the attendance record to the employee's attendance array
-    employee.attendence.push(newAttendance);
-    const historyRecord = new AttendanceHistory({
-      activityType: 'Attendance Added', // Or a more specific type like "Employee Created"
-      description: `Employee ${firstName} ${lastName} attendance was posted by ${req.user.name}`,
-      changedBy: req.user._id, // The user who created the employee
-      changedAt: new Date()
-    });
-
-    // Save the history record
-    await historyRecord.save()
-    // Save the updated employee document
-    const updatedEmployee = await employee.save();
-
-    // Respond with the updated employee data
-    res.status(201).json({
-      success: true,
-      message: "Attendance record created successfully",
-      data: updatedEmployee,
-    });
-  } catch (error) {
-    console.error("Error creating attendance record:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create attendance record",
-      error: error.message,
-    });
-  }
-};
-// Get Attendance of All Employees
-exports.getAllAttendances = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.body;
-
-    // Fetch all employees and their attendance records
-    let employees = await Employee.find({})
-      .select('firstName lastName attendence') // Select only relevant fields
-      .populate('attendence.leaves'); // Populate leave details if needed
-
-    if (!employees.length) {
-      return res.status(404).json({ message: 'No employees found.' });
-    }
-
-    // Filter attendance records for each employee by date range
-    if (startDate || endDate) {
-      const start = startDate ? new Date(startDate) : new Date('1970-01-01');
-      const end = endDate ? new Date(endDate) : new Date();
-
-      employees = employees.map(employee => {
-        const filteredAttendance = employee.attendence.filter(record => {
-          const recordDate = new Date(record.date);
-          return recordDate >= start && recordDate <= end;
-        });
-
-        return {
-          employeeId: employee._id,
-          name: `${employee.firstName} ${employee.lastName}`,
-          attendance: filteredAttendance,
-        };
-      });
-    } else {
-      // If no date range is provided, return all attendance records
-      employees = employees.map(employee => ({
-        employeeId: employee._id,
-        name: `${employee.firstName} ${employee.lastName}`,
-        attendance: employee.attendence,
-      }));
-    }
-
-    return res.status(200).json({
-      message: 'Attendance records retrieved successfully.',
-      data: employees,
-    });
-  } catch (error) {
-    console.error('Error fetching attendance:', error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
-  }
-};
-
-// Get Attendance Records
-exports.getAttendancebyid = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const {  startDate, endDate } = req.body;
-
-    // Check if employeeId is provided
-    if (!employeeId) {
-      return res.status(400).json({ message: 'Employee ID is required.' });
-    }
-
-    // Find the employee
-    const employee = await Employee.findById(employeeId).populate('attendence.leaves');
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found.' });
-    }
-
-    // Filter attendance by date range if startDate and endDate are provided
-    let filteredAttendance = employee.attendence;
-
-    if (startDate || endDate) {
-      const start = startDate ? new Date(startDate) : new Date('1970-01-01');
-      const end = endDate ? new Date(endDate) : new Date();
-
-      filteredAttendance = filteredAttendance.filter((record) => {
-        const recordDate = new Date(record.date);
-        return recordDate >= start && recordDate <= end;
-      });
-    }
-   
-    // Return filtered attendance records
-    return res.status(200).json({
-      message: 'Attendance records retrieved successfully.',
-      attendance: filteredAttendance,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
-  }
-};
-exports.getAttendanceByIdStatus = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { startDate, endDate, status } = req.body;
-
-    // Example list of holidays (can be fetched from a database or configuration file)
-    const holidays = [];
-
-    // Validate employeeId
-    if (!employeeId) {
-      return res.status(400).json({ message: "Employee ID is required." });
-    }
-
-    // Validate status if provided
-    if (status && !["Present", "Absent", "On Leave"].includes(status)) {
-      return res.status(400).json({
-        message: "Invalid status. Must be Present, Absent, or On Leave."
-      });
-    }
-
-    // Find the employee
-    const employee = await Employee.findById(employeeId).populate("attendence.leaves");
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found." });
-    }
-
-    // Filter attendance records
-    let filteredAttendance = employee.attendence;
-
-    // Filter by date range if provided
-    if (startDate || endDate) {
-      const start = startDate ? new Date(startDate) : new Date("1970-01-01");
-      const end = endDate ? new Date(endDate) : new Date();
-
-      filteredAttendance = filteredAttendance.filter((record) => {
-        const recordDate = new Date(record.date);
-        return recordDate >= start && recordDate <= end;
-      });
-    }
-
-    // Filter by status if provided
-    if (status) {
-      filteredAttendance = filteredAttendance.filter((record) => record.status === status);
-    }
-
-    // Count attendance by status
-    const statusCounts = filteredAttendance.reduce(
-      (counts, record) => {
-        counts[record.status] = (counts[record.status] || 0) + 1;
-        return counts;
-      },
-      { Present: 0, Absent: 0, "On Leave": 0 }
-    );
-
-    // Filter holidays within the date range
-    const start = startDate ? new Date(startDate) : new Date("1970-01-01");
-    const end = endDate ? new Date(endDate) : new Date();
-    const filteredHolidays = holidays.filter((holiday) => {
-      const holidayDate = new Date(holiday.date);
-      return holidayDate >= start && holidayDate <= end;
-    });
-
-    // Return filtered records with counts
-    return res.status(200).json({
-      message: "Attendance records retrieved successfully.",
-      attendance: filteredAttendance,
-      holidays: filteredHolidays,
-      counts: {
-        present: statusCounts.Present,
-        absent: statusCounts.Absent,
-        onLeave: statusCounts["On Leave"],
-        holidays: filteredHolidays.length
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Internal server error.",
-      error: error.message
-    });
-  }
-};
-exports.updateAttendanceById = async (req, res) => {
-  try {
-    const { employeeId, attendanceId } = req.params; // Employee and Attendance IDs from params
-    const updateData = req.body; // Updated fields in the request body
-
-    // Validate required parameters
-    if (!employeeId || !attendanceId) {
-      return res.status(400).json({ message: 'Employee ID and Attendance ID are required.' });
+    if (!newFileName) {
+      return res.status(400).json({ message: 'New file name is required' });
     }
 
     // Find the employee
     const employee = await Employee.findById(employeeId);
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found.' });
+      return res.status(404).json({ message: 'Employee not found' });
     }
 
-    // Find the specific attendance record
-    const attendanceRecord = employee.attendence.id(attendanceId);
-    if (!attendanceRecord) {
-      return res.status(404).json({ message: 'Attendance record not found.' });
+    console.log("Employee data:", employee);
+    console.log("Attachments:", employee.attachments);
+    console.log("Attachment ID from request:", attachmentId);
+
+    // Find the file in attachments
+    const fileIndex = employee.attachments.findIndex(att => att._id.toString() === attachmentId);
+    if (fileIndex === -1) {
+      return res.status(404).json({ message: 'File not found' });
     }
 
-    // Update the fields in the attendance record
-    Object.keys(updateData).forEach((key) => {
-      attendanceRecord[key] = updateData[key];
-    });
+    const oldFile = employee.attachments[fileIndex];
+    const oldKey = oldFile.fileUrl.split('.amazonaws.com/')[1]; // Extract key from URL
 
-    // Save the updated employee document
+    const newKey = `employeedoc/${uuidv4()}-${newFileName}`;
+
+    // Copy file to new key
+    await s3.copyObject({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      CopySource: `${process.env.AWS_BUCKET_NAME}/${oldKey}`,
+      Key: newKey
+    }).promise();
+
+    // Delete the old file from S3
+    await s3.deleteObject({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: oldKey
+    }).promise();
+
+    // Update MongoDB
+    const updatedFileUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com/${newKey}`;
+    employee.attachments[fileIndex].fileName = newFileName;
+    employee.attachments[fileIndex].fileUrl = updatedFileUrl;
+
     await employee.save();
 
-    return res.status(200).json({
-      message: 'Attendance record updated successfully.',
-      updatedAttendance: attendanceRecord,
-    });
+    return res.status(200).json({ message: 'File renamed successfully', updatedFile: employee.attachments[fileIndex] });
+
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+    console.error('Error renaming file:', error);
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 };
-
 
 
 
