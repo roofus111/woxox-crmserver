@@ -1,5 +1,6 @@
 const Company = require("../models/Company");
 const Invoice = require("../models/invoice");
+const Sales = require("../models/sales");
 
 const getTotalInvoiceCount = async (companyId) => {
   try {
@@ -24,9 +25,14 @@ exports.createInvoice = async (req, res) => {
       invoiceNumber : (count + 1).toString().padStart(5, '0'),
       company: req.user.company,
     });
+
+    const sales = await Sales.findById(invoiceData.sales);
+    sales.invoice.push(invoice._id);
+    await sales.save();
     console.log(invoice);
     const savedInvoice = await invoice.save();
     res.status(201).json(savedInvoice);
+
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -61,6 +67,7 @@ const formattedInvoices = invoices.map((invoice) => ({
   gst: invoice.gst,
   refId: invoice._id,
   leadId: invoice.customer?._id,
+  salesId: invoice.sales,
   _id: invoice._id
     }));
 

@@ -376,6 +376,7 @@ router.use(authenticateUser); // Apply authentication to all routes
  *       scheme: bearer
  *       bearerFormat: JWT
  */
+router.get("/company/user-performance", leadsController.userPerformance);
 
 router.get("/", leadsController.getAllLeads);
 /**

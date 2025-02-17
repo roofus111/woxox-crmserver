@@ -776,26 +776,25 @@ exports.UpdateLeadStatus = async (req, res) => {
       // }
 
       // Only create a sales request if financeModule is enabled
-      // if (company.Module.finance) {
-      //   const year = new Date().getFullYear().toString().slice(-2);
-      //   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-      //   const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+      if (company.Module.finance) {
+        const year = new Date().getFullYear().toString().slice(-2);
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        const endOfYear = new Date(new Date().getFullYear(), 11, 31);
 
-      //   const salesCount =
-      //     (await Sales.countDocuments({
-      //       company: req.user.company._id,
-      //       createdAt: { $gte: startOfYear, $lte: endOfYear },
-      //     })) + 1;
+        const salesCount =
+          (await Sales.countDocuments({
+            company: req.user.company._id,
+            createdAt: { $gte: startOfYear, $lte: endOfYear },
+          })) + 1;
 
-      //   const salesId = `${year}-${salesCount.toString().padStart(5, "0")}`;
-      //   const newSales = new Sales({
-      //     SalesId: salesId,
-      //     LeadId: lead._id,
-      //     CustomerId: lead.Customer,
-      //     company: req.user.company._id,
-      //   });
-      //   await newSales.save();
-      // }  
+        const salesId = `${year}-${salesCount.toString().padStart(5, "0")}`;
+        const newSales = new Sales({
+          SalesId: salesId,
+          LeadId: lead._id,
+          company: req.user.company._id,
+        });
+        await newSales.save();
+      }  
       lead.stages = 0;
     }
 
@@ -998,3 +997,83 @@ exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+exports.userPerformance = async (req, res) => {
+  try {
+    const  companyId  = req.user.company;
+    const { startDate, endDate } = req.query;
+
+    // Create date filters
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.createdAt = {};
+      if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
+    }
+    console.log(req.user.company);
+
+    // Aggregate pipeline to get user performance metrics
+    const userPerformance = await Lead.aggregate([
+      {
+        $match: {
+          company: companyId,
+          assignedTo: { $ne: null },
+          ...dateFilter
+        }
+      },
+      {
+        $group: {
+          _id: '$assignedTo',
+          totalLeads: { $sum: 1 },
+          convertedLeads: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Converted'] }, 1, 0]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userDetails'
+        }
+      },
+      {
+        $unwind: '$userDetails'
+      },
+      {
+        $project: {
+          userId: '$_id',
+          name: '$userDetails.name',
+          totalLeads: 1,
+          convertedLeads: 1,
+          conversionRate: {
+            $multiply: [
+              { $divide: ['$convertedLeads', '$totalLeads'] },
+              100
+            ]
+          }
+        }
+      },
+      {
+        $sort: { conversionRate: -1 }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: userPerformance
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user performance data',
+      error: error.message
+    });
+  }
+};
+
+

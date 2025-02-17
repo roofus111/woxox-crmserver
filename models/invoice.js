@@ -71,7 +71,7 @@ totalAmount: {
   },
   status: {
     type: String,
-    enum: ["Pending", "Paid", "Overdue", "Cancelled"],
+    enum: ["Pending", "Paid", "Overdue", "Cancelled","Refunded"],
     default: "Pending",
   },
   notes: {
@@ -84,7 +84,12 @@ totalAmount: {
   paid:{
     type:Number,
     default:0
+  },
+  sales:{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Sales", // This references the Invoice model
   }
 });
+
 
 module.exports = mongoose.model("Invoice", InvoiceSchema);
