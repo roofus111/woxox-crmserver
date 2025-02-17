@@ -57,8 +57,22 @@
  *         shared:
  *           type: array
  *           items:
- *             $ref: '#/components/schemas/File'
- *           description: List of shared users with their access levels
+ *             type: object
+ *             properties:
+ *               sharedWith:
+ *                 type: string
+ *                 format: ObjectId
+ *                 description: User ID the file is shared with
+ *               sharedAt:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Timestamp of when the file was shared
+ *               accessLevel:
+ *                 type: string
+ *                 enum: [view, edit, admin]
+ *                 default: view
+ *                 description: Access level for the shared user
+ *           description: List of shared users with their access details
  *     SharedAccess:
  *       type: object
  *       required:

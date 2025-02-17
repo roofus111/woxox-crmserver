@@ -259,7 +259,7 @@ router.use(authenticateUser)
  *         description: Employee created successfully
  *         content:
  *           application/json:
- *             schema:
+ *             schema:                                                                                   
  *               type: object
  *               properties:
  *                 message:
@@ -573,6 +573,6 @@ router.get('/employees/status', HRController.getEmployeesByStatus);
 router.post('/:employeeId/attachments', upload.array('attachments'),HRController.postAttachment);
 router.get('/employee/:employeeId/attachments/:attachmentId', HRController.getAttachmentById);
 router.delete('/employee/:employeeId/attachment/:attachmentId',HRController.deleteAttachment);
-router.put("/renameAttachment/:employeeId/:attachmentId", HRController.renameAttachment);
+router.put('/renameAttachment/:employeeId/:attachmentId', HRController.renameAttachment);
 
 module.exports = router;

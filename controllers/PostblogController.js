@@ -1,6 +1,6 @@
 const Post = require('../models/Postblog');
 // const Category = require('../models/Category');
-// const Tag = require('../models/Tag');
+const TagModel = require('../models/TagModel');
 const fs = require('fs');
 const path = require('path');
 
@@ -28,35 +28,39 @@ const path = require('path');
 
 exports.createPost = async (req, res) => {
   try {
-    const { title, slug, content, author, categories = [],relatedPosts, tags, seo } = JSON.parse(req.body.formData);
+    const { title, slug, content, author,
+      //  categories = [],
+       relatedPosts,
+        tags,
+        seo } = JSON.parse(req.body.formData);
     const featuredImage = req.file ?  req.file.filename : null;
 
-    if (!title || !slug || !content || !author) {
+    if (!title || !slug || !content ) {
       return res.status(400).json({ message: 'Title, slug, content, and author are required.' });
     }
 
-    // Validate categories
-    if (categories.length > 0) {
-      const validCategories = await Category.find({ _id: { $in: categories } });
-      if (validCategories.length !== categories.length) {
-        return res.status(400).json({ message: 'Invalid categories provided.' });
-      }
-    }
-
-    // Validate tags
-    // if (tags.length > 0) {
-    //   const validTags = await Tag.find({ _id: { $in: tags } });
-    //   if (validTags.length !== tags.length) {
-    //     return res.status(400).json({ message: 'Invalid tags provided.' });
+    // // Validate categories
+    // if (categories.length > 0) {
+    //   const validCategories = await Category.find({ _id: { $in: categories } });
+    //   if (validCategories.length !== categories.length) {
+    //     return res.status(400).json({ message: 'Invalid categories provided.' });
     //   }
     // }
+
+    // Validate tags
+    if (tags.length > 0) {
+      const validTags = await TagModel.find({ _id: { $in: tags } });
+      if (validTags.length !== tags.length) {
+        return res.status(400).json({ message: 'Invalid tags provided.' });
+      }
+    }
 
     const post = new Post({
       title,
       slug,
       content,
-      author,
-      categories,
+      // author,
+      // categories,
       tags,
       featuredImage: featuredImage,
       seo,relatedPosts // Add image to the post

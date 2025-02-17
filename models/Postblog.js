@@ -20,15 +20,15 @@ const PostBlogSchema = new mongoose.Schema({
     type: String, 
     maxlength: 300 
   }, // Short summary for previews
-  author: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
-  },
-  categories: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Category' 
-  }], // Link to multiple categories
+  // author: { 
+  //   type: mongoose.Schema.Types.ObjectId, 
+  //   ref: 'User', 
+  //   // required: true 
+  // },
+  // categories: [{ 
+  //   type: mongoose.Schema.Types.ObjectId, 
+  //   ref: 'Category' 
+  // }], // Link to multiple categories
   tags: [{ 
     type: String 
   }], // Link to multiple tags
