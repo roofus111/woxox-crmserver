@@ -350,7 +350,7 @@ exports.getLeadsForDocs = async (req, res) => {
 exports.getCampaigns = async (req, res) => {
   try {
     // Get all campaigns from the Campaign collection
-    const campaigns = await Campaign.find();
+    const campaigns = await Campaign.find({company: req.user.company._id});
 
     // Get lead counts for all campaigns
     const leadCounts = await Lead.aggregate([
@@ -381,7 +381,7 @@ exports.getCampaigns = async (req, res) => {
       };
     });
 
-    res.status(200).json({ campaigns: mergedCampaigns });
+    res.status(200).json({ campaign: mergedCampaigns });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -997,3 +997,83 @@ exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+exports.userPerformance = async (req, res) => {
+  try {
+    const  companyId  = req.user.company;
+    const { startDate, endDate } = req.query;
+
+    // Create date filters
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.createdAt = {};
+      if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
+      if (endDate) dateFilter.createdAt.$lte = new Date(endDate);
+    }
+    console.log(req.user.company);
+
+    // Aggregate pipeline to get user performance metrics
+    const userPerformance = await Lead.aggregate([
+      {
+        $match: {
+          company: companyId,
+          assignedTo: { $ne: null },
+          ...dateFilter
+        }
+      },
+      {
+        $group: {
+          _id: '$assignedTo',
+          totalLeads: { $sum: 1 },
+          convertedLeads: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Converted'] }, 1, 0]
+            }
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userDetails'
+        }
+      },
+      {
+        $unwind: '$userDetails'
+      },
+      {
+        $project: {
+          userId: '$_id',
+          name: '$userDetails.name',
+          totalLeads: 1,
+          convertedLeads: 1,
+          conversionRate: {
+            $multiply: [
+              { $divide: ['$convertedLeads', '$totalLeads'] },
+              100
+            ]
+          }
+        }
+      },
+      {
+        $sort: { conversionRate: -1 }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: userPerformance
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user performance data',
+      error: error.message
+    });
+  }
+};
+
+

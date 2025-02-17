@@ -573,12 +573,6 @@ router.get('/employees/status', HRController.getEmployeesByStatus);
 router.post('/:employeeId/attachments', upload.array('attachments'),HRController.postAttachment);
 router.get('/employee/:employeeId/attachments/:attachmentId', HRController.getAttachmentById);
 router.delete('/employee/:employeeId/attachment/:attachmentId',HRController.deleteAttachment);
+router.put("/renameAttachment/:employeeId/:attachmentId", HRController.renameAttachment);
 
-
-//attendance
-router.post('/addattendance', HRController.Addattendance)
-router.get('/getallattendence', HRController.getAllAttendances);
-router.get('/getattendence/:employeeId', HRController.getAttendancebyid);
-router.get('/getattendenceid/:employeeId', HRController.getAttendanceByIdStatus);
-router.put('/updateattendance/:employeeId/:attendanceId', HRController.updateAttendanceById);
 module.exports = router;
