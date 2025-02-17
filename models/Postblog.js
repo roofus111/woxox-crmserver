@@ -20,11 +20,11 @@ const PostBlogSchema = new mongoose.Schema({
     type: String, 
     maxlength: 300 
   }, // Short summary for previews
-  // author: { 
-  //   type: mongoose.Schema.Types.ObjectId, 
-  //   ref: 'User', 
-  //   // required: true 
-  // },
+  author: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
   // categories: [{ 
   //   type: mongoose.Schema.Types.ObjectId, 
   //   ref: 'Category' 

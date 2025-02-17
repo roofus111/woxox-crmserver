@@ -162,7 +162,7 @@ const options={
       description:"API documentation made with express and node.js documented with swagger",
     },
     servers:[{
-      url:"http://localhost:8000",
+      url:"http://app.canbridge.in",
     },
   ],
   },
