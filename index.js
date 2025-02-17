@@ -25,6 +25,7 @@ const HR= require("./routes/HRRoutes")
 const Files=require("./routes/FileHandlerRoutes")
 const Folder=require("./routes/folderRoutes")
 const Attendance=require('./routes/attendanceRouter')
+const blogPost=require('./routes/PostblogRoutes')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -77,6 +78,7 @@ app.use("/api/hr",HR)
 app.use("/api/files",Files)
 app.use("/api/folders",Folder)
 app.use("/api/attendance",Attendance)
+app.use("/api/blogpost",blogPost)
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
   return io.sockets.adapter.rooms.get(userId)?.size > 0;

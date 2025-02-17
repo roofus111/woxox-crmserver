@@ -1,6 +1,6 @@
 const Post = require('../models/Postblog');
-const Category = require('../models/Category');
-const Tag = require('../models/Tag');
+// const Category = require('../models/Category');
+// const Tag = require('../models/Tag');
 const fs = require('fs');
 const path = require('path');
 
@@ -127,8 +127,8 @@ exports.getPostById = async (req, res) => {
 
     // Fetch the post by ID
     const post = await Post.findById(id)
-      .populate('categories', 'name') // Populate category names
-      .populate('tags', 'name') // Populate tag names
+      // .populate('categories', 'name') // Populate category names
+      // .populate('tags', 'name') // Populate tag names
       .populate('author', 'name email') // Populate author name and email
       .exec();
 
@@ -159,8 +159,8 @@ exports.updatePost = async (req, res) => {
       content, 
       excerpt, 
       author, 
-      categories, 
-      tags, 
+      // categories, 
+      // tags, 
       featuredImage, 
       status, 
       seo, 
@@ -179,18 +179,18 @@ exports.updatePost = async (req, res) => {
       return res.status(404).json({ message: 'Post not found.' });
     }
 
-    // Validate categories if provided
-    if (categories && categories.length) {
-      const validCategories = await Category.find({ _id: { $in: categories } });
-      if (validCategories.length !== categories.length) {
-        return res.status(400).json({ message: 'Invalid categories provided.' });
-      }
-    }
+    // // Validate categories if provided
+    // if (categories && categories.length) {
+    //   const validCategories = await Category.find({ _id: { $in: categories } });
+    //   if (validCategories.length !== categories.length) {
+    //     return res.status(400).json({ message: 'Invalid categories provided.' });
+    //   }
+    // }
 
-    // Validate tags if provided
-    if (tags && !Array.isArray(tags)) {
-      return res.status(400).json({ message: 'Tags should be an array of strings.' });
-    }
+    // // Validate tags if provided
+    // if (tags && !Array.isArray(tags)) {
+    //   return res.status(400).json({ message: 'Tags should be an array of strings.' });
+    // }
     
 
     // Update the post with the new values
@@ -199,8 +199,8 @@ exports.updatePost = async (req, res) => {
     post.content = content || post.content;
     post.excerpt = excerpt || post.excerpt;
     post.author = author || post.author;
-    post.categories = categories || post.categories;
-    post.tags = tags || post.tags;
+    // post.categories = categories || post.categories;
+    // post.tags = tags || post.tags;
     post.status = status || post.status;
     post.seo = seo || post.seo;
     post.featuredImage = featuredImage !== undefined ? featuredImage : post.featuredImage; // Update image if provided
