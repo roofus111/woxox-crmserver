@@ -85,7 +85,7 @@ const PostBlogSchema = new mongoose.Schema({
 });
 
 // Middleware to update timestamps and increment version
-PostSchema.pre('save', function (next) {
+PostBlogSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   if (this.isModified('content')) {
     this.version += 1;
