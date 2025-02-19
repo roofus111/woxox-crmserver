@@ -415,3 +415,61 @@ exports.deleteAttendance = async (req, res) => {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 };
+
+exports.getMyAttendance = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        // Validate dates
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: "Start date and end date are required" });
+        }
+
+        // Ensure user is authenticated
+        if (!req.user || !req.user._id) {
+            return res.status(403).json({ message: "Unauthorized access" });
+        }
+
+        // Convert dates to remove time portion
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // End of the day
+
+        // Fetch attendance records for the logged-in user
+        const attendanceRecords = await Attendance.find({
+            employeeId: req.user._id,
+            date: { $gte: start, $lte: end }
+        })
+        .populate("employeeId", "firstName lastName email") // Populating employee details
+        .sort({ date: -1 }); // Sort by date descending
+
+        // Calculate summary statistics
+        const summary = {
+            totalDays: attendanceRecords.length,
+            statusCount: {},
+            totalWorkHours: 0,
+            totalOvertimeHours: 0
+        };
+
+        attendanceRecords.forEach(record => {
+            // Count status occurrences
+            summary.statusCount[record.status] = (summary.statusCount[record.status] || 0) + 1;
+            
+            // Sum work hours
+            summary.totalWorkHours += record.workHours || 0;
+            summary.totalOvertimeHours += record.overtimeHours || 0;
+        });
+
+        return res.status(200).json({
+            message: "Attendance records fetched successfully",
+            summary,
+            attendance: attendanceRecords
+        });
+
+    } catch (error) {
+        console.error("Error fetching attendance:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};

@@ -11,4 +11,5 @@ router.get("/insight/:employeeId",attendanceController. getAttendanceInsightsByE
 router.get("/leaves/:employeeId", attendanceController. getLeaveTypesByEmployee);
 router.put('/:id', attendanceController.updateAttendance);
 router.delete('/:id',attendanceController. deleteAttendance);
+router.get('/my-attendance', attendanceController.getMyAttendance);
 module.exports = router;
