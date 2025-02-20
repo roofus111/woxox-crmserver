@@ -89,17 +89,25 @@ PayrollSchema.pre('save', function (next) {
     this.baseSalary = (this.monthlySalary / this.totalWorkingDays) * this.daysWorked;
   }
 
-  // Calculate Total Extra Earnings
-  this.totalExtraEarnings = this.extraEarnings.reduce((sum, e) => sum + e.amount, 0);
+  // Calculate Total Extra Earnings - Handle null/undefined case
+  if (Array.isArray(this.extraEarnings)) {
+    this.totalExtraEarnings = this.extraEarnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+  } else {
+    this.totalExtraEarnings = 0;
+  }
 
-  // Calculate Total Deductions
-  this.totalDeductions = this.deductions.reduce((sum, d) => sum + d.amount, 0);
+  // Calculate Total Deductions - Handle null/undefined case
+  if (Array.isArray(this.deductions)) {
+    this.totalDeductions = this.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
+  } else {
+    this.totalDeductions = 0;
+  }
 
   // Calculate Net Salary
   this.netSalary = this.baseSalary + this.totalExtraEarnings - this.totalDeductions - this.tax;
 
   // Calculate Remaining Salary
-  this.remainingSalary = this.netSalary - this.paidAmount;
+  this.remainingSalary = this.netSalary - (this.paidAmount || 0);
 
   // Auto-Update Payment Status
   if (this.paidAmount === 0) {
@@ -111,6 +119,50 @@ PayrollSchema.pre('save', function (next) {
   }
 
   this.updatedAt = Date.now();
+  next();
+});
+
+// Add middleware for updates
+PayrollSchema.pre('findOneAndUpdate', async function(next) {
+  const docToUpdate = await this.model.findOne(this.getQuery());
+  if (docToUpdate) {
+    // Get the update data
+    const update = this.getUpdate();
+    
+    // If extraEarnings or deductions are being updated, recalculate totals
+    if (update.extraEarnings) {
+      update.totalExtraEarnings = update.extraEarnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+    }
+    if (update.deductions) {
+      update.totalDeductions = update.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
+    }
+
+    // Recalculate netSalary if relevant fields are updated
+    if (update.extraEarnings || update.deductions || update.tax || update.baseSalary) {
+      const baseSalary = update.baseSalary || docToUpdate.baseSalary;
+      const totalExtraEarnings = update.totalExtraEarnings || docToUpdate.totalExtraEarnings;
+      const totalDeductions = update.totalDeductions || docToUpdate.totalDeductions;
+      const tax = update.tax || docToUpdate.tax;
+      
+      update.netSalary = baseSalary + totalExtraEarnings - totalDeductions - tax;
+      update.remainingSalary = update.netSalary - (update.paidAmount || docToUpdate.paidAmount);
+    }
+
+    // Update payment status
+    const paidAmount = update.paidAmount || docToUpdate.paidAmount;
+    const netSalary = update.netSalary || docToUpdate.netSalary;
+    
+    if (paidAmount === 0) {
+      update.paymentStatus = 'Pending';
+    } else if (paidAmount < netSalary) {
+      update.paymentStatus = 'Half Paid';
+    } else {
+      update.paymentStatus = 'Paid';
+    }
+
+    update.updatedAt = Date.now();
+    this.setUpdate(update);
+  }
   next();
 });
 

@@ -46,7 +46,7 @@ const EventSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["ToDo", "Sceduled" , "in progress", "completed"],
+      enum: ["ToDo", "Scheduled" , "in progress", "completed"],
       default: "ToDo",
     },
     dueDate: {
