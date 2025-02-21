@@ -4,164 +4,177 @@
  *   schemas:
  *     Attachment:
  *       type: object
- *       properties:
- *         fileName:
- *           type: string
- *           description: Name of the file.
- *         fileType:
- *           type: string
- *           description: Type of the file (e.g., pdf, jpg).
- *         fileUrl:
- *           type: string
- *           description: URL where the file is stored.
  *       required:
  *         - fileName
  *         - fileUrl
- *
- *     Leave:
- *       type: object
  *       properties:
- *         employee:
+ *         fileName:
  *           type: string
- *           format: ObjectId
- *           description: Reference to the employee who requested the leave.
- *         leaveType:
+ *           description: Name of the uploaded file
+ *         fileType:
  *           type: string
- *           enum: ['Sick', 'Casual', 'Maternity', 'Other']
- *           description: Type of leave.
- *         startDate:
+ *           description: Type/extension of the file
+ *         fileUrl:
  *           type: string
- *           format: date
- *           description: Start date of the leave.
- *         endDate:
- *           type: string
- *           format: date
- *           description: End date of the leave.
- *         status:
- *           type: string
- *           enum: ['Pending', 'Approved', 'Rejected']
- *           description: Current status of the leave request.
- *         reason:
- *           type: string
- *           description: Reason for the leave.
- *
- *     Attendance:
+ *           description: URL where the file is stored
+ * 
+ *     History:
  *       type: object
+ *       required:
+ *         - activityType
+ *         - description
+ *         - changedBy
  *       properties:
- *         employee:
+ *         activityType:
  *           type: string
- *           format: ObjectId
- *           description: Reference to the employee.
- *         date:
+ *           enum: [Employee Updated, Job Title Change, Department Change, Status Update, Attendance Added, Attendance Update, Salary Update, Leave Change, Performance Update, Training Added]
+ *           description: Type of change made
+ *         description:
  *           type: string
- *           format: date
- *           description: Date of the attendance record.
- *         checkInTime:
+ *           description: Detailed description of the change
+ *         changedBy:
+ *           type: string
+ *           description: Reference to User who made the change
+ *         changedAt:
  *           type: string
  *           format: date-time
- *           description: Check-in time.
- *         checkOutTime:
+ *           description: When the change was made
+ *         oldValue:
  *           type: string
- *           format: date-time
- *           description: Check-out time.
- *         status:
+ *           description: Previous value before change
+ *         newValue:
  *           type: string
- *           enum: ['Present', 'Absent', 'On Leave']
- *           description: Attendance status for the day.
- *
- *     Payroll:
- *       type: object
- *       properties:
- *         employee:
- *           type: string
- *           format: ObjectId
- *           description: Reference to the employee.
- *         basicSalary:
- *           type: number
- *           description: Base salary amount.
- *         bonus:
- *           type: number
- *           description: Bonus amount.
- *         deductions:
- *           type: number
- *           description: Deductions amount.
- *         netSalary:
- *           type: number
- *           description: Net salary after deductions and bonuses.
- *         paymentDate:
- *           type: string
- *           format: date
- *           description: Date of salary payment.
- *
+ *           description: New value after change
+ * 
  *     Employee:
  *       type: object
- *       properties:
- *         company:
- *           type: string
- *           format: ObjectId
- *           description: Reference to the company the employee works for.
- *         User:
- *           type: string
- *           format: ObjectId
- *           description: Reference to the User model for sales representatives.
- *         firstName:
- *           type: string
- *           description: First name of the employee.
- *         lastName:
- *           type: string
- *           description: Last name of the employee.
- *         email:
- *           type: string
- *           format: email
- *           description: Employee's email address.
- *         phoneNumber:
- *           type: string
- *           description: Employee's phone number.
- *         gender:
- *           type: string
- *           enum: ['Male', 'Female', 'Other']
- *           description: Gender of the employee.
- *         status:
- *           type: string
- *           enum: ['Active', 'Inactive', 'On Leave']
- *           description: Current employment status.
- *         jobTitle:
- *           type: string
- *           description: Job title of the employee.
- *         department:
- *           type: string
- *           description: Department of the employee.
- *         supervisor:
- *           type: string
- *           format: ObjectId
- *           description: Reference to the supervisor (another Employee).
- *         attachments:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/Attachment'
- *         attendence:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/Attendance'
- *         payroll:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/Payroll'
- *         createdAt:
- *           type: string
- *           format: date-time
- *           description: When the employee record was created.
- *         updatedAt:
- *           type: string
- *           format: date-time
- *           description: When the employee record was last updated.
  *       required:
  *         - company
  *         - User
  *         - firstName
  *         - email
+ *       properties:
+ *         company:
+ *           type: string
+ *           description: Reference to Company model
+ *         User:
+ *           type: string
+ *           description: Reference to User model
+ *         firstName:
+ *           type: string
+ *           description: Employee's first name
+ *         lastName:
+ *           type: string
+ *           description: Employee's last name
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: Employee's email address
+ *         phoneNumber:
+ *           type: string
+ *           description: Contact number
+ *         dateOfBirth:
+ *           type: string
+ *           format: date
+ *           description: Date of birth
+ *         gender:
+ *           type: string
+ *           enum: [Male, Female, Other]
+ *           description: Gender of employee
+ *         address:
+ *           type: object
+ *           properties:
+ *             street:
+ *               type: string
+ *             city:
+ *               type: string
+ *             state:
+ *               type: string
+ *             zipCode:
+ *               type: string
+ *             country:
+ *               type: string
+ *           description: Employee's address details
+ *         startDate:
+ *           type: string
+ *           format: date
+ *           description: Employment start date
+ *         endDate:
+ *           type: string
+ *           format: date
+ *           description: Employment end date
+ *         status:
+ *           type: string
+ *           enum: [Active, Inactive]
+ *           default: Active
+ *           description: Current employment status
+ *         jobTitle:
+ *           type: string
+ *           description: Current job position
+ *         department:
+ *           type: string
+ *           description: Department name
+ *         role:
+ *           type: string
+ *           enum: [Admin, Salesperson, Manager, Support]
+ *           description: Role in the organization
+ *         supervisor:
+ *           type: string
+ *           description: Reference to Employee (reporting manager)
+ *         attachments:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Attachment'
+ *           description: Array of uploaded documents
+ *         salary:
+ *           type: number
+ *           description: Current salary
+ *         history:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/History'
+ *           description: Array of changes made to employee record
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: Record creation timestamp
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Record last update timestamp
+ * 
+ *     EmployeeResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           description: Operation success status
+ *         message:
+ *           type: string
+ *           description: Response message
+ *         data:
+ *           $ref: '#/components/schemas/Employee'
+ *           description: Employee data
+ * 
+ *     EmployeeListResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           description: Operation success status
+ *         count:
+ *           type: number
+ *           description: Total number of records
+ *         data:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Employee'
+ *           description: Array of employee records
  */
 
+const mongoose = require('mongoose');
+
+// ... rest of your schema code ...
 const express = require('express');
 const router = express.Router();
 const multer = require("multer");
@@ -171,408 +184,394 @@ const upload = multer({ storage });
 const authenticateUser = require('../middleware/authenticateUser');
 
 router.use(authenticateUser)
-// employee
+
 /**
  * @swagger
  * /api/hr/create:
  *   post:
  *     summary: Create a new employee
- *     description: This endpoint is used to create a new employee in the system, including file uploads (e.g., resume or profile picture).
- *     operationId: createEmployee
- *     tags:
- *       - Employee
- *     consumes:
- *       - multipart/form-data
- *     produces:
- *       - application/json
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
+ *             required:
+ *               - firstName
+ *               - email
  *             properties:
  *               firstName:
  *                 type: string
- *                 description: First name of the employee
  *               lastName:
  *                 type: string
- *                 description: Last name of the employee
  *               email:
  *                 type: string
  *                 format: email
- *                 description: Email address of the employee
  *               phoneNumber:
  *                 type: string
- *                 description: Phone number of the employee
- *               dateOfBirth:
- *                 type: string
- *                 format: date
- *                 description: Date of birth of the employee
  *               gender:
  *                 type: string
  *                 enum: [Male, Female, Other]
- *                 description: Gender of the employee
- *                 example: Male
- *               address:
- *                 type: string
- *                 description: Home address of the employee
- *               startDate:
- *                 type: string
- *                 format: date
- *                 description: Start date of the employee
- *               endDate:
- *                 type: string
- *                 format: date
- *                 description: End date of the employee (optional)
  *               status:
  *                 type: string
  *                 enum: [Active, Inactive, On Leave]
- *                 description: Current employment status
- *                 example: Active
  *               jobTitle:
  *                 type: string
- *                 description: Job title of the employee
  *               department:
  *                 type: string
- *                 description: Department of the employee
- *               role:
- *                 type: string
- *                 enum: [Admin, Salesperson, Manager, Support]
- *                 description: Role of the employee
- *                 example: Manager
  *               supervisor:
  *                 type: string
- *                 description: ID of the supervisor (optional)
- *                 example: "63bfc2c46f529f7b4c8eaf1b"
- *               salary:
- *                 type: number
- *                 description: Salary of the employee
  *               attachments:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
- *                 description: File upload field for resume or profile picture
  *     responses:
  *       201:
  *         description: Employee created successfully
- *         content:
- *           application/json:
- *             schema:                                                                                   
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 employee:
- *                   $ref: '#/components/schemas/Employee'
  *       400:
- *         description: Bad request
- *       404:
- *         description: Supervisor not found (if supervisor is provided)
- *       500:
- *         description: Internal server error
-  *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
+ *         description: Invalid input
  */
+router.post('/create', upload.array('attachments'), HRController.createEmployee);
 
-
-router.post('/create', upload.array('attachments'),HRController.createEmployee);
 /**
  * @swagger
  * /api/hr/getemployees:
  *   get:
- *     summary: Fetch employees
- *     tags:
- *       - Employee
- *     description: Fetch a single employee by ID or a list of employees with optional filters and pagination.
+ *     summary: Get all employees
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Successfully fetched employee(s)
+ *         description: List of employees retrieved successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 employees:
- *                   type: array  
- *                   items:
- *                     $ref: '#/components/schemas/Employee'
- *                 total:
- *                   type: integer
- *                   description: Total number of employees.
- *                 page:
- *                   type: integer
- *                   description: Current page.
- *                 limit:
- *                   type: integer
- *                   description: Number of employees per page.
- *       404:
- *         description: Employee not found.
- *       500:
- *         description: Internal server error.
- *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Employee'
  */
-
 router.get('/getemployees', HRController.getEmployee);
+
 /**
  * @swagger
  * /api/hr/getemployees/{EmployeeId}:
  *   get:
- *     summary: Get Employee by ID
- *     description: Fetch details of a specific employee using their unique ID.
- *     tags:
- *       - Employee
+ *     summary: Get employee by ID
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: EmployeeId
  *         required: true
- *         description: Unique identifier of the employee
  *         schema:
  *           type: string
  *     responses:
  *       200:
- *         description: Employee details fetched successfully
+ *         description: Employee details retrieved successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 employee:
- *                   type: object
- *                   description: Employee details
+ *               $ref: '#/components/schemas/Employee'
  *       404:
  *         description: Employee not found
- *       500:
- *         description: Internal server error
-  *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
  */
 router.get('/getemployees/:EmployeeId', HRController.getEmployee);
+
 /**
  * @swagger
  * /api/hr/putemployees/{employeeId}:
  *   put:
- *     summary: Update an employee's details
- *     description: Update specific fields of an employee using their ID.
- *     tags:
- *       - Employee
+ *     summary: Update employee details
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - name: employeeId
- *         in: path
- *         description: The ID of the employee to update
+ *       - in: path
+ *         name: employeeId
  *         required: true
  *         schema:
  *           type: string
  *     requestBody:
- *       description: Fields to update for the employee
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               firstName:
- *                 type: string
- *                 description: Employee's name
- *               position:
- *                 type: string
- *                 description: Employee's position
- *               department:
- *                 type: string
- *                 description: Employee's department
- *               salary:
- *                 type: number
- *                 description: Employee's salary
- *             example:
- *               firstName: Jane Doe
- *               position: Developer
- *               department: Engineering
- *               salary: 85000
+ *             $ref: '#/components/schemas/EmployeeUpdate'
  *     responses:
  *       200:
  *         description: Employee updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Employee updated successfully
- *                 employee:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                       example: 63a1d42fbd1f4b43f4e7345a
- *                     firstName:
- *                       type: string
- *                       example: Jane Doe
- *                     position:
- *                       type: string
- *                       example: Developer
- *                     department:
- *                       type: string
- *                       example: Engineering
- *                     salary:
- *                       type: number
- *                       example: 85000
- *       400:
- *         description: Invalid input or employee ID
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Invalid employee ID
  *       404:
  *         description: Employee not found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Employee not found
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Internal server error
-  *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
  */
+router.put('/putemployees/:employeeId', HRController.updateEmployee);
 
-router.put('/putemployees/:employeeId',HRController.updateEmployee);
 /**
  * @swagger
  * /api/hr/employees/{employeeId}/status:
  *   put:
  *     summary: Update employee status
- *     description: Update the status of an employee (Active or Inactive).
-  *    tags:
- *       - Employee
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - name: employeeId
- *         in: path
- *         description: The ID of the employee to update
+ *       - in: path
+ *         name: employeeId
  *         required: true
  *         schema:
  *           type: string
  *     requestBody:
- *         description: The new status of the employee
- *         required: true
-  *       content:
+ *       required: true
+ *       content:
  *         application/json:
- *         schema:
- *           type: object
- *           properties:
- *             status:
- *               type: string
- *               enum: [Active, Inactive]
- *               description: The status to update the employee to (Active or Inactive).
- *               example: Active
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Active, Inactive, On Leave]
  *     responses:
  *       200:
- *         description: Employee status successfully updated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Employee status updated to Active
- *                 employee:
- *                   $ref: '#/components/schemas/Employee'
- *       400:
- *         description: Invalid status provided
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Invalid status. Must be Active or Inactive."
+ *         description: Employee status updated successfully
  *       404:
  *         description: Employee not found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Employee not found
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Internal server error
- *                 error:
- *                   type: string
- *                   example: Error message details
-  *     security:
+ */
+router.put('/employees/:employeeId/status', HRController.updateEmployeeStatus);
+
+/**
+ * @swagger
+ * /api/hr/employees/status:
+ *   get:
+ *     summary: Get employees by status
+ *     tags: [HR]
+ *     security:
  *       - bearerAuth: []
- * components: 
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Active, Inactive, On Leave]
+ *     responses:
+ *       200:
+ *         description: Employees retrieved successfully
+ */
+router.get('/employees/status', HRController.getEmployeesByStatus);
+
+/**
+ * @swagger
+ * /api/hr/{employeeId}/attachments:
+ *   post:
+ *     summary: Add attachments to employee
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               attachments:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Attachments added successfully
+ */
+router.post('/:employeeId/attachments', upload.array('attachments'), HRController.postAttachment);
+
+/**
+ * @swagger
+ * /api/hr/employee/{employeeId}/attachments/{attachmentId}:
+ *   get:
+ *     summary: Get employee attachment
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Attachment retrieved successfully
+ *       404:
+ *         description: Attachment not found
+ */
+router.get('/employee/:employeeId/attachments/:attachmentId', HRController.getAttachmentById);
+
+/**
+ * @swagger
+ * /api/hr/employee/{employeeId}/attachment/{attachmentId}:
+ *   delete:
+ *     summary: Delete employee attachment
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Attachment deleted successfully
+ *       404:
+ *         description: Attachment not found
+ */
+router.delete('/employee/:employeeId/attachment/:attachmentId', HRController.deleteAttachment);
+
+/**
+ * @swagger
+ * /api/hr/renameAttachment/{employeeId}/{attachmentId}:
+ *   put:
+ *     summary: Rename employee attachment
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newFileName
+ *             properties:
+ *               newFileName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Attachment renamed successfully
+ *       404:
+ *         description: Attachment not found
+ */
+router.put('/renameAttachment/:employeeId/:attachmentId', HRController.renameAttachment);
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     Employee:
+ *       type: object
+ *       required:
+ *         - company
+ *         - User
+ *         - firstName
+ *         - email
+ *       properties:
+ *         company:
+ *           type: string
+ *           description: Reference to Company
+ *         User:
+ *           type: string
+ *           description: Reference to User
+ *         firstName:
+ *           type: string
+ *         lastName:
+ *           type: string
+ *         email:
+ *           type: string
+ *           format: email
+ *         phoneNumber:
+ *           type: string
+ *         gender:
+ *           type: string
+ *           enum: [Male, Female, Other]
+ *         status:
+ *           type: string
+ *           enum: [Active, Inactive, On Leave]
+ *         jobTitle:
+ *           type: string
+ *         department:
+ *           type: string
+ *         supervisor:
+ *           type: string
+ *         attachments:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Attachment'
+ *
+ *     EmployeeUpdate:
+ *       type: object
+ *       properties:
+ *         firstName:
+ *           type: string
+ *         lastName:
+ *           type: string
+ *         email:
+ *           type: string
+ *           format: email
+ *         phoneNumber:
+ *           type: string
+ *         gender:
+ *           type: string
+ *           enum: [Male, Female, Other]
+ *         jobTitle:
+ *           type: string
+ *         department:
+ *           type: string
+ *         supervisor:
+ *           type: string
+ *
+ *     Attachment:
+ *       type: object
+ *       required:
+ *         - fileName
+ *         - fileUrl
+ *       properties:
+ *         fileName:
+ *           type: string
+ *         fileType:
+ *           type: string
+ *         fileUrl:
+ *           type: string
+ *
  *   securitySchemes:
  *     bearerAuth:
  *       type: http
  *       scheme: bearer
  *       bearerFormat: JWT
  */
-
-
-
-
-router.put('/employees/:employeeId/status', HRController.updateEmployeeStatus);
-router.get('/employees/status', HRController.getEmployeesByStatus);
-
-
-//attachments
-router.post('/:employeeId/attachments', upload.array('attachments'),HRController.postAttachment);
-router.get('/employee/:employeeId/attachments/:attachmentId', HRController.getAttachmentById);
-router.delete('/employee/:employeeId/attachment/:attachmentId',HRController.deleteAttachment);
-router.put('/renameAttachment/:employeeId/:attachmentId', HRController.renameAttachment);
 
 module.exports = router;

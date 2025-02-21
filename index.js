@@ -169,6 +169,7 @@ const options={
     },
     servers:[{
       url:"http://app.canbridge.in",
+      // url:"http://localhost:8000",
     },
   ],
   },
