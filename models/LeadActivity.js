@@ -19,7 +19,7 @@ const LeadActivitySchema = new Schema({
   action: {
     type: String,
     required: true,
-    enum: ['created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted','followUp','notPicked','Rescheduled'], // Various lead-related actions
+    enum: ['created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted','followUp','notPicked','Rescheduled','Answered','NotAnswered','Busy','Wrong Number','Note Reachable','Callback Requested'], // Various lead-related actions
   },
   timestamp: {
     type: Date,

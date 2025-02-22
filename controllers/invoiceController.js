@@ -1,12 +1,20 @@
 const Company = require("../models/Company");
 const Invoice = require("../models/invoice");
 const Sales = require("../models/sales");
+const mongoose = require('mongoose');
 
 const getTotalInvoiceCount = async (companyId) => {
   try {
-    const filter = companyId ? { company: companyId } : {}; // Create a filter based on companyId if provided
-    const count = await Invoice.countDocuments(filter); // Count documents in the Invoice collection
-    return count;
+    const filter = companyId ? { company: companyId } : {};
+    // Find the invoice with the highest invoice number
+    const lastInvoice = await Invoice.findOne(filter)
+      .sort({ invoiceNumber: -1 })
+      .select('invoiceNumber');
+    
+    if (!lastInvoice) return 0;
+    
+    // Convert the last invoice number to integer
+    return parseInt(lastInvoice.invoiceNumber, 10);
   } catch (error) {
     console.error("Error getting invoice count:", error);
     throw new Error("Unable to retrieve invoice count.");
@@ -15,26 +23,55 @@ const getTotalInvoiceCount = async (companyId) => {
 
 // Create a new invoice
 exports.createInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const invoiceData = req.body;
 
-    const count = await getTotalInvoiceCount(req.user.company); 
+    // Validate required fields
+    if (!invoiceData.sales) {
+      throw new Error('Sales ID is required');
+    }
+
+    // Get invoice count and validate sales existence concurrently
+    const [count, sales] = await Promise.all([
+      getTotalInvoiceCount(req.user.company),
+      Sales.findById(invoiceData.sales).session(session)
+    ]);
+
+    if (!sales) {
+      throw new Error('Sales record not found');
+    }
 
     const invoice = new Invoice({
       ...invoiceData,
-      invoiceNumber : (count + 1).toString().padStart(5, '0'),
+      invoiceNumber: (count + 1).toString().padStart(5, '0'),
       company: req.user.company,
     });
+console.log(invoice);
+    // Save invoice first to get a valid _id
+    const savedInvoice = await invoice.save({ session });
+    console.log(savedInvoice._id);
+    // Now update sales with the saved invoice's _id
+    sales.invoice.push(savedInvoice._id);
+    await sales.save({ session });
 
-    const sales = await Sales.findById(invoiceData.sales);
-    sales.invoice.push(invoice._id);
-    await sales.save();
-    console.log(invoice);
-    const savedInvoice = await invoice.save();
+    await session.commitTransaction();
     res.status(201).json(savedInvoice);
-
+ 
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    await session.abortTransaction();
+    
+    const statusCode = error.message.includes('required') ? 400 : 
+                      error.message.includes('not found') ? 404 : 500;
+    
+    res.status(statusCode).json({ 
+      message: error.message,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  } finally {
+    session.endSession();
   }
 };
 

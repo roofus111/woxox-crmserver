@@ -350,7 +350,7 @@ exports.getLeadsForDocs = async (req, res) => {
 exports.getCampaigns = async (req, res) => {
   try {
     // Get all campaigns from the Campaign collection
-    const campaigns = await Campaign.find({company: req.user.company._id});
+    const campaigns = await Campaign.find({company: req.user.company._id, assignedTo: req.user._id,});
 
     // Get lead counts for all campaigns
     const leadCounts = await Lead.aggregate([
@@ -430,7 +430,7 @@ exports.deleteLeadsByCompany = async (req, res) => {
   try {
     // Deleting all leads where the 'company' field matches the companyId provided
     const result = await Lead.deleteMany({
-      company: "66e1675aad0e5a07675470f8",
+      campaignid: "67b6d0aec6512b0cce2164d5",
     });
     if (result.deletedCount === 0) {
       return res
