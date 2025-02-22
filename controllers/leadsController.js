@@ -350,11 +350,12 @@ exports.getLeadsForDocs = async (req, res) => {
 exports.getCampaigns = async (req, res) => {
   try {
     // Get all campaigns from the Campaign collection
-    const campaigns = await Lead.distinct("campaignid", {
+    const campaignid = await Lead.distinct("campaignid", {
       company: req.user.company,
       assignedTo: req.user._id,
     });
     // Get lead counts for all campaigns
+       const campaigns = await Campaign.find({ _id: { $in: campaignid } });
     console.log(campaigns);
     const leadCounts = await Lead.aggregate([
       {
