@@ -347,13 +347,123 @@ exports.getLeadsForDocs = async (req, res) => {
 //   }
 // };
 
+// exports.getCampaigns = async (req, res) => {
+//   try {
+//     // Get all campaigns from the Campaign collection
+//     const campaigns = await Campaign.find({company: req.user.company._id});
+
+//     // Get lead counts for all campaigns
+//     const leadCounts = await Lead.aggregate([
+//       {
+//         $group: {
+//           _id: "$campaignid",
+//           totalLeads: { $sum: 1 }, // Count all leads
+//           newLeads: {
+//             $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] }, // Count only 'New' leads
+//           },
+//         },
+//       },
+//     ]);
+
+//     // Merge campaign details with lead counts
+//     const mergedCampaigns = campaigns.map(campaign => {
+//       const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
+//         totalLeads: 0,
+//         newLeads: 0,
+//       };
+
+//       return {
+//         id: campaign._id,
+//         name: campaign.name,
+//         totalLeads: leadData.totalLeads,
+//         newLeads: leadData.newLeads,
+//         details: campaign, // Include all campaign details
+//       };
+//     });
+
+//     res.status(200).json({ campaign: mergedCampaigns });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 exports.getCampaigns = async (req, res) => {
   try {
-    // Get all campaigns from the Campaign collection
-    const campaigns = await Campaign.find({company: req.user.company._id});
+    if (!req.user || !req.user.company || !req.user._id) {
+      return res.status(400).json({ message: "Invalid user or company data" });
+    }
 
-    // Get lead counts for all campaigns
+    const companyId = req.user.company._id;
+    const userId = req.user._id;
+
+    // Get campaigns with aggregated lead counts, filtered by company and user
+    const campaigns = await Campaign.aggregate([
+      { 
+        $match: { 
+          company: companyId, 
+          user: userId // Assuming campaigns have a `user` field
+        } 
+      },
+      {
+        $lookup: {
+          from: "leads",
+          localField: "_id",
+          foreignField: "campaignid",
+          as: "leads",
+        },
+      },
+      {
+        $addFields: {
+          totalLeads: { $size: "$leads" },
+          newLeads: {
+            $size: {
+              $filter: {
+                input: "$leads",
+                as: "lead",
+                cond: { $eq: ["$$lead.status", "New"] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          id: "$_id",
+          name: 1,
+          totalLeads: 1,
+          newLeads: 1,
+          details: "$$ROOT",
+        },
+      },
+    ]);
+
+    res.status(200).json({ campaigns });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+exports.getCampaigns = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Fetch only campaigns assigned to the logged-in user
+    const campaigns = await Campaign.find({ assignedTo: userId }).lean();
+
+    if (campaigns.length === 0) {
+      return res.status(200).json({ campaigns: [] }); // Return empty array if no campaigns found
+    }
+
+    // Aggregate lead counts only for the assigned campaigns
     const leadCounts = await Lead.aggregate([
+      {
+        $match: {
+          campaignid: { $in: campaigns.map(c => c._id) }, // Filter by assigned campaigns
+          user: userId, // Only count leads added by the logged-in user
+        },
+      },
       {
         $group: {
           _id: "$campaignid",
@@ -365,7 +475,7 @@ exports.getCampaigns = async (req, res) => {
       },
     ]);
 
-    // Merge campaign details with lead counts
+    // Merge campaigns with their respective lead statistics
     const mergedCampaigns = campaigns.map(campaign => {
       const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
         totalLeads: 0,
@@ -377,15 +487,17 @@ exports.getCampaigns = async (req, res) => {
         name: campaign.name,
         totalLeads: leadData.totalLeads,
         newLeads: leadData.newLeads,
-        details: campaign, // Include all campaign details
+        details: campaign, // Include full campaign details
       };
     });
 
-    res.status(200).json({ campaign: mergedCampaigns });
+    res.status(200).json({ campaigns: mergedCampaigns });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error fetching campaigns:", err);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
 
 exports.getCounsellorLeads = async (req, res) => {
