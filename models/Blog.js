@@ -80,7 +80,7 @@ const BlogSchema = new mongoose.Schema({
   }, // Increment with each update
   relatedPosts: [{ 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Post' 
+    ref: 'Blog' 
   }] // Link to related posts
 });
 

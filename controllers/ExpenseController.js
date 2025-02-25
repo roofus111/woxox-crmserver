@@ -1,5 +1,5 @@
 const { Expense } = require('../models/Expense'); // Import Expense model
-const { Category } = require('../models/Expense'); // Import Category model
+// const { Category } = require('../models/Expense'); // Import Category model
 
 // Create a new expense
 exports.createExpense = async (req, res) => {
@@ -52,7 +52,7 @@ exports.createExpense = async (req, res) => {
         res.status(201).json({ success: true, data: savedExpense });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
-    }
+    }  
 }; 
 
 // Add a new category to an existing expense
