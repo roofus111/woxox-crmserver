@@ -33,8 +33,8 @@ exports.createEmployee = async (req, res) => {
         supervisor,
         attendence,
         payroll,
-        performance,
-        training,
+        // performance,
+        // training,
         salary,//*
       } = req.body;
   
@@ -91,8 +91,8 @@ exports.createEmployee = async (req, res) => {
         supervisor: supervisor || null,
         attendence, // This can be an array of attendance records (e.g., { date, status, checkInTime })
         payroll, // Array of payroll records (e.g., { basicSalary, netSalary, paymentDate })
-        performance, // Array of performance records (e.g., { reviewDate, rating, feedback })
-        training, // Array of training records (e.g., { trainingName, startDate, endDate })
+        // performance, // Array of performance records (e.g., { reviewDate, rating, feedback })
+        // training, // Array of training records (e.g., { trainingName, startDate, endDate })
         salary,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -133,8 +133,8 @@ exports.getEmployee = async (req, res) => {
         .populate('supervisor', 'firstName lastName') // Populating supervisor details
         .populate('attendence') // Populating attendance
         .populate('payroll') // Populating payroll
-        .populate('performance') // Populating performance
-        .populate('training') // Populating training
+        // .populate('performance') // Populating performance
+        // .populate('training') // Populating training
 
 
       if (!employee) {
