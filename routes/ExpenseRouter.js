@@ -7,11 +7,8 @@ const authenticateUser = require('../middleware/authenticateUser');
 router.use(authenticateUser);
 
 router.post('/createexpense', ExpenseController.createExpense);
-// router.put('/updatecategory/:expenseId/:categoryId', ExpenseController.updateCategoryInExpense);
-// router.delete('/deletecategory/:expenseId/:categoryId', ExpenseController.deleteCategoryFromExpense);
-// router.get('/getcategories/:expenseId', ExpenseController.getCategoriesByExpense);
-// router.post('/addcategory/:expenseId', ExpenseController.addCategoryToExpense);
-
+router.get('/getexpenses', ExpenseController.getExpenses);
+router.get('/getexpense/:id', ExpenseController.getExpenseById);
+router.put('/updateexpense/:id', ExpenseController.updateExpense);
+router.delete('/deleteexpense/:id', ExpenseController.deleteExpense);
 module.exports = router;
-
- 
