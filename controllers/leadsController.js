@@ -432,7 +432,7 @@ exports.getCampaigns = async (req, res) => {
       };
     });
 
-    res.status(200).json({ campaigns: mergedCampaigns });
+    res.status(200).json({ campaign: mergedCampaigns });
   } catch (err) {
     console.error("Error fetching campaigns:", err);
     res.status(500).json({ message: "Internal Server Error" });
