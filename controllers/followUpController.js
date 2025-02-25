@@ -132,10 +132,12 @@ exports.getFollowUpsByLead = async (req, res) => {
 exports.updateFollowUp = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
+  console.log(req.body);
+  
 
   try {
     const { followUpId } = req.params;
-    const { followUpDate, status, notes, nextFollowUpDate, assignedTo } = req.body;
+    const { followUpDate, status, notes, nextFollowUpDate, assignedTo,completionNote } = req.body;
 
     if (!followUpId) {
       throw new Error("Follow-up ID is required.");
@@ -156,6 +158,7 @@ exports.updateFollowUp = async (req, res) => {
     if (status) followUp.status = status;
     if (notes) followUp.notes = notes;
     if (assignedTo) followUp.assignedTo = assignedTo;
+    if (completionNote) followUp.completionNote = completionNote;
 
     // Handle nextFollowUpDate updates explicitly
     if (nextFollowUpDate) {

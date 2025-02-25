@@ -46,6 +46,10 @@ const leadFollowUpSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  completionNote: {
+    type: String,
+    required: false,
+  },
 });
 
 leadFollowUpSchema.pre("save", function (next) {
