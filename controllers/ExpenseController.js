@@ -114,3 +114,27 @@ exports.deleteExpense = async (req, res) => {
         res.status(500).json({ message: 'Server error', error });
     }
 };
+exports.getPost = async (req, res) => {
+  try {
+    const { id, slug } = req.params; // Get ID or slug from request parameters
+
+    let post;
+    if (id) {
+      post = await Post.findById(id).populate('author categories tags relatedPosts');
+    } else if (slug) {
+      post = await Post.findOne({ slug }).populate('author categories tags relatedPosts');
+    }
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found.' });
+    }
+
+    res.status(200).json(post);
+  } catch (error) {
+    console.error('Error fetching post:', error);
+    res.status(500).json({
+      message: 'An error occurred while fetching the post.',
+      error: error.message,
+    });
+  }
+};

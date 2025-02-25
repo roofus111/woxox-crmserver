@@ -10,7 +10,7 @@ const customerSchema = new mongoose.Schema({
     city: { type: String, trim: true },
     state: { type: String, trim: true },
     postalCode: { type: String, trim: true },
-    country: { type: String, trim: true }
+    country: { type: String, trim: true }  
   },
   dateOfBirth: { type: Date },
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
