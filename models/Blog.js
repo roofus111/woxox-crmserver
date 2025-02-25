@@ -23,7 +23,7 @@ const BlogSchema = new mongoose.Schema({
   author: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
-    required: true 
+    // required: true 
   },
 //   categories: [{ 
 //     type: mongoose.Schema.Types.ObjectId, 

@@ -1,30 +1,41 @@
-const Blog = require('../models/Blog');
+const slugify = require('slugify');
+const Blog = require('../models/Blog'); // Ensure correct model import
 
-// @route   POST /posts
-// @desc    Create a new post with an image
 exports.createPost = async (req, res) => {
-    try {
-      const { title, content, excerpt, author, status, tags, seo } = req.body;
-      const featuredImage = req.file ? `/uploads/${req.file.filename}` : '';
-  
-      const newPost = new Blog({
-        title,
-        slug: title.toLowerCase().split(' ').join('-'),
-        content,
-        excerpt,
-        author,
-        status,
-        tags: tags ? tags.split(',') : [],
-        seo,
-        featuredImage
-      });
-  
-      await newPost.save();
-      res.status(201).json({ success: true, message: 'Post created successfully', post: newPost });
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+  try {
+    const { title, content, excerpt,  status, tags, seo } = req.body;
+    const featuredImage = req.file ? `/uploads/${req.file.filename}` : '';
+
+    if (!title || !content) {
+      return res.status(400).json({ success: false, message: 'Title, content, and author are required' });
     }
-  };
+
+    const slug = slugify(title, { lower: true, strict: true });
+
+    const existingPost = await Blog.findOne({ slug });
+    if (existingPost) {
+      return res.status(400).json({ success: false, message: 'A post with this title already exists' });
+    }
+
+    const newPost = new Blog({
+      title,
+      slug,
+      content,
+      excerpt,
+      // author,
+      status,
+      tags, // Directly using tags as received from frontend
+      seo,
+      featuredImage,
+    });
+
+    await newPost.save();
+    res.status(201).json({ success: true, message: 'Post created successfully', post: newPost });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+  }
+};
+
   
   exports.getAllPosts = async (req, res) => {
     try {
