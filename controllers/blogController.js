@@ -45,15 +45,15 @@ exports.createPost = async (req, res) => {
       res.status(500).json({ success: false, message: error.message });
     }
   };
-  exports.getPostById = async (req, res) => {
-    try {
-      const post = await Blog.findById(req.params.id).populate('author', 'name email');
-      if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-      res.status(200).json(post);
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  };
+  // exports.getPostById = async (req, res) => {
+  //   try {
+  //     const post = await Blog.findById(req.params.id).populate('author', 'name email');
+  //     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+  //     res.status(200).json(post);
+  //   } catch (error) {
+  //     res.status(500).json({ success: false, message: error.message });
+  //   }
+  // };
   exports.updatePost = async (req, res) => {
     try {
       const { title, content, excerpt, author, status, tags, seo } = req.body;
@@ -97,6 +97,36 @@ exports.getImage = (req, res) => {
     res.sendFile(filePath);
   } else {
     res.status(404).json({ success: false, message: 'Image not found' });
+  }
+};
+exports.getPostById = async (req, res) => {
+  try {
+    const { id } = req.params; // Extract post ID from request parameters
+
+    // Validate ID presence
+    if (!id) {
+      return res.status(400).json({ message: 'Post ID is required.' });
+    }
+
+    // Fetch the post by ID
+    const post = await Blog.find({slug:id})
+      .populate('tags', 'name') // Populate tag names
+      .populate('author', 'name email') // Populate author name and email
+      .exec();
+
+    // If post is not found, return 404
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found.' });
+    }
+
+    // Respond with the post details
+    res.status(200).json(post);
+  } catch (error) {
+    console.error('Error fetching post by ID:', error.message);
+    res.status(500).json({
+      message: 'An error occurred while fetching the post.',
+      error: error.message,
+    });
   }
 };
 
