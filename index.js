@@ -30,6 +30,8 @@ const payroll=require('./routes/payrollRoutes')
 const taskcalender = require('./Calender/routes/taskcalenderRoutes');
 const eventcalender = require('./Calender/routes/eventcalenderRoutes');
 const employeeScheduleRouter = require('./Calender/routes/employeeScheduleRouter');
+const Blog=require('./routes/blogRouter')
+const expenseRouter=require('./routes/ExpenseRouter')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -87,6 +89,8 @@ app.use("/api/payroll",payroll)
 app.use("/api/taskcalender",taskcalender)
 app.use("/api/eventcalender",eventcalender)
 app.use("/api/employeeSchedule",employeeScheduleRouter)
+app.use("/api/expense",expenseRouter)
+app.use("/api/blog",Blog)
 // Utility to check if a user is connected
 const isUserConnected = (userId) => {
   return io.sockets.adapter.rooms.get(userId)?.size > 0;
@@ -164,7 +168,7 @@ const options={
     openapi:"3.0.0",
     info:{
       title: "CRM documentation",
-      version:"0.1.0",
+      version:"0.1.0", 
       description:"API documentation made with express and node.js documented with swagger",
     },
     servers:[{

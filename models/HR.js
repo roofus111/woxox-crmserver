@@ -86,8 +86,8 @@ const HistorySchema = new mongoose.Schema({
     role: { type: String, enum: ['Admin', 'Salesperson', 'Manager', 'Support'], required: false },
     supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Reporting manager
     attachments:[AttachmentSchema],
-    // attendence: [AttendanceSchema],
-    // payroll :[PayrollSchema],
+    attendence: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }, 
+    payroll :{ type: mongoose.Schema.Types.ObjectId, ref: 'Payroll' },
     // performance:[PerformanceSchema],
     // training:[TrainingSchema],
     salary: { type: Number },

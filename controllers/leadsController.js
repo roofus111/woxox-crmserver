@@ -347,6 +347,47 @@ exports.getLeadsForDocs = async (req, res) => {
 //   }
 // };
 
+// exports.getCampaigns = async (req, res) => {
+//   try {
+//     // Get all campaigns from the Campaign collection
+//     const campaigns = await Campaign.find({company: req.user.company._id});
+
+//     // Get lead counts for all campaigns
+//     const leadCounts = await Lead.aggregate([
+//       {
+//         $group: {
+//           _id: "$campaignid",
+//           totalLeads: { $sum: 1 }, // Count all leads
+//           newLeads: {
+//             $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] }, // Count only 'New' leads
+//           },
+//         },
+//       },
+//     ]);
+
+//     // Merge campaign details with lead counts
+//     const mergedCampaigns = campaigns.map(campaign => {
+//       const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
+//         totalLeads: 0,
+//         newLeads: 0,
+//       };
+
+//       return {
+//         id: campaign._id,
+//         name: campaign.name,
+//         totalLeads: leadData.totalLeads,
+//         newLeads: leadData.newLeads,
+//         details: campaign, // Include all campaign details
+//       };
+//     });
+
+//     res.status(200).json({ campaign: mergedCampaigns });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 exports.getCampaigns = async (req, res) => {
   try {
     // Get all campaigns from the Campaign collection
@@ -359,6 +400,12 @@ exports.getCampaigns = async (req, res) => {
     console.log(campaigns);
     const leadCounts = await Lead.aggregate([
       {
+        $match: {
+          campaignid: { $in: campaigns.map(c => c._id) }, // Filter by assigned campaigns
+          user: userId, // Only count leads added by the logged-in user
+        },
+      },
+      {
         $group: {
           _id: "$campaignid",
           totalLeads: { $sum: 1 }, // Count all leads
@@ -369,7 +416,7 @@ exports.getCampaigns = async (req, res) => {
       },
     ]);
 
-    // Merge campaign details with lead counts
+    // Merge campaigns with their respective lead statistics
     const mergedCampaigns = campaigns.map(campaign => {
       const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
         totalLeads: 0,
@@ -381,15 +428,17 @@ exports.getCampaigns = async (req, res) => {
         name: campaign.name,
         totalLeads: leadData.totalLeads,
         newLeads: leadData.newLeads,
-        details: campaign, // Include all campaign details
+        details: campaign, // Include full campaign details
       };
     });
 
-    res.status(200).json({ campaign: mergedCampaigns });
+    res.status(200).json({ campaigns: mergedCampaigns });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error fetching campaigns:", err);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
 
 exports.getCounsellorLeads = async (req, res) => {
