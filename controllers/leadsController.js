@@ -402,7 +402,7 @@ exports.getCampaigns = async (req, res) => {
       {
         $match: {
           campaignid: { $in: campaigns.map(c => c._id) }, // Filter by assigned campaigns
-          user: req.user._id, // Only count leads added by the logged-in user
+          user: userId , // Only count leads added by the logged-in user
         },
       },
       {

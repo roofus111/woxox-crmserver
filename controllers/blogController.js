@@ -83,22 +83,7 @@ exports.createPost = async (req, res) => {
     }
   };
  
-  const path = require('path');
-const fs = require('fs');
 
-// @route   GET /images/:filename
-// @desc    Fetch an image by filename
-exports.getImage = (req, res) => {
-  const filename = req.params.filename;
-  const filePath = path.join(__dirname, '../uploads', filename);
-
-  // Check if file exists
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ success: false, message: 'Image not found' });
-  }
-};
 exports.getPostById = async (req, res) => {
   try {
     const { id } = req.params; // Extract post ID from request parameters
@@ -129,5 +114,22 @@ exports.getPostById = async (req, res) => {
     });
   }
 };
+const path = require('path');
+
+// Upload image function
+exports.uploadImage = (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded!' });
+  }
+
+  const imageUrl = `/uploads/${req.file.filename}`; // Adjust based on your server setup
+
+  res.status(200).json({
+    success: true,
+    message: 'Image uploaded successfully',
+    imageUrl
+  });
+};
+
 
 
