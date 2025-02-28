@@ -17,6 +17,11 @@ exports.createPost = async (req, res) => {
       return res.status(400).json({ success: false, message: 'A post with this title already exists' });
     }
 
+    const relatedPosts = await Blog.find({ 
+      tags: { $in: tags }, 
+      _id: { $ne: existingPost?._id } // Exclude the current post
+    }).limit(5);
+
     const newPost = new Blog({
       title,
       slug,
@@ -27,6 +32,7 @@ exports.createPost = async (req, res) => {
       tags, // Directly using tags as received from frontend
       seo,
       featuredImage,
+      relatedPosts: relatedPosts.map(post => post._id),
     });
 
     await newPost.save();
@@ -56,20 +62,68 @@ exports.createPost = async (req, res) => {
   // };
   exports.updatePost = async (req, res) => {
     try {
-      const { title, content, excerpt, author, status, tags, seo } = req.body;
-      const featuredImage = req.file ? `/uploads/${req.file.filename}` : req.body.featuredImage;
+      const { id } = req.params; // Get post ID from URL params
+      const { title, content, excerpt, status, tags, seo } = req.body;
+      const featuredImage = req.file ? `/uploads/${req.file.filename}` : null; // Handle new image upload
   
-      const updatedPost = await Blog.findByIdAndUpdate(
-        req.params.id,
-        { title, slug: title.toLowerCase().split(' ').join('-'), content, excerpt, author, status, tags: tags ? tags.split(',') : [], seo, featuredImage },
-        { new: true }
-      );
-     
-      if (!updatedPost) return res.status(404).json({ success: false, message: 'Post not found' });
+      // Find the post by ID
+      const post = await Blog.findById(id);
+      if (!post) {
+        return res.status(404).json({ success: false, message: 'Post not found' });
+      }
   
-      res.status(200).json({ success: true, message: 'Post updated successfully', post: updatedPost });
+      // Update slug if the title changes
+      if (title && title !== post.title) {
+        post.slug = slugify(title, { lower: true, strict: true });
+  
+        // Ensure slug is unique
+        const existingPost = await Blog.findOne({ slug: post.slug, _id: { $ne: id } });
+        if (existingPost) {
+          return res.status(400).json({ success: false, message: 'A post with this title already exists' });
+        }
+      }
+  
+      // Ensure tags is always an array
+      const tagsArray = Array.isArray(tags) ? tags : post.tags;
+  
+      // Generate excerpt if not provided
+      post.excerpt = excerpt || content?.substring(0, 300) + '...';
+  
+      // Update related posts based on new tags
+      if (tagsArray.length > 0) {
+        const relatedPosts = await Blog.find({
+          tags: { $in: tagsArray },
+          _id: { $ne: post._id }
+        }).limit(5);
+        post.relatedPosts = relatedPosts.map(p => p._id);
+      }
+  
+      // Update the `publishedAt` field when transitioning to `published`
+      if (status && status === 'published' && !post.publishedAt) {
+        post.publishedAt = new Date();
+      }
+  
+      // Apply updates
+      post.title = title || post.title;
+      post.content = content || post.content;
+      post.status = status || post.status;
+      post.tags = tagsArray;
+      post.seo = seo || post.seo;
+      post.featuredImage = featuredImage || post.featuredImage;
+      post.updatedAt = new Date();
+      post.version += 1; // Increment version
+  
+      await post.save();
+  
+      res.status(200).json({ success: true, message: 'Post updated successfully', post });
+  
     } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+      console.error(error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal Server Error',
+        error: error.message
+      });
     }
   };
   exports.deletePost = async (req, res) => {
@@ -128,7 +182,7 @@ exports.uploadImage = (req, res) => {
     success: true,
     message: 'Image uploaded successfully',
     imageUrl
-  });
+  });   
 };
 
 

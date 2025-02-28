@@ -9,5 +9,4 @@ router.get('/get', blogController.getAllPosts);
 router.get('/:id', blogController.getPostById);
 router.put('/:id', upload.single('featuredImage'), blogController.updatePost);
 router.delete('/:id', blogController.deletePost);
-router.post('/upload', upload.single('image'),blogController. uploadImage);
 module.exports = router;

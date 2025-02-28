@@ -2189,4 +2189,5 @@ router.get('/leadInsight/:assigneeId' ,leadsController.homeInsight);
  */
 
 router.get('/count-by-campaign',leadsController. getLeadsCountByCampaignAndStatus);
+router.get('/count',leadsController.getLeadStatus)
 module.exports = router;

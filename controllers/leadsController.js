@@ -1129,4 +1129,69 @@ exports.userPerformance = async (req, res) => {
   }
 };
 
+exports.getLeadStatus = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: "Start date and end date are required" });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Ensure the end date includes the full day
+
+        // Ensure user and company exist in the request
+        if (!req.user || !req.user.company || !req.user._id) {
+            return res.status(403).json({ message: "Unauthorized access" });
+        }
+
+        const companyId = req.user.company._id;
+        const userId = req.user._id;
+
+        // Base query for filtering leads by user and company
+        const baseQuery = { company: companyId, assignedTo: userId };
+
+        // Query for leads within date range
+        const dateRangeQuery = { 
+            ...baseQuery, 
+            createdAt: { $gte: start, $lte: end } 
+        };
+
+        // Fetch lead counts within the date range
+        const totalLeadsInRange = await Lead.countDocuments(dateRangeQuery);
+        const newLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'New' });
+        const inProgressLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'In Progress' });
+        const convertedLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'Converted' });
+
+        // Fetch overall lead counts
+        const totalLeadsOverall = await Lead.countDocuments(baseQuery);
+        const newLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'New' });
+        const inProgressLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'In Progress' });
+        const convertedLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'Converted' });
+
+        return res.status(200).json({
+            dateRange: {
+                totalLeads: totalLeadsInRange,
+                newLeads: newLeadsInRange,
+                inProgressLeads: inProgressLeadsInRange,
+                convertedLeads: convertedLeadsInRange
+            },
+            overall: {
+                totalLeads: totalLeadsOverall,
+                newLeads: newLeadsOverall,
+                inProgressLeads: inProgressLeadsOverall,
+                convertedLeads: convertedLeadsOverall
+            }
+        });
+
+    } catch (error) {
+        console.error("Error fetching lead statistics:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+
+
+
 
