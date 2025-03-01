@@ -12,5 +12,6 @@ router.delete('/:id', blogController.deletePost);
 router.post('/uploads/:postId', upload.single('featuredImage'),blogController. addPostImage);
 router.put('/uploads/:postId', upload.single('featuredImage'),blogController. updatePostImage);
 router.get('/images/:filename', blogController.getImageByFilename);
+router.delete('/uploads/:postId', blogController.deletePostImage);
 
 module.exports = router;

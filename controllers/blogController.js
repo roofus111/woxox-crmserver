@@ -248,4 +248,44 @@ exports.getImageByFilename = async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
   }
 };
+const fs = require('fs');
+
+exports.deletePostImage = async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    // Validate postId
+    if (!postId) {
+      return res.status(400).json({ success: false, message: 'Post ID is required' });
+    }
+
+    const post = await Blog.findById(postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
+    }
+
+    if (!post.featuredImage) {
+      return res.status(400).json({ success: false, message: 'No image found for this post' });
+    }
+
+    // Construct the full image path
+    const imagePath = path.join(__dirname, '../uploads/', post.featuredImage);
+
+    // Delete the image file
+    fs.unlink(imagePath, async (err) => {
+      if (err && err.code !== 'ENOENT') {
+        return res.status(500).json({ success: false, message: 'Error deleting image', error: err.message });
+      }
+
+      // Remove the image reference from the post
+      post.featuredImage = null;
+      await post.save();
+
+      res.status(200).json({ success: true, message: 'Image deleted successfully' });
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+  }
+};
 
