@@ -4,7 +4,7 @@ const Blog = require('../models/Blog'); // Ensure correct model import
 exports.createPost = async (req, res) => {
   try {
     const { title, content, excerpt,  status, tags, seo } = req.body;
-    const featuredImage = req.file ? `/uploads/${req.file.filename}` : '';
+    const featuredImage = req.file ? req.file.filename  : '';
 
     if (!title || !content) {
       return res.status(400).json({ success: false, message: 'Title, content, and author are required' });
@@ -64,7 +64,8 @@ exports.createPost = async (req, res) => {
     try {
       const { id } = req.params; // Get post ID from URL params
       const { title, content, excerpt, status, tags, seo } = req.body;
-      const featuredImage = req.file ? `/uploads/${req.file.filename}` : null; // Handle new image upload
+      const featuredImage = req.file ? req.file.filename : null;
+      // Handle new image upload
   
       // Find the post by ID
       const post = await Blog.findById(id);
@@ -168,22 +169,83 @@ exports.getPostById = async (req, res) => {
     });
   }
 };
-const path = require('path');
+exports.updatePostImage = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
 
-// Upload image function
-exports.uploadImage = (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: 'No file uploaded!' });
+    const featuredImage = req.file.filename;
+
+    const updatedPost = await Blog.findByIdAndUpdate(
+      postId,
+      { featuredImage },
+      { new: true }
+    );
+
+    if (!updatedPost) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
+    }
+
+    res.status(200).json({ success: true, message: 'Image updated successfully', post: updatedPost });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
   }
-
-  const imageUrl = `/uploads/${req.file.filename}`; // Adjust based on your server setup
-
-  res.status(200).json({
-    success: true,
-    message: 'Image uploaded successfully',
-    imageUrl
-  });   
 };
 
 
+
+exports.addPostImage = async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+
+    const featuredImage = req.file.filename; // Store only the filename as a strin // Store as an object
+
+    const post = await Blog.findById(postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
+    }
+
+    if (post.featuredImage) {
+      return res.status(400).json({ success: false, message: 'Post already has an image. Use update instead.' });
+    }
+
+    post.featuredImage = featuredImage;
+    await post.save();
+
+    res.status(200).json({ success: true, message: 'Image added successfully', post });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+  }
+};
+
+const path = require('path');
+
+exports.getImageByFilename = async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    if (!filename) {
+      return res.status(400).json({ success: false, message: 'Filename is required' });
+    }
+
+    // Construct the full image path (adjust based on your storage path)
+    const imagePath = path.join(__dirname, '../uploads/images/', filename);
+
+    // Send the file
+    res.sendFile(imagePath, (err) => {
+      if (err) {
+        res.status(404).json({ success: false, message: 'Image not found' });
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+  }
+};
 
