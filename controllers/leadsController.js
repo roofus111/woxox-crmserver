@@ -397,12 +397,12 @@ exports.getCampaigns = async (req, res) => {
     });
     // Get lead counts for all campaigns
        const campaigns = await Campaign.find({ _id: { $in: campaignid } });
-    console.log(campaigns);
+
     const leadCounts = await Lead.aggregate([
       {
         $match: {
           campaignid: { $in: campaigns.map(c => c._id) }, // Filter by assigned campaigns
-          user: req.user.id , // Only count leads added by the logged-in user
+          assignedTo: new mongoose.Types.ObjectId(req.user._id), // Use assignedTo instead of user
         },
       },
       {
@@ -422,7 +422,6 @@ exports.getCampaigns = async (req, res) => {
         totalLeads: 0,
         newLeads: 0,
       };
-
       return {
         id: campaign._id,
         name: campaign.name,
