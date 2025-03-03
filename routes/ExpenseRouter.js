@@ -138,7 +138,7 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 /**
  * @swagger
- * /api/expenses/createexpense:
+ * /api/expense/createexpense:
  *   post:
   *     tags: [Expenses]
  *     summary: Create a new expense
@@ -161,7 +161,7 @@ router.post('/createexpense', ExpenseController.createExpense);
 
 /**
  * @swagger
- * /api/expenses/getexpenses:
+ * /api/expense/getexpenses:
  *   get:
   *     tags: [Expenses]
  *     summary: Get all expenses
@@ -181,7 +181,7 @@ router.get('/getexpenses', ExpenseController.getExpenses);
 
 /**
  * @swagger
- * /api/expenses/getexpense/{id}:
+ * /api/expense/getexpense/{id}:
  *   get:
  *     tags: [Expenses]
  *     summary: Get expense by ID
@@ -203,7 +203,7 @@ router.get('/getexpense/:id', ExpenseController.getExpenseById);
 
 /**
  * @swagger
- * /api/expenses/updateexpense/{id}:
+ * /api/expense/updateexpense/{id}:
  *   put:
   *     tags: [Expenses]
  *     summary: Update an expense
@@ -231,7 +231,7 @@ router.put('/updateexpense/:id', ExpenseController.updateExpense);
 
 /**
  * @swagger
- * /api/expenses/deleteexpense/{id}:
+ * /api/expense/deleteexpense/{id}:
  *   delete:
   *     tags: [Expenses]
  *     summary: Delete an expense
