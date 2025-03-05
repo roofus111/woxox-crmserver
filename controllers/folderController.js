@@ -40,6 +40,7 @@ exports.createFolder = async (req, res) => {
 
     // Create new folder
     const newFolder = new Folders({
+      User: req.user._id,
       folderName: trimmedFolderName,
       parent: parent || null, // Null for root folders
       root: isRoot, // True if no parent is provided

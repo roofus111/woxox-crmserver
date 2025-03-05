@@ -197,7 +197,7 @@ router.post('/upload', upload.array('files'), fileController.createFile);
  *       500:
  *         description: Server error
  */
-router.get("/getfiles/:parentId", fileController.getFilesAndFoldersByParentId);
+router.get("/getfiles", fileController.getFilesAndFoldersByParentId);
 
 /**
  * @swagger

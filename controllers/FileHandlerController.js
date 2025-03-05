@@ -1,17 +1,16 @@
-const AWS = require('aws-sdk');
-const Files=require('../models/Filehandler')
-const User = require('../models/User');
-const { v4: uuidv4 } = require('uuid'); // For generating unique file names
-const {S3} = require("@aws-sdk/client-s3")
-const s3Client = require("../config/s3")
-const mongoose =require("mongoose")
+const AWS = require("aws-sdk");
+const Files = require("../models/Filehandler");
+const User = require("../models/User");
+const { v4: uuidv4 } = require("uuid"); // For generating unique file names
+const { S3 } = require("@aws-sdk/client-s3");
+const s3Client = require("../config/s3");
+const mongoose = require("mongoose");
 // Configure AWS S3
 const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID, 
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
 });
-
 
 exports.createFile = async (req, res) => {
   try {
@@ -36,7 +35,9 @@ exports.createFile = async (req, res) => {
 
     // Ensure user has a company ID
     if (!req.user || !req.user.company || !req.user.company._id) {
-      return res.status(403).json({ error: "Unauthorized: Company ID is required" });
+      return res
+        .status(403)
+        .json({ error: "Unauthorized: Company ID is required" });
     }
 
     const companyId = req.user.company._id;
@@ -63,6 +64,7 @@ exports.createFile = async (req, res) => {
 
     // Create new file document
     const newFile = new Files({
+      User: req.user._id,
       leadId,
       docName,
       fileName: fileName || uploadedFiles[0].fileName,
@@ -80,10 +82,14 @@ exports.createFile = async (req, res) => {
     // Save the file to the database
     const savedFile = await newFile.save();
 
-    return res.status(201).json({ message: "File created successfully", file: savedFile });
+    return res
+      .status(201)
+      .json({ message: "File created successfully", file: savedFile });
   } catch (error) {
     console.error("Error creating file:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -92,24 +98,28 @@ const Folders = require("../models/folderHandler"); // Import Folders Model
 
 exports.getFilesAndFoldersByParentId = async (req, res) => {
   try {
-    const { parentId } = req.params;
-
+    const { parentId } = req.query;
+    console.log(parentId);
     // ✅ Ensure user has a valid company ID
     if (!req.user || !req.user.company || !req.user.company._id) {
-      return res.status(403).json({ error: "Unauthorized: Company ID is required" });
+      return res
+        .status(403)
+        .json({ error: "Unauthorized: Company ID is required" });
     }
     const companyId = req.user.company._id;
-
-    // ✅ Validate parentId format before querying MongoDB
-    if (!mongoose.Types.ObjectId.isValid(parentId)) {
-      return res.status(400).json({ error: "Invalid parent ID" });
+    let filter = {};
+    if (parentId === undefined) {
+      filter = { User: req.user._id, company: companyId, root: true };
+    }else{
+      filter = { parent: parentId, company: companyId };
     }
+    console.log(filter);
 
     // 1️⃣ Fetch the Latest Files from MongoDB (Filtered by company)
-    const dbFiles = await Files.find({ parent: parentId, company: companyId });
+    const dbFiles = await Files.find(filter);
 
     // 2️⃣ Fetch Folders from MongoDB (Filtered by company)
-    const dbFolders = await Folders.find({ parent: parentId, company: companyId });
+    const dbFolders = await Folders.find(filter);
 
     // 3️⃣ Fetch Files & Folders from S3 (Scoped to Company)
     const s3Params = {
@@ -135,7 +145,10 @@ exports.getFilesAndFoldersByParentId = async (req, res) => {
     // ✅ Extract Folders from S3 Response
     const s3Folders = s3Data.CommonPrefixes
       ? s3Data.CommonPrefixes.map((folder) => ({
-          name: folder.Prefix.replace(`fileuploads/${companyId}/${parentId}/`, "").replace("/", ""),
+          name: folder.Prefix.replace(
+            `fileuploads/${companyId}/${parentId}/`,
+            ""
+          ).replace("/", ""),
           path: folder.Prefix,
           type: "folder",
         }))
@@ -143,11 +156,15 @@ exports.getFilesAndFoldersByParentId = async (req, res) => {
 
     // 4️⃣ Ensure Updated File Names Are Reflected
     const updatedFiles = dbFiles.map((dbFile) => {
-      const matchingS3File = s3Files.find((s3File) => s3File.key.includes(dbFile.fileName));
+      const matchingS3File = s3Files.find((s3File) =>
+        s3File.key.includes(dbFile.fileName)
+      );
       return {
         ...dbFile.toObject(),
         fileUrl: matchingS3File ? matchingS3File.url : dbFile.fileUrl,
-        lastModified: matchingS3File ? matchingS3File.lastModified : dbFile.uploadedAt,
+        lastModified: matchingS3File
+          ? matchingS3File.lastModified
+          : dbFile.uploadedAt,
       };
     });
 
@@ -159,19 +176,25 @@ exports.getFilesAndFoldersByParentId = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving files and folders:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 
-
-const { CopyObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+} = require("@aws-sdk/client-s3");
 exports.updateFileName = async (req, res) => {
   try {
     const { fileId } = req.params;
     let { fileName } = req.body;
 
     if (!fileId || !fileName) {
-      return res.status(400).json({ message: "File ID and new file name are required." });
+      return res
+        .status(400)
+        .json({ message: "File ID and new file name are required." });
     }
 
     // 🔹 Find the File by ID
@@ -181,9 +204,14 @@ exports.updateFileName = async (req, res) => {
     }
 
     // 🔹 Ensure the filename is unique in the same parent folder
-    const duplicateFile = await Files.findOne({ fileName, parent: file.parent });
+    const duplicateFile = await Files.findOne({
+      fileName,
+      parent: file.parent,
+    });
     if (duplicateFile && duplicateFile._id.toString() !== fileId) {
-      return res.status(400).json({ message: "A file with this name already exists in the same folder." });
+      return res.status(400).json({
+        message: "A file with this name already exists in the same folder.",
+      });
     }
 
     // 🔹 Ensure file extension is retained
@@ -221,10 +249,14 @@ exports.updateFileName = async (req, res) => {
     file.fileName = fileName;
     await file.save();
 
-    return res.status(200).json({ message: "File name and URL updated successfully", file });
+    return res
+      .status(200)
+      .json({ message: "File name and URL updated successfully", file });
   } catch (error) {
     console.error("Error updating file name:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -240,7 +272,9 @@ exports.copyFile = async (req, res) => {
 
     const originalFileName = file.fileName;
     const fileExtension = originalFileName.split(".").pop();
-    const fileBaseName = originalFileName.substring(0, originalFileName.lastIndexOf(".")) || originalFileName;
+    const fileBaseName =
+      originalFileName.substring(0, originalFileName.lastIndexOf(".")) ||
+      originalFileName;
 
     // 🔹 Check existing copies in S3
     const s3Params = {
@@ -269,12 +303,14 @@ exports.copyFile = async (req, res) => {
     console.log("Copying file in S3 from:", copySource, "to:", newFileKey);
 
     // 🔹 Copy file in S3
-    await s3Client.send(new CopyObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      CopySource: copySource,
-      Key: newFileKey,
-      ACL: "private", // Optional: Change if public
-    }));
+    await s3Client.send(
+      new CopyObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        CopySource: copySource,
+        Key: newFileKey,
+        ACL: "private", // Optional: Change if public
+      })
+    );
 
     // 🔹 Save new file entry in MongoDB with **parent retained**
     const newFile = new Files({
@@ -290,18 +326,20 @@ exports.copyFile = async (req, res) => {
       access: file.access,
       shared: file.shared,
       company: file.company || req.user.companyId, // Example fallback
-
     });
 
     await newFile.save();
 
-    return res.status(201).json({ message: "File copied successfully", file: newFile });
+    return res
+      .status(201)
+      .json({ message: "File copied successfully", file: newFile });
   } catch (error) {
     console.error("Error copying file:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
-
 
 exports.moveFile = async (req, res) => {
   try {
@@ -314,9 +352,14 @@ exports.moveFile = async (req, res) => {
     }
 
     // 🔹 Check if a file with the same name already exists in the target folder (MongoDB)
-    const existingFile = await Files.findOne({ fileName: file.fileName, parent: parent });
+    const existingFile = await Files.findOne({
+      fileName: file.fileName,
+      parent: parent,
+    });
     if (existingFile) {
-      return res.status(400).json({ message: "A file with this name already exists in the target folder." });
+      return res.status(400).json({
+        message: "A file with this name already exists in the target folder.",
+      });
     }
 
     // 🔹 Update only the parent in MongoDB (File stays in the same S3 location)
@@ -326,10 +369,11 @@ exports.moveFile = async (req, res) => {
     return res.status(200).json({ message: "File moved successfully", file });
   } catch (error) {
     console.error("Error moving file:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
-
 
 exports.deleteFile = async (req, res) => {
   try {
@@ -342,13 +386,18 @@ exports.deleteFile = async (req, res) => {
     }
 
     // 🔹 Extract file key from S3 URL
-    const fileKey = file.fileUrl.replace(`https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`, "");
+    const fileKey = file.fileUrl.replace(
+      `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/`,
+      ""
+    );
 
     // 🔹 Delete the file from S3
-    await s3Client.send(new DeleteObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: fileKey,
-    }));
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileKey,
+      })
+    );
 
     // 🔹 Delete the file from MongoDB
     await Files.findByIdAndDelete(fileId);
@@ -356,7 +405,9 @@ exports.deleteFile = async (req, res) => {
     return res.status(200).json({ message: "File deleted successfully." });
   } catch (error) {
     console.error("Error deleting file:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 exports.getFilesByLeadId = async (req, res) => {
@@ -370,16 +421,18 @@ exports.getFilesByLeadId = async (req, res) => {
       return res.status(404).json({ message: "No files found for this lead." });
     }
 
-    return res.status(200).json({ message: "Files retrieved successfully", files });
+    return res
+      .status(200)
+      .json({ message: "Files retrieved successfully", files });
   } catch (error) {
     console.error("Error retrieving files:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
 
-
 const Leads = require("../models/Lead");
-
 
 exports.listAllLeadsFromFilesAndFolders = async (req, res) => {
   try {
@@ -387,17 +440,24 @@ exports.listAllLeadsFromFilesAndFolders = async (req, res) => {
 
     // 🔹 Get unique lead IDs from Files & Folders filtered by company
     const fileLeadIds = await Files.distinct("leadId", { company: companyId });
-    const folderLeadIds = await Folders.distinct("leadId", { company: companyId });
+    const folderLeadIds = await Folders.distinct("leadId", {
+      company: companyId,
+    });
 
     // 🔹 Merge and remove duplicates
     const uniqueLeadIds = [...new Set([...fileLeadIds, ...folderLeadIds])];
 
     if (uniqueLeadIds.length === 0) {
-      return res.status(404).json({ message: "No leads found for this company." });
+      return res
+        .status(404)
+        .json({ message: "No leads found for this company." });
     }
 
     // 🔹 Fetch lead details (only name & email)
-    const leads = await Leads.find({ _id: { $in: uniqueLeadIds }, company: companyId }).select("name email");
+    const leads = await Leads.find({
+      _id: { $in: uniqueLeadIds },
+      company: companyId,
+    }).select("name email");
 
     return res.status(200).json({
       message: "All leads retrieved successfully",
@@ -405,23 +465,8 @@ exports.listAllLeadsFromFilesAndFolders = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving leads:", error);
-    return res.status(500).json({ message: "Internal server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
