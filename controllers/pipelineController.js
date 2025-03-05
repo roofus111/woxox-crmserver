@@ -20,7 +20,7 @@ exports.getPipelines = async (req, res) => {
     .populate('User', 'name email'); // Populate user data
     res.status(200).json(pipelines);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message });   
   }
 };
 exports.getPipelineById = async (req, res) => {
