@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-
+const Employee = require('../models/HR');
 exports.register = async (req, res) => {
     const userProfile = new User({
       ...req.body
@@ -8,7 +8,16 @@ exports.register = async (req, res) => {
   
     try {
       const newProfile = await userProfile.save();
+    if(req.body.employee)
+    {
+      const updatedemployee= await Employee.findByIdAndUpdate(req.body.employee, { $set: { User: newProfile._id } }, { new: true });
+
+      res.status(201).json(updatedemployee);
+    }
+    else
+    {
       res.status(201).json(newProfile);
+    }
     } catch (err) {
       res.status(400).json({ message: err.message });
     }

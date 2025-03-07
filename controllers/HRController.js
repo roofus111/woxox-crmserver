@@ -74,7 +74,6 @@ exports.createEmployee = async (req, res) => {
       // Create a new employee
       const newEmployee = new Employee({
         company: req.user.company._id,
-        User: req.user._id,
         firstName,
         lastName,
         email,
@@ -90,8 +89,8 @@ exports.createEmployee = async (req, res) => {
         role,
         attachments: uploadedFiles,
         supervisor: supervisor || null,
-        attendence, // This can be an array of attendance records (e.g., { date, status, checkInTime })
-        payroll, // Array of payroll records (e.g., { basicSalary, netSalary, paymentDate })
+        attendence: attendence, // Changed to store MongoDB ID reference
+        payroll: payroll, 
         // performance, // Array of performance records (e.g., { reviewDate, rating, feedback })
         // training, // Array of training records (e.g., { trainingName, startDate, endDate })
         salary,
