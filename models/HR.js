@@ -83,7 +83,7 @@ const HistorySchema = new mongoose.Schema({
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     jobTitle: { type: String, required: false },
     department: { type: String, required: false }, // E.g., "Sales", "Marketing", "Support"
-    role: { type: String, enum: ['Admin', 'Salesperson', 'Manager', 'Support'], required: false },
+    role: { type: String,     enum: ["admin", "manager", "user", "guest","hr","docteam","finance",'pipeline'], required: false },
     supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Reporting manager
     attachments:[AttachmentSchema],
     attendence: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }, 
