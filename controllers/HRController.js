@@ -16,6 +16,7 @@ const s3 = new AWS.S3({
 
 exports.createEmployee = async (req, res) => {
     try {
+
       const {
         firstName,
         lastName,
@@ -72,8 +73,8 @@ exports.createEmployee = async (req, res) => {
   
       // Create a new employee
       const newEmployee = new Employee({
-        company:req.user.company?._id,
-        User:req.user._id,
+        company: req.user.company._id,
+        User: req.user._id,
         firstName,
         lastName,
         email,
@@ -114,7 +115,11 @@ exports.createEmployee = async (req, res) => {
       return res.status(201).json({ message: 'Employee created successfully', employee: savedEmployee });
     } catch (error) {
       console.error('Error creating employee:', error);
-      return res.status(500).json({ message: 'Internal server error', error: error.message });
+      return res.status(500).json({ 
+        message: 'Internal server error', 
+        error: error.message,
+        details: error.errors // Add validation error details if available
+      });
     }
   };
 

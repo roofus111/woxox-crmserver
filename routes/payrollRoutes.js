@@ -205,7 +205,7 @@ router.use(authenticateUser);
 
 /**
  * @swagger
- * /api/payroll:
+ * /api/payroll/payroll:
  *   post:
  *     tags:
  *       - Payroll
@@ -250,7 +250,7 @@ router.post('/payroll', payrollController.createPayroll);
 
 /**
  * @swagger
- * /api/payroll:
+ * /api/payroll/payroll:
  *   get:
  *     tags:
  *       - Payroll
@@ -267,7 +267,7 @@ router.get('/payroll', payrollController.getAllPayrolls);
 
 /**
  * @swagger
- * /api/payroll/{id}:
+ * /api/payroll/payroll/{id}:
  *   get:
  *     tags:
  *       - Payroll
@@ -288,7 +288,7 @@ router.get('/payroll/:id', payrollController.getPayrollById);
 
 /**
  * @swagger
- * /api/payroll/{id}:
+ * /api/payroll/payroll/{id}:
  *   put:
  *     tags:
  *       - Payroll
@@ -343,7 +343,7 @@ router.delete('/payroll/:id', payrollController.deletePayroll);
 
 /**
  * @swagger
- * /api/payroll/{id}/pay:
+ * /api/payroll/payroll/{id}/pay:
  *   put:
  *     tags:
  *       - Payroll
@@ -375,7 +375,7 @@ router.put('/payroll/:id/pay', payrollController.addPartialPayment);
 
 /**
  * @swagger
- * /api/payroll/employee/{employeeId}:
+ * /api/payroll/payroll/employee/{employeeId}:
  *   get:
  *     tags:
  *       - Payroll
