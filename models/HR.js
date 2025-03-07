@@ -88,6 +88,7 @@ const HistorySchema = new mongoose.Schema({
     attachments:[AttachmentSchema],
     attendence: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }, 
     payroll :{ type: mongoose.Schema.Types.ObjectId, ref: 'Payroll' },
+    
     // performance:[PerformanceSchema],
     // training:[TrainingSchema],
     salary: { type: Number },

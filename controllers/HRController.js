@@ -507,6 +507,29 @@ exports.renameAttachment = async (req, res) => {
   }
 };
 
+exports.getEmployeeByUserId = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const employee = await Employee.findOne({ User: userId })
+            .populate('company')
+            .populate('User')
+            .populate('supervisor')
+            .populate('attendence')
+            .populate('payroll');
+
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        res.status(200).json(employee);
+    } catch (error) {
+        console.error('Error fetching employee by userId:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
 
 
 
