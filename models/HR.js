@@ -63,7 +63,7 @@ const HistorySchema = new mongoose.Schema({
       User: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User", // Assuming you have a User model for sales representatives
-        required: true,
+        // required: true,
       },
     firstName: { type: String, required: true },
     lastName: { type: String, required: false },
