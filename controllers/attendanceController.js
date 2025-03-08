@@ -510,15 +510,16 @@ exports.applyForLeave = async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 };
+ // Ensure the Attendance model is imported
 
 exports.approveOrRejectLeave = async (req, res) => {
     try {
         const { attendanceId, action, adminComments } = req.body;
-        const UserId = req.user._id;
+        const adminId = req.user._id; // Renamed for clarity
 
         // Validation
-        if (!attendanceId || !action || !UserId) {
-            return res.status(400).json({ message: 'Attendance ID, action, and UserId are required' });
+        if (!attendanceId || !action || !adminId) {
+            return res.status(400).json({ message: 'Attendance ID, action, and admin ID are required' });
         }
 
         if (!['Approved', 'Rejected'].includes(action)) {
@@ -538,10 +539,8 @@ exports.approveOrRejectLeave = async (req, res) => {
 
         // Update the leave approval status
         attendance.leaveDetails.leaveApprovalStatus = action;
-        attendance.leaveDetails.approvedBy = UserId;
-        if (adminComments) {
-            attendance.leaveDetails.adminComments = adminComments;
-        }
+        attendance.leaveDetails.approvedBy = adminId;
+        attendance.leaveDetails.adminComments = adminComments || ''; // Ensure field is always present
 
         await attendance.save();
 
@@ -554,3 +553,4 @@ exports.approveOrRejectLeave = async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 };
+
