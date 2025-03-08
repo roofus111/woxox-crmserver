@@ -487,7 +487,7 @@ router.delete('/employee/:employeeId/attachment/:attachmentId', HRController.del
  *         description: Attachment not found
  */
 router.put('/renameAttachment/:employeeId/:attachmentId', HRController.renameAttachment);
-
+router.get('/employee/:userId', HRController.getEmployeeByUserId);
 /**
  * @swagger
  * components:

@@ -473,3 +473,114 @@ exports.getMyAttendance = async (req, res) => {
         return res.status(500).json({ message: "Internal Server Error" });
     }
 };
+exports.applyForLeave = async (req, res) => {
+    try {
+        const {  employeeId, leaveType, leaveReason, leaveStartDate, leaveEndDate, noOfleaveDays,submittedTo} = req.body;
+
+        // Validation
+        if ( !employeeId || !leaveType || !leaveStartDate || !leaveEndDate || !noOfleaveDays || !submittedTo ) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        if (new Date(leaveStartDate) > new Date(leaveEndDate)) {
+            return res.status(400).json({ message: 'Leave start date cannot be after end date' });
+        }
+
+        // Create a new attendance record with leave details
+        const attendance = new Attendance({
+            User: req.user.id, // Updated field name
+            company: req.user.company._id,
+            employeeId: employeeId,
+            date: leaveStartDate,
+            status: 'Leave',
+            leaveDetails: {
+                leaveType,
+                leaveReason,
+                leaveStartDate,
+                leaveEndDate,
+                noOfleaveDays,
+                leaveApprovalStatus: 'Pending',
+                submittedTo: submittedTo || 'HR'
+            }
+        });
+
+        await attendance.save();
+
+        res.status(201).json({ message: 'Leave application submitted successfully', attendance });
+    } catch (error) {
+        console.error('Error applying for leave:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+ // Ensure the Attendance model is imported
+ const mongoose = require('mongoose');
+
+exports.approveOrRejectLeave = async (req, res) => {
+    try {
+        const {  action, adminComments } = req.body;
+        const { attendanceId } = req.params;
+        const adminId = req.user._id;
+
+        // Validate Required Fields
+        if (!attendanceId || !action) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Attendance ID and action are required' 
+            });
+        }
+
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid Attendance ID' 
+            });
+        }
+
+        // Validate Action Value
+        if (!['Approved', 'Rejected'].includes(action)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Action must be either Approved or Rejected' 
+            });
+        }
+
+        // Fetch Attendance Record
+        const attendance = await Attendance.findById(attendanceId);
+        if (!attendance) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Attendance record not found' 
+            });
+        }
+
+        // Check if Leave Already Processed
+        if (attendance.leaveDetails.leaveApprovalStatus !== 'Pending') {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Leave application is already processed' 
+            });
+        }
+
+        // Update Leave Approval Status
+        attendance.leaveDetails.leaveApprovalStatus = action;
+        attendance.leaveDetails.approvedBy = adminId;
+        attendance.leaveDetails.adminComments = adminComments || '';
+
+        await attendance.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Leave application ${action} successfully`,
+            data: attendance,
+        });
+
+    } catch (error) {
+        console.error('Error processing leave approval:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: error.message 
+        });
+    }
+};

@@ -16,6 +16,7 @@ const s3 = new AWS.S3({
 
 exports.createEmployee = async (req, res) => {
     try {
+
       const {
         firstName,
         lastName,
@@ -47,7 +48,14 @@ exports.createEmployee = async (req, res) => {
           return res.status(404).json({ message: 'Supervisor not found' });
         }
       }
-  
+   // Generate the next employeeId in the format EMP1, EMP2, etc.
+   const lastEmployee = await Employee.findOne().sort({ createdAt: -1 }).select('employeeId');
+   let newEmployeeId = 'EMP1'; // Default to EMP1 if no previous record exists
+
+   if (lastEmployee?.employeeId) {
+       const lastIdNumber = parseInt(lastEmployee.employeeId.replace('EMP', '')) || 0;
+       newEmployeeId = `EMP${lastIdNumber + 1}`;
+   }
     // Upload files to S3 and get URLs
     const uploadedFiles = [];
     if (files && files.length > 0) {
@@ -72,8 +80,8 @@ exports.createEmployee = async (req, res) => {
   
       // Create a new employee
       const newEmployee = new Employee({
-        company:req.user.company?._id,
-        User:req.user._id,
+        company: req.user.company._id,
+        employeeId: newEmployeeId,
         firstName,
         lastName,
         email,
@@ -89,8 +97,8 @@ exports.createEmployee = async (req, res) => {
         role,
         attachments: uploadedFiles,
         supervisor: supervisor || null,
-        attendence, // This can be an array of attendance records (e.g., { date, status, checkInTime })
-        payroll, // Array of payroll records (e.g., { basicSalary, netSalary, paymentDate })
+        attendence: attendence, // Changed to store MongoDB ID reference
+        payroll: payroll, 
         // performance, // Array of performance records (e.g., { reviewDate, rating, feedback })
         // training, // Array of training records (e.g., { trainingName, startDate, endDate })
         salary,
@@ -114,7 +122,11 @@ exports.createEmployee = async (req, res) => {
       return res.status(201).json({ message: 'Employee created successfully', employee: savedEmployee });
     } catch (error) {
       console.error('Error creating employee:', error);
-      return res.status(500).json({ message: 'Internal server error', error: error.message });
+      return res.status(500).json({ 
+        message: 'Internal server error', 
+        error: error.message,
+        details: error.errors // Add validation error details if available
+      });
     }
   };
 
@@ -502,6 +514,29 @@ exports.renameAttachment = async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 };
+
+exports.getEmployeeByUserId = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const employee = await Employee.findOne({ User: userId })
+            .populate('company')
+            .populate('User')
+            .populate('supervisor')
+            .populate('attendence')
+            .populate('payroll');
+
+        if (!employee) {
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        res.status(200).json(employee);
+    } catch (error) {
+        console.error('Error fetching employee by userId:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 
 
 
