@@ -513,46 +513,74 @@ exports.applyForLeave = async (req, res) => {
     }
 };
  // Ensure the Attendance model is imported
+ const mongoose = require('mongoose');
 
 exports.approveOrRejectLeave = async (req, res) => {
     try {
-        const { attendanceId, action, adminComments } = req.body;
-        const adminId = req.user._id; // Renamed for clarity
+        const {  action, adminComments } = req.body;
+        const { attendanceId } = req.params;
+        const adminId = req.user._id;
 
-        // Validation
-        if (!attendanceId || !action || !adminId) {
-            return res.status(400).json({ message: 'Attendance ID, action, and admin ID are required' });
+        // Validate Required Fields
+        if (!attendanceId || !action) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Attendance ID and action are required' 
+            });
         }
 
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid Attendance ID' 
+            });
+        }
+
+        // Validate Action Value
         if (!['Approved', 'Rejected'].includes(action)) {
-            return res.status(400).json({ message: 'Action must be either Approved or Rejected' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Action must be either Approved or Rejected' 
+            });
         }
 
-        // Find the attendance record
+        // Fetch Attendance Record
         const attendance = await Attendance.findById(attendanceId);
         if (!attendance) {
-            return res.status(404).json({ message: 'Attendance record not found' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Attendance record not found' 
+            });
         }
 
-        // Check if the leave is already processed
+        // Check if Leave Already Processed
         if (attendance.leaveDetails.leaveApprovalStatus !== 'Pending') {
-            return res.status(400).json({ message: 'Leave application is already processed' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Leave application is already processed' 
+            });
         }
 
-        // Update the leave approval status
+        // Update Leave Approval Status
         attendance.leaveDetails.leaveApprovalStatus = action;
         attendance.leaveDetails.approvedBy = adminId;
-        attendance.leaveDetails.adminComments = adminComments || ''; // Ensure field is always present
+        attendance.leaveDetails.adminComments = adminComments || '';
 
         await attendance.save();
 
         res.status(200).json({
-            message: `Leave application ${action.toLowerCase()} successfully`,
-            attendance
+            success: true,
+            message: `Leave application ${action} successfully`,
+            data: attendance,
         });
+
     } catch (error) {
-        console.error('Error processing leave approval:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('Error processing leave approval:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: error.message 
+        });
     }
 };
-

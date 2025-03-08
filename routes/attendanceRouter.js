@@ -389,7 +389,7 @@ router.get('/my-attendance', attendanceController.getMyAttendance);
 
 router.post('/apply-leave', attendanceController.applyForLeave);
 
-router.put('/approve', attendanceController.approveOrRejectLeave);
+router.put('/approve/:attendanceId', attendanceController.approveOrRejectLeave);
 
 /**
  * @swagger

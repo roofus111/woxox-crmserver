@@ -17,7 +17,7 @@ exports.register = async (req, res) => {
     else
     {
       res.status(201).json(newProfile);
-    }
+    }   
     } catch (err) {
       res.status(400).json({ message: err.message });
     }
