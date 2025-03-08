@@ -473,3 +473,84 @@ exports.getMyAttendance = async (req, res) => {
         return res.status(500).json({ message: "Internal Server Error" });
     }
 };
+exports.applyForLeave = async (req, res) => {
+    try {
+        const {  employeeId, leaveType, leaveReason, leaveStartDate, leaveEndDate, noOfleaveDays,submittedTo} = req.body;
+
+        // Validation
+        if ( !employeeId || !leaveType || !leaveStartDate || !leaveEndDate || !noOfleaveDays || !submittedTo ) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        if (new Date(leaveStartDate) > new Date(leaveEndDate)) {
+            return res.status(400).json({ message: 'Leave start date cannot be after end date' });
+        }
+
+        // Create a new attendance record with leave details
+        const attendance = new Attendance({
+            employeeId: employeeId,
+            date: leaveStartDate,
+            status: 'Leave',
+            leaveDetails: {
+                leaveType,
+                leaveReason,
+                leaveStartDate,
+                leaveEndDate,
+                noOfleaveDays,
+                leaveApprovalStatus: 'Pending',
+                submittedTo: submittedTo || 'HR'
+            }
+        });
+
+        await attendance.save();
+
+        res.status(201).json({ message: 'Leave application submitted successfully', attendance });
+    } catch (error) {
+        console.error('Error applying for leave:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+exports.approveOrRejectLeave = async (req, res) => {
+    try {
+        const { attendanceId, action, adminComments } = req.body;
+        const UserId = req.user._id;
+
+        // Validation
+        if (!attendanceId || !action || !UserId) {
+            return res.status(400).json({ message: 'Attendance ID, action, and UserId are required' });
+        }
+
+        if (!['Approved', 'Rejected'].includes(action)) {
+            return res.status(400).json({ message: 'Action must be either Approved or Rejected' });
+        }
+
+        // Find the attendance record
+        const attendance = await Attendance.findById(attendanceId);
+        if (!attendance) {
+            return res.status(404).json({ message: 'Attendance record not found' });
+        }
+
+        // Check if the leave is already processed
+        if (attendance.leaveDetails.leaveApprovalStatus !== 'Pending') {
+            return res.status(400).json({ message: 'Leave application is already processed' });
+        }
+
+        // Update the leave approval status
+        attendance.leaveDetails.leaveApprovalStatus = action;
+        attendance.leaveDetails.approvedBy = UserId;
+        if (adminComments) {
+            attendance.leaveDetails.adminComments = adminComments;
+        }
+
+        await attendance.save();
+
+        res.status(200).json({
+            message: `Leave application ${action.toLowerCase()} successfully`,
+            attendance
+        });
+    } catch (error) {
+        console.error('Error processing leave approval:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
