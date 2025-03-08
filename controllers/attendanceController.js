@@ -488,6 +488,8 @@ exports.applyForLeave = async (req, res) => {
 
         // Create a new attendance record with leave details
         const attendance = new Attendance({
+            User: req.user.id, // Updated field name
+            company: req.user.company._id,
             employeeId: employeeId,
             date: leaveStartDate,
             status: 'Leave',

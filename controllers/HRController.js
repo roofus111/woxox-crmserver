@@ -48,7 +48,14 @@ exports.createEmployee = async (req, res) => {
           return res.status(404).json({ message: 'Supervisor not found' });
         }
       }
-  
+   // Generate the next employeeId in the format EMP1, EMP2, etc.
+   const lastEmployee = await Employee.findOne().sort({ createdAt: -1 }).select('employeeId');
+   let newEmployeeId = 'EMP1'; // Default to EMP1 if no previous record exists
+
+   if (lastEmployee?.employeeId) {
+       const lastIdNumber = parseInt(lastEmployee.employeeId.replace('EMP', '')) || 0;
+       newEmployeeId = `EMP${lastIdNumber + 1}`;
+   }
     // Upload files to S3 and get URLs
     const uploadedFiles = [];
     if (files && files.length > 0) {
@@ -74,6 +81,7 @@ exports.createEmployee = async (req, res) => {
       // Create a new employee
       const newEmployee = new Employee({
         company: req.user.company._id,
+        employeeId: newEmployeeId,
         firstName,
         lastName,
         email,
