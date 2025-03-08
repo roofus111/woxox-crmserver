@@ -31,7 +31,6 @@ const FileSchema = new mongoose.Schema({
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Lead", // Assuming you have a Lead model already
-    required: true,
   },
   docName: {
     type: String,

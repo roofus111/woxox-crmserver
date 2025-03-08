@@ -42,7 +42,7 @@ exports.createFile = async (req, res) => {
 
     const companyId = req.user.company._id;
     const uploadedFiles = [];
-
+    const cleanFileName = files[0].originalname;
     // Upload each file to S3 and get its URL
     for (const file of files) {
       const fileContent = file.buffer;
@@ -66,7 +66,7 @@ exports.createFile = async (req, res) => {
     const newFile = new Files({
       User: req.user._id,
       leadId,
-      docName,
+      docName: cleanFileName,
       fileName: fileName || uploadedFiles[0].fileName,
       fileType: fileType || uploadedFiles[0].fileType,
       fileUrl: fileUrl || uploadedFiles[0].fileUrl,

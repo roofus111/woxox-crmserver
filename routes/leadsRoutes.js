@@ -221,8 +221,8 @@ const authenticateUser = require("../middleware/authenticateUser");
 const multer = require("multer");
 const { S3 } = require("@aws-sdk/client-s3");
 const { v4: uuidv4 } = require("uuid");
-const File = require("../models/document"); // Import the File model
-const s3Client = require("../config/s3"); // Import the S3 client
+const File = require("../models/Filehandler"); // Update to match the actual filename casing
+const s3Client = require("../config/s3");
 const Lead = require('../models/Lead')
 // Set up multer for S3
 const storage = multer.memoryStorage();
@@ -284,14 +284,14 @@ router.get("/docs/:id", async (req, res) => {
   try {
     const fileId = req.params.id;
     const fileRecord = await File.findById(fileId);
-
+    
     if (!fileRecord) {
       return res.status(404).json({ error: "File not found" });
     }
 
     const params = {
       Bucket: process.env.AWS_BUCKET_NAME,
-      Key: fileRecord.fileUrl.split("/").pop(), // Extract the key from the file URL
+      Key: `fileuploads/${fileRecord.company}/${fileRecord.fileName}`, // Update path based on actual file structure
     };
 
     // Create an instance of S3 client
@@ -304,12 +304,13 @@ router.get("/docs/:id", async (req, res) => {
     res.setHeader("Content-Type", fileRecord.fileType);
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${fileRecord.fileName}"`
+      `attachment; filename="${fileRecord.docName}${fileRecord.fileName.substring(fileRecord.fileName.lastIndexOf('.'))}"` // Use docName but keep original file extension
     );
 
     // Pipe the data to the response
     data.Body.pipe(res);
   } catch (error) {
+    console.error('Error downloading file:', error);
     res.status(500).json({ error: error.message });
   }
 });
