@@ -48,6 +48,10 @@ const io = new Server(server, {
     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
+const Message = require("./models/Message");
+const ChatGroup = require("./models/ChatGroup");
+const multer = require('multer');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI);
@@ -91,25 +95,232 @@ app.use("/api/eventcalender",eventcalender)
 app.use("/api/employeeSchedule",employeeScheduleRouter)
 app.use("/api/expense",expenseRouter)
 app.use("/api/blog",Blog)
-// Utility to check if a user is connected
-const isUserConnected = (userId) => {
-  return io.sockets.adapter.rooms.get(userId)?.size > 0;
-};
+
+// Initialize S3 client
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// Track online users and typing status
+const onlineUsers = new Map();
+const typingUsers = new Map();
 
 io.on("connection", (socket) => {
   console.log("New client connected");
 
-  socket.emit("welcome", { message: "Welcome to the notification system!" });
+  socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
 
-  socket.on("register", (userId) => {
-    socket.join(userId);
-    console.log(`User ${userId} registered and joined their room`);
+  // Register user and update online status
+  socket.on("register", async (userId) => {
+    try {
+      socket.join(userId);
+      onlineUsers.set(userId, socket.id);
+      await User.findByIdAndUpdate(userId, { socketId: socket.id });
+      
+      // Broadcast online status to all users
+      io.emit("user_status_change", {
+        userId,
+        status: "online"
+      });
+      
+      console.log(`User ${userId} registered with socket ${socket.id}`);
+    } catch (error) {
+      console.error("Error registering user:", error);
+    }
   });
 
-  socket.on("disconnect", () => {
-    console.log(`Client disconnected: ${socket.id}`);
+  // Handle private messages
+  socket.on("private_message", async (data) => {
+    try {
+      const { from, to, message, messageType = 'text', fileData } = data;
+      
+      let fileUrl = null;
+      if (fileData && messageType !== 'text') {
+        fileUrl = await uploadFileToS3(fileData);
+      }
+
+      const newMessage = new Message({
+        from,
+        to,
+        content: message,
+        messageType,
+        fileUrl,
+        fileName: fileData?.name,
+        fileSize: fileData?.size
+      });
+      await newMessage.save();
+
+      const recipientSocket = onlineUsers.get(to);
+      if (recipientSocket) {
+        io.to(recipientSocket).emit("new_message", {
+          messageId: newMessage._id,
+          from,
+          message,
+          messageType,
+          fileUrl,
+          timestamp: newMessage.timestamp
+        });
+      }
+
+      socket.emit("message_sent", { success: true, messageId: newMessage._id });
+    } catch (error) {
+      console.error("Error sending message:", error);
+      socket.emit("message_sent", { success: false, error: "Failed to send message" });
+    }
+  });
+
+  // Handle group messages
+  socket.on("group_message", async (data) => {
+    try {
+      const { from, groupId, message, messageType = 'text', fileData } = data;
+      
+      const group = await ChatGroup.findById(groupId);
+      if (!group) throw new Error("Group not found");
+
+      let fileUrl = null;
+      if (fileData && messageType !== 'text') {
+        fileUrl = await uploadFileToS3(fileData);
+      }
+
+      const newMessage = new Message({
+        from,
+        groupId,
+        content: message,
+        messageType,
+        fileUrl,
+        fileName: fileData?.name,
+        fileSize: fileData?.size
+      });
+      await newMessage.save();
+
+      // Emit to all group members
+      group.members.forEach(member => {
+        const memberSocket = onlineUsers.get(member.user.toString());
+        if (memberSocket) {
+          io.to(memberSocket).emit("new_group_message", {
+            messageId: newMessage._id,
+            groupId,
+            from,
+            message,
+            messageType,
+            fileUrl,
+            timestamp: newMessage.timestamp
+          });
+        }
+      });
+
+      socket.emit("message_sent", { success: true, messageId: newMessage._id });
+    } catch (error) {
+      console.error("Error sending group message:", error);
+      socket.emit("message_sent", { success: false, error: "Failed to send message" });
+    }
+  });
+
+  // Handle typing indicators
+  socket.on("typing_start", ({ from, to, isGroup }) => {
+    const key = isGroup ? `group:${to}` : to;
+    if (!typingUsers.has(key)) {
+      typingUsers.set(key, new Set());
+    }
+    typingUsers.get(key).add(from);
+
+    if (isGroup) {
+      socket.to(to).emit("typing_update", {
+        groupId: to,
+        users: Array.from(typingUsers.get(key))
+      });
+    } else {
+      const recipientSocket = onlineUsers.get(to);
+      if (recipientSocket) {
+        io.to(recipientSocket).emit("typing_update", { userId: from });
+      }
+    }
+  });
+
+  socket.on("typing_end", ({ from, to, isGroup }) => {
+    const key = isGroup ? `group:${to}` : to;
+    if (typingUsers.has(key)) {
+      typingUsers.get(key).delete(from);
+    }
+
+    if (isGroup) {
+      socket.to(to).emit("typing_update", {
+        groupId: to,
+        users: Array.from(typingUsers.get(key))
+      });
+    } else {
+      const recipientSocket = onlineUsers.get(to);
+      if (recipientSocket) {
+        io.to(recipientSocket).emit("typing_update", { userId: null });
+      }
+    }
+  });
+
+  // Handle read receipts
+  socket.on("mark_read", async ({ messageId, userId }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (message) {
+        if (!message.readBy.some(read => read.user.toString() === userId)) {
+          message.readBy.push({ user: userId });
+          await message.save();
+
+          // Notify message sender
+          const senderSocket = onlineUsers.get(message.from.toString());
+          if (senderSocket) {
+            io.to(senderSocket).emit("message_read", {
+              messageId,
+              readBy: userId,
+              timestamp: new Date()
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+    }
+  });
+
+  socket.on("disconnect", async () => {
+    try {
+      const user = await User.findOne({ socketId: socket.id });
+      if (user) {
+        onlineUsers.delete(user._id.toString());
+        await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
+        
+        // Broadcast offline status
+        io.emit("user_status_change", {
+          userId: user._id,
+          status: "offline"
+        });
+      }
+      console.log(`Client disconnected: ${socket.id}`);
+    } catch (error) {
+      console.error("Error handling disconnect:", error);
+    }
   });
 });
+
+// Helper function to upload files to S3
+async function uploadFileToS3(fileData) {
+  try {
+    const key = `chat-files/${Date.now()}-${fileData.name}`;
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: key,
+      Body: fileData.buffer,
+      ContentType: fileData.mimetype
+    }));
+    return `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${key}`;
+  } catch (error) {
+    console.error("Error uploading to S3:", error);
+    throw error;
+  }
+}
 
 cron.schedule("0,30 * * * *", async () => {
   console.log("Running follow-up check");
@@ -142,7 +353,7 @@ cron.schedule("0,30 * * * *", async () => {
       const formattedHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
       const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
 
-      if (isUserConnected(userId)) {
+      if (onlineUsers.has(userId)) {
         const message = `You have a Follow-up Meeting with ${followUp.leadId.name} today at ${formattedTime}`;
         io.to(userId).emit("followUpAlert", {
           message: message,
