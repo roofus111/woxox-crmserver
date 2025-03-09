@@ -584,3 +584,95 @@ exports.approveOrRejectLeave = async (req, res) => {
         });
     }
 };
+
+exports.getLeaveRequests = async (req, res) => {
+    try {
+        const { startDate, endDate, status } = req.query;
+
+        // Ensure company ID exists in request
+        if (!req.user || !req.user.company || !req.user.company._id) {
+            return res.status(403).json({ message: "Unauthorized access: Company ID missing" });
+        }
+
+        const companyId = req.user.company._id;
+
+        // Build query object
+        const query = {
+            company: companyId,
+            status: 'Leave',
+            'leaveDetails.leaveType': { $ne: null }
+        };
+
+        // Add date range filter if provided
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            query.date = { $gte: start, $lte: end };
+        }
+
+        // Add approval status filter if provided
+        if (status) {
+            query['leaveDetails.leaveApprovalStatus'] = status;
+        }
+
+        // Fetch leave requests
+        const leaveRequests = await Attendance.find(query)
+            .populate({
+                path: 'employeeId',
+                select: 'firstName lastName email department designation employeeId',
+                populate: {
+                    path: 'User',
+                    select: 'email'
+                }
+            })
+            .select('date status leaveDetails createdAt')
+            .sort({ createdAt: -1 });
+
+        if (leaveRequests.length === 0) {
+            return res.status(404).json({ 
+                success: false,
+                message: "No leave requests found" 
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Leave requests fetched successfully",
+            count: leaveRequests.length,
+            data: leaveRequests.map(request => ({
+                id: request._id,
+                employeeDetails: {
+                    id: request.employeeId._id,
+                    name: `${request.employeeId.firstName} ${request.employeeId.lastName}`,
+                    email: request.employeeId.User?.email,
+                    department: request.employeeId.department,
+                    designation: request.employeeId.designation,
+                    employeeId: request.employeeId.employeeId
+                },
+                leaveDetails: {
+                    type: request.leaveDetails.leaveType,
+                    reason: request.leaveDetails.leaveReason,
+                    startDate: request.leaveDetails.leaveStartDate,
+                    endDate: request.leaveDetails.leaveEndDate,
+                    status: request.leaveDetails.leaveApprovalStatus,
+                    approvedBy: request.leaveDetails.approvedBy,
+                    noOfDays: request.leaveDetails.noOfleaveDays
+                },
+                appliedDate: request.createdAt
+            }))
+        });
+
+    } catch (error) {
+        console.error("Error fetching leave requests:", error);
+        return res.status(500).json({ 
+            success: false,
+            message: "Internal Server Error",
+            error: error.message 
+        });
+    }
+};
+

@@ -391,6 +391,8 @@ router.post('/apply-leave', attendanceController.applyForLeave);
 
 router.put('/approve/:attendanceId', attendanceController.approveOrRejectLeave);
 
+router.get('/leave-requests', attendanceController.getLeaveRequests);
+
 /**
  * @swagger
  * components:
