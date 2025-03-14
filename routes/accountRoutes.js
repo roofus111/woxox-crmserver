@@ -8,8 +8,8 @@ router.post('/addbankaccount',accountsController.addBankAccount);
 router.get('/getbankaccounts',accountsController.getBankAccounts);
 router.get('/getbankaccounts/:id',accountsController.getBankAccountById);
 router.put('/updatebankaccount/:id',accountsController.updateBankAccount);
-router.put('/disableBankAccount/:id',accountsController.disableBankAccount);
-router.post('/createTransaction/:accountId',accountsController.createTransaction);
+router.put('/toggle/:id',accountsController.toggleBankAccountStatus);
+// router.post('/createTransaction/:accountId',accountsController.createTransaction);
 
 
 

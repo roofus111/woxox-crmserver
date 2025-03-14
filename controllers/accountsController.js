@@ -89,28 +89,31 @@ exports.updateBankAccount = async (req, res) => {
       branchName: req.body.branchName,
       ifscCode: req.body.ifscCode,
       accountType: req.body.accountType,
-      currency: req.body.currency
+      currency: req.body.currency,
+      accountNumber: req.body.accountNumber,
+      balance: req.body.balance,
+      isActive: req.body.isActive,
+      initialBalance: req.body.initialBalance,
+      openingDate: req.body.openingDate,
+      notes: req.body.notes
     };
-
+    
     // Remove undefined fields
     Object.keys(updateData).forEach(key => 
       updateData[key] === undefined && delete updateData[key]
     );
 
-    const account = await Account.findOneAndUpdate(
+    const updatedAccount = await Account.findOneAndUpdate(
       {
         _id: req.params.id,
         company: req.user.company._id,
         isActive: true
       },
       updateData,
-      {
-        new: true,
-        runValidators: true
-      }
+      { new: true }
     );
 
-    if (!account) {
+    if (!updatedAccount) {
       return res.status(404).json({
         success: false,
         error: 'Bank account not found'
@@ -119,6 +122,40 @@ exports.updateBankAccount = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      data: updatedAccount
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+exports.toggleBankAccountStatus = async (req, res) => {
+  try {
+    const account = await Account.findOne({
+      _id: req.params.id,
+      company: req.user.company._id
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bank account not found'
+      });
+    }
+
+    // Toggle the isActive status
+    const newStatus = !account.isActive;
+
+    // Update the status
+    account.isActive = newStatus;
+    await account.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Bank account ${newStatus ? 'enabled' : 'disabled'} successfully`,
       data: account
     });
   } catch (error) {
@@ -129,43 +166,4 @@ exports.updateBankAccount = async (req, res) => {
   }
 };
 
-exports.disableBankAccount = async (req, res) => {
-  try {
-    const account = await Account.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        company: req.user.company._id,
-        isActive: true
-      },
-      { 
-        isActive: false,
-        allowIncomingTransactions: false,
-        allowOutgoingTransactions: false,
-        disabledAt: new Date()
-      },
-      {
-        new: true
-      }
-    );
 
-    if (!account) {
-      return res.status(404).json({
-        success: false,
-        error: 'Bank account not found or already disabled'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Bank account disabled successfully',
-      data: account
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
-
-// Create a new transaction
