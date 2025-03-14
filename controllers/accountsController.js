@@ -10,7 +10,13 @@ exports.addBankAccount = async (req, res) => {
       ifscCode: req.body.ifscCode,
       accountType: req.body.accountType,
       currency: req.body.currency || 'USD',
-      company: req.user.company._id
+      company: req.user.company._id,
+      createdBy: req.user._id,
+      initialBalance: req.body.initialBalance || 0,
+      balance: req.body.initialBalance || 0,
+      openingDate: req.body.openingDate || Date.now(),
+      isActive: req.body.isActive ?? true,
+      notes: req.body.notes
     };
 
     const newAccount = new Account(accountData);
@@ -32,7 +38,7 @@ exports.getBankAccounts = async (req, res) => {
   try {
     const accounts = await Account.find({ 
       company: req.user.company._id,
-      isActive: true 
+      // isActive: true 
     });
 
     res.status(200).json({
@@ -163,76 +169,3 @@ exports.disableBankAccount = async (req, res) => {
 };
 
 // Create a new transaction
-exports.createTransaction = async (req, res) => {
-  try {
-    const { accountId } = req.params;
-    const { type, amount, description, category, paymentMethod, reference } = req.body;
-    const userId = req.user.id; // Assuming you have user info from auth middleware
-
-    // Find the bank account with its current state
-    const account = await Account.findById(accountId);
-    if (!account) {
-      return res.status(404).json({ message: 'Bank account not found' });
-    }
-
-    // Store previous balance for history
-    const previousBalance = account.balance;
-
-    // Create transaction data object
-    const transactionData = {
-      type,
-      amount,
-      description,
-      category,
-      paymentMethod,
-      reference,
-      date: new Date()
-    };
-
-    // Create detailed history entry
-    const historyEntry = {
-      transaction: null, // Will be updated after transaction is created
-      action: 'created',
-      performedBy: userId,
-      previousState: {
-        balance: previousBalance,
-        transactionCount: account.transactions.length
-      },
-      newState: {
-        transactionDetails: transactionData,
-        expectedBalance: type === 'income' 
-          ? previousBalance + amount 
-          : previousBalance - amount
-      },
-      timestamp: new Date()
-    };
-
-    // Add transaction using the schema method
-    await account.addTransaction(transactionData, userId);
-
-    // Add additional history metadata
-    const newTransaction = account.transactions[account.transactions.length - 1];
-    historyEntry.transaction = newTransaction._id;
-    historyEntry.newState.actualBalance = account.balance;
-    account.transactionHistory.push(historyEntry);
-
-    // Save the updated account with new history
-    await account.save();
-
-    // Return response with transaction and history details
-    return res.status(201).json({
-      message: 'Transaction created successfully',
-      transaction: newTransaction,
-      history: historyEntry,
-      currentBalance: account.balance
-    });
-
-  } catch (error) {
-    console.error('Error creating transaction:', error);
-    return res.status(500).json({
-      message: 'Error creating transaction',
-      error: error.message
-    });
-  }
-};
-

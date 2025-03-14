@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 // Transaction Schema (as a sub-schema)
 const transactionSchema = new mongoose.Schema({
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: true,
+  },
   date: {
     type: Date,
     required: true,
@@ -96,6 +101,25 @@ const bankAccountSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  initialBalance: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  openingDate: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  notes: {
+    type: String,
+    trim: true
   },
   transactions: [transactionSchema],
   transactionHistory: [transactionHistorySchema]
