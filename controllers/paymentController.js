@@ -1,6 +1,7 @@
 const Payment = require("../models/payment");
 const Invoice = require("../models/invoice");
 const mongoose = require("mongoose");
+const BankAccount = require("../models/Account");
 // Add a new payment
 
 
@@ -43,6 +44,30 @@ exports.createPayment = async (req, res) => {
       session.endSession();
       return res.status(404).json({ message: "Invoice not found" });
     }
+
+    // Find and update the bank account
+    const bankAccount = await BankAccount.findOne({ 
+      company: req.user.company._id,
+      _id: req.body.bankAccountId 
+    }).session(session);
+
+    if (!bankAccount) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Bank account not found" });
+    }
+
+    // Add transaction to bank account
+    await bankAccount.addTransaction({
+      company: req.user.company._id,
+      date: new Date(),
+      type: 'income',
+      amount: payment.amount,
+      description: `Payment received for invoice ${updatedInvoice.invoiceId}`,
+      category: 'payment',
+      paymentMethod: payment.paymentMethod,
+      reference: payment.paymentId
+    }, req.user._id);
 
     await payment.save({ session }); // Save the payment within the transaction
     await session.commitTransaction(); // Commit the transaction

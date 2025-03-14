@@ -10,7 +10,8 @@ router.get('/getbankaccounts/:id',accountsController.getBankAccountById);
 router.put('/updatebankaccount/:id',accountsController.updateBankAccount);
 router.put('/toggle/:id',accountsController.toggleBankAccountStatus);
 router.post('/accounts/:accountId', accountsController.addTransaction);
-
+router.get('/transactions/:accountId',accountsController.getTransactionsByAccountId)
+router.get('/history/:accountId',accountsController.getTransactionHistory)
 
 
 module.exports = router;

@@ -63,6 +63,11 @@ const PaymentSchema = new mongoose.Schema(
     },
     refundId: {
       type: String, // Reference to a refund if applicable
+    },
+    bankAccountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'BankAccount',
+      required: true
     }
   },
   { timestamps: true }

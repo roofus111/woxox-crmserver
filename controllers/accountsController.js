@@ -170,7 +170,6 @@ exports.addTransaction = async (req, res) => {
   try {
     const { accountId } = req.params;
     const { 
-      company,
       type,
       amount,
       description,
@@ -219,8 +218,106 @@ exports.addTransaction = async (req, res) => {
   } catch (error) {
     console.error('Transaction error:', error); // For debugging
     return res.status(500).json({
-      success: false,
+      success: false,  
       message: 'Error adding transaction',
+      error: error.message
+    });
+  }
+};
+
+exports.getTransactionsByAccountId = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    
+    // Find the bank account and populate transactions
+    const bankAccount = await Account.findOne({
+      _id: accountId,
+      company: req.user.company._id
+    }).populate('transactions');
+    
+    if (!bankAccount) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Bank account not found' 
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: bankAccount.transactions.length,
+      data: bankAccount.transactions
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching transactions',
+      error: error.message
+    });
+  }
+};
+
+exports.getTransactionHistory = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { startDate, endDate, type, sort = 'desc' } = req.query;
+    
+    // Build query filters
+    const query = {
+      _id: accountId,
+      company: req.user.company._id
+    };
+
+    // Find the bank account and populate transactions with sorting
+    const bankAccount = await Account.findOne(query)
+      .populate({
+        path: 'transactions',
+        match: {
+          ...(startDate && { date: { $gte: new Date(startDate) } }),
+          ...(endDate && { date: { $lte: new Date(endDate) } }),
+          ...(type && { type })
+        },
+        options: {
+          sort: { date: sort === 'desc' ? -1 : 1 }
+        }
+      });
+    
+    if (!bankAccount) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Bank account not found' 
+      });
+    }
+
+    // Calculate summary statistics
+    const transactions = bankAccount.transactions;
+    const summary = {
+      totalCredits: transactions
+        .filter(t => t.type === 'credit')
+        .reduce((sum, t) => sum + t.amount, 0),
+      totalDebits: transactions
+        .filter(t => t.type === 'debit')
+        .reduce((sum, t) => sum + t.amount, 0),
+      totalTransactions: transactions.length
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        accountDetails: {
+          accountName: bankAccount.accountName,
+          accountNumber: bankAccount.accountNumber,
+          currentBalance: bankAccount.balance
+        },
+        summary,
+        transactions: transactions
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching transaction history',
       error: error.message
     });
   }
