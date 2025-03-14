@@ -166,4 +166,62 @@ exports.toggleBankAccountStatus = async (req, res) => {
   }
 };
 
+exports.addTransaction = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { 
+      company,
+      type,
+      amount,
+      description,
+      category,
+      paymentMethod,
+      reference,
+      date 
+    } = req.body;
 
+    // Find the bank account and include createdBy field
+    const bankAccount = await Account.findById(accountId);
+    
+    if (!bankAccount) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Bank account not found' 
+      });
+    }
+
+    // Set createdBy if it's not already set
+    if (!bankAccount.createdBy) {
+      bankAccount.createdBy = req.user._id;  // Assuming req.user is set by auth middleware
+    }
+
+    // Create transaction data object
+    const transactionData = {
+      company:req.user.company._id,
+      type,
+      amount,
+      description,
+      category,
+      paymentMethod,
+      reference,
+      date: date || new Date()
+    };
+
+    // Add transaction using the model method
+    await bankAccount.addTransaction(transactionData, req.user._id);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Transaction added successfully',
+      data: bankAccount
+    });
+
+  } catch (error) {
+    console.error('Transaction error:', error); // For debugging
+    return res.status(500).json({
+      success: false,
+      message: 'Error adding transaction',
+      error: error.message
+    });
+  }
+};
