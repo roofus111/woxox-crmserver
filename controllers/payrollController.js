@@ -1,4 +1,5 @@
 const Payroll = require('../models/Payroll');
+const BankAccount = require('../models/Account');
 
 // Create Payroll
 exports.createPayroll = async (req, res) => {
@@ -6,11 +7,17 @@ exports.createPayroll = async (req, res) => {
     const {
       employeeId, employeeName, department, monthlySalary,
       totalWorkingDays, daysWorked, extraEarnings, deductions,
-      tax, paymentDate, paymentMethod, bankDetails
+      tax, paymentDate, paymentMethod, bankDetails, bankAccount
     } = req.body;
 
-    if (!employeeId || !employeeName || !department || !monthlySalary || !totalWorkingDays || !daysWorked || !paymentDate || !paymentMethod) {
+    if (!employeeId || !employeeName || !department || !monthlySalary || !totalWorkingDays || !daysWorked || !paymentDate || !paymentMethod || !bankAccount) {
       return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Find and verify the bank account
+    const bankAccountDoc = await BankAccount.findById(bankAccount);
+    if (!bankAccountDoc) {
+      return res.status(404).json({ message: 'Bank account not found' });
     }
 
     const baseSalary = (monthlySalary / totalWorkingDays) * daysWorked;
@@ -18,13 +25,44 @@ exports.createPayroll = async (req, res) => {
     const totalDeductions = deductions?.reduce((sum, d) => sum + d.amount, 0) || 0;
     const netSalary = baseSalary + totalExtraEarnings - totalDeductions - tax;
 
+    // Check if bank account has sufficient balance
+    if (bankAccountDoc.balance < netSalary) {
+      return res.status(400).json({ message: 'Insufficient funds in bank account' });
+    }
+
     const payroll = new Payroll({
-      employeeId, employeeName, department, monthlySalary,
-      totalWorkingDays, daysWorked, baseSalary, extraEarnings,
-      totalExtraEarnings, deductions, totalDeductions, tax, netSalary,
-      paidAmount: 0, remainingSalary: netSalary, paymentDate,
-      paymentMethod, paymentStatus: 'Pending', bankDetails
+      employeeId,
+      employeeName,
+      department,
+      monthlySalary,
+      totalWorkingDays,
+      daysWorked,
+      baseSalary,
+      extraEarnings,
+      totalExtraEarnings,
+      deductions,
+      totalDeductions,
+      tax,
+      netSalary,
+      paidAmount: 0,
+      remainingSalary: netSalary,
+      paymentDate,
+      paymentMethod,
+      paymentStatus: 'Pending',
+      bankDetails,
+      bankAccount
     });
+
+    // Create transaction for salary payment
+    await bankAccountDoc.addTransaction({
+      company: bankAccountDoc.company,
+      type: 'expense',
+      amount: netSalary,
+      description: `Salary payment for ${employeeName} - ${paymentDate}`,
+      category: 'Payroll',
+      paymentMethod: paymentMethod,
+      reference: `PAYROLL-${employeeId}-${new Date().toISOString().slice(0, 7)}`
+    }, req.user._id);
 
     await payroll.save();
     return res.status(201).json({ message: 'Payroll created successfully', payroll });
@@ -92,10 +130,31 @@ exports.addPartialPayment = async (req, res) => {
     if (amountPaid <= 0) return res.status(400).json({ message: 'Invalid payment amount' });
     if (payroll.remainingSalary <= 0) return res.status(400).json({ message: 'Salary already fully paid' });
 
+    // Use the stored bankAccount reference
+    const bankAccount = await BankAccount.findById(payroll.bankAccount);
+    if (!bankAccount) {
+      return res.status(404).json({ message: 'Bank account not found' });
+    }
+
+    // Check if bank account has sufficient balance
+    if (bankAccount.balance < amountPaid) {
+      return res.status(400).json({ message: 'Insufficient funds in bank account' });
+    }
+
+    // Create transaction for partial salary payment
+    await bankAccount.addTransaction({
+      company: bankAccount.company,
+      type: 'expense',
+      amount: amountPaid,
+      description: `Partial salary payment for ${payroll.employeeName}`,
+      category: 'Payroll',
+      paymentMethod: paymentMethod,
+      reference: `PAYROLL-PARTIAL-${payroll.employeeId}-${new Date().toISOString()}`
+    }, req.user._id);
+
     payroll.paymentHistory.push({ amountPaid, paymentMethod, paymentDate: new Date() });
     payroll.paidAmount += amountPaid;
     payroll.remainingSalary = payroll.netSalary - payroll.paidAmount;
-
     payroll.paymentStatus = payroll.paidAmount === payroll.netSalary ? 'Paid' : 'Half Paid';
 
     await payroll.save();
@@ -106,6 +165,7 @@ exports.addPartialPayment = async (req, res) => {
     return res.status(500).json({ message: 'Server error' });
   }
 };
+
 // Get Payrolls by Employee ID
 exports.getPayrollByEmployeeId = async (req, res) => {
   try {

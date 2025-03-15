@@ -16,7 +16,7 @@ const DeductionSchema = new mongoose.Schema({
 const PaymentHistorySchema = new mongoose.Schema({
   amountPaid: { type: Number, required: true },
   paymentDate: { type: Date, default: Date.now },
-  paymentMethod: { type: String, enum: ['Bank Transfer', 'Cash', 'Cheque', 'UPI'], required: true }
+  paymentMethod: { type: String,  enum: ['cash', 'bank_transfer', 'check', 'credit_card'], required: true }
 });
 
 // Bank Details Schema (Embedded in Payroll)
@@ -63,7 +63,7 @@ const PayrollSchema = new mongoose.Schema({
   paymentDate: { type: Date, required: true },
   paymentMethod: {
     type: String,
-    enum: ['Bank Transfer', 'Cash', 'Cheque', 'UPI'],
+    enum: ['cash', 'bank_transfer', 'check', 'credit_card'],
     required: true
   },
   paymentStatus: {
@@ -77,6 +77,12 @@ const PayrollSchema = new mongoose.Schema({
 
   // Payment History as Array
   paymentHistory: [PaymentHistorySchema], // ✅ Stores multiple payments
+
+  bankAccount: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BankAccount',  // References the BankAccount model
+    required: true
+  },
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
