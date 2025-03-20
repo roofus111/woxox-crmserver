@@ -113,6 +113,7 @@ const LeadSchema = new mongoose.Schema({
   source: { type: String },
   Customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

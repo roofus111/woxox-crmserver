@@ -6,6 +6,7 @@ const Campaign = require("../models/Campaign");
 const Customer = require("../models/Customer");
 const Company = require("../models/Company");
 const LeadActivity = require("../models/LeadActivity");
+const TagManager = require("../models/Tagmanager");
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -1220,6 +1221,54 @@ exports.getLeadStatus = async (req, res) => {
         console.error("Error fetching lead statistics:", error);
         res.status(500).json({ message: "Internal server error" });
     }
+};
+
+
+exports.addTagsToLead = async (req, res) => {
+  try {
+    const { tags } = req.body; // Array of tag IDs
+    const leadId = req.params.id;
+
+    // Validate lead exists
+    const lead = await Lead.findById(leadId);
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    // Validate all tags exist
+    const validTags = await TagManager.find({ _id: { $in: tags } });
+    if (validTags.length !== tags.length) {
+      return res.status(400).json({ error: "One or more tags are invalid" });
+    }
+
+    // Update lead with tags
+    lead.tags.push(...tags);
+    await lead.save();
+
+    res.json({ message: "Tags added successfully", lead });
+  } catch (error) {
+    res.status(500).json({ error: "Error adding tags to lead", details: error.message });
+  }
+};
+
+/**
+ * Remove a tag from a lead
+ */
+exports.removeTagFromLead = async (req, res) => {
+  try {
+    const { tagId } = req.body; // Tag ID to remove
+    const leadId = req.params.id;
+
+    // Validate lead exists
+    const lead = await Lead.findById(leadId);
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    // Remove tag from lead
+    lead.tags = lead.tags.filter(tag => tag.toString() !== tagId);
+    await lead.save();
+
+    res.json({ message: "Tag removed successfully", lead });
+  } catch (error) {
+    res.status(500).json({ error: "Error removing tag from lead", details: error.message });
+  }
 };
 
 
