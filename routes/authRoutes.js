@@ -71,7 +71,7 @@
  *           description: The date and time when the user was created.
  *           example: "2023-01-01T12:00:00Z"
  */const express = require('express');
-const { register, login, changePassword } = require('../controllers/authController');
+const { register, login, changePassword, adminChangePassword } = require('../controllers/authController');
 const authenticateUser = require('../middleware/authenticateUser');
 const router = express.Router();
 
@@ -304,5 +304,6 @@ router.post('/login', login);
 
 
 router.post('/change-password', authenticateUser, changePassword);
+router.post('/admin-change-password', authenticateUser, adminChangePassword);
 
 module.exports = router;

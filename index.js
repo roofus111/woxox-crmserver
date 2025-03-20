@@ -33,6 +33,7 @@ const employeeScheduleRouter = require('./Calender/routes/employeeScheduleRouter
 const Blog=require('./routes/blogRouter')
 const expenseRouter=require('./routes/ExpenseRouter')
 const accountRoutes=require('./routes/accountRoutes')
+const tagMManagerRoutes=require('./routes/tagmanagerRoutes')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -97,6 +98,7 @@ app.use("/api/employeeSchedule",employeeScheduleRouter)
 app.use("/api/expense",expenseRouter)
 app.use("/api/blog",Blog)
 app.use("/api/account",accountRoutes)
+app.use("/api/tagmanager",tagMManagerRoutes)
 
 // Initialize S3 client
 const s3Client = new S3Client({
