@@ -717,6 +717,7 @@ exports.createLead = async (req, res) => {
 
 exports.getLeadsByCampaignId = async (req, res) => {
   const { campaignid } = req.params;
+  const { page = 1, limit = 100, sort = 'createdAt', order = -1 } = req.query;
 
   try {
     // Validate campaignId
@@ -724,24 +725,55 @@ exports.getLeadsByCampaignId = async (req, res) => {
       return res.status(400).json({ error: "Invalid campaign ID format." });
     }
 
-    // Fetch leads from the database
-    const leads = await Lead.find({ campaignid })
-      .populate("assignedTo", "_id firstName lastName")
-      .populate("campaignid", "_id name description")
-      .exec();
+    // Calculate skip value for pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Create sort object
+    const sortObj = { [sort]: parseInt(order) };
+
+    // Execute queries in parallel for better performance
+    const [leads, totalCount] = await Promise.all([
+      Lead.find({ campaignid })
+        .select('-__v') // Exclude unnecessary fields
+        .populate("assignedTo", "_id firstName lastName")
+        .populate("campaignid", "_id name description")
+        .sort(sortObj)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean() // Convert to plain JavaScript objects for better performance
+        .exec(),
+      Lead.countDocuments({ campaignid })
+    ]);
 
     // Check if leads exist
     if (!leads || leads.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No leads found for the given campaign ID." });
+      return res.status(404).json({ 
+        success: false,
+        message: "No leads found for the given campaign ID." 
+      });
     }
 
-    // Return the leads
-    res.status(200).json(leads);
+    // Return the paginated results with metadata
+    res.status(200).json({
+      success: true,
+      data: {
+        leads,
+        pagination: {
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          currentPage: parseInt(page),
+          perPage: parseInt(limit),
+          hasMore: skip + leads.length < totalCount
+        }
+      }
+    });
+
   } catch (error) {
     console.error("Error fetching leads by campaign ID:", error.message);
-    res.status(500).json({ error: "An error occurred while fetching leads." });
+    res.status(500).json({ 
+      success: false,
+      error: "An error occurred while fetching leads." 
+    });
   }
 };
 
