@@ -122,31 +122,6 @@ exports.deleteTag = async (req, res) => {
 };
 
 
-exports.getCommonLeadsAndFilesByTags = async (req, res) => {
-  try {
-    const { tags } = req.body; // Expecting an array of tag names
-
-    if (!tags || !Array.isArray(tags) || tags.length === 0) {
-      return res.status(400).json({ error: "Tags must be a non-empty array" });
-    }
-
-    // Find leads and files that contain ALL specified tags
-    const leads = await Lead.find({ tags: { $all: tags } });
-    const files = await File.find({ tags: { $all: tags } });
-
-    if (leads.length === 0 && files.length === 0) {
-      return res.status(404).json({ message: "No common leads or files found for the given tags" });
-    }
-
-    res.json({ 
-      message: "Common leads and files retrieved successfully", 
-      leads, 
-      files 
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Error retrieving common leads and files", details: error.message });
-  }
-};
 
 exports.getAllTagsWithCounts = async (req, res) => {
   try {
@@ -165,6 +140,31 @@ exports.getAllTagsWithCounts = async (req, res) => {
     console.error("Error fetching tags:", error);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
+};
+
+// Controller to get details of leads that are commonly present in all the given tags
+exports.getCommonLeadsInTags = async (req, res) => {
+    try {
+        const { tagNames } = req.body; // Expecting an array of tag names in the request body
+        if (!Array.isArray(tagNames) || tagNames.length === 0) {
+            return res.status(400).json({ error: "Invalid or missing tag names" });
+        }
+
+        // Find leads that are associated with all the given tags
+        const leads = await Lead.find({ tags: { $all: tagNames.map(name => name.toLowerCase()) } });
+
+        // Return detailed information about each lead
+        res.status(200).json({
+            success: true,
+            data: leads // This will return the entire lead objects
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
 };
 
 

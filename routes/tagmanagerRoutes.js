@@ -10,7 +10,7 @@ router.get("/alltags", tagManagerController.getTags);
 router.get("/tag/:name", tagManagerController.getTagByName);
 router.put("/updatetags/:name", tagManagerController.updateTag);
 router.delete("/deletetags/:name", tagManagerController.deleteTag);
-router.post('/common-tags', tagManagerController.getCommonLeadsAndFilesByTags);
+router.post('/common-leads', tagManagerController.getCommonLeadsInTags);
 router.get('/tags-with-counts', tagManagerController.getAllTagsWithCounts);
 
 module.exports = router;
