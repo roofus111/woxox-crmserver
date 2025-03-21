@@ -34,16 +34,8 @@ const PaymentSchema = new mongoose.Schema(
 
     paymentMethod: {
       type: String,
-      required: true,
-      enum: [
-        "credit",
-        "debit",
-        "bank-transfer",
-        "UPI",
-        "other",
-        "cash",
-      ],
-      default: "cash",
+      enum: ['Cash', 'Cheque', 'Credit Card', 'Debit Card', 'UPI', 'Bank Transfer', 'Other'],
+      required: true
     },
     paymentStatus: {
       type: String,
@@ -64,11 +56,11 @@ const PaymentSchema = new mongoose.Schema(
     refundId: {
       type: String, // Reference to a refund if applicable
     },
-    bankAccountId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'BankAccount',
-      required: true
-    }
+    // bankAccountId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: 'BankAccount',
+    //   required: true
+    // }
   },
   { timestamps: true }
 );

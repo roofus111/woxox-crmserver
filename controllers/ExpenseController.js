@@ -1,5 +1,5 @@
 const { Expense } = require("../models/Expense");
-const BankAccount = require("../models/Account");
+// const BankAccount = require("../models/Account");
 
 // Create a new expense
 exports.createExpense = async (req, res) => {
@@ -20,34 +20,19 @@ exports.createExpense = async (req, res) => {
             refundAmount,
             refundReason,
             originalExpense,
-            bankAccountId
         } = req.body;
 
         // Validate required fields
-        if (!amount || !bankAccountId) {
+        if (!amount) { // Removed bankAccountId check
             return res.status(400).json({ 
-                message: "Amount and bank account ID are required." 
+                message: "Amount is required." 
             });
-        }
-
-        // Find the bank account
-        const bankAccount = await BankAccount.findById(bankAccountId);
-        if (!bankAccount) {
-            return res.status(404).json({ 
-                message: "Bank account not found." 
-            });
-        }
-
-        // Ensure refund amount does not exceed original amount
-        if (isRefunded && refundAmount > amount) {
-            return res.status(400).json({ message: "Refund amount cannot exceed the original expense amount." });
         }
 
         // Build the expense object
         const newExpense = new Expense({
             company: req.user.company._id,
             user: req.user._id,
-            bankAccountId: bankAccountId,
             amount,
             description,
             date: date || Date.now(),
@@ -66,37 +51,15 @@ exports.createExpense = async (req, res) => {
             originalExpense: originalExpense || null
         });
 
-        // Create transaction data
-        const transactionData = {
-            company: req.user.company._id,
-            date: date || Date.now(),
-            type: 'expense',
-            amount: amount,
-            description: description,
-            category: categories && categories.length > 0 ? 
-                      (typeof categories[0] === 'object' ? categories[0].name : categories[0]) : 
-                      'Uncategorized',
-            paymentMethod: paymentMethod ? paymentMethod.toLowerCase() : 'cash',
-            reference: newExpense._id.toString()
-        };
-
+       
         try {
-            // Add transaction to bank account
-            await bankAccount.addTransaction(transactionData, req.user._id);
-            // Save expense to database
             await newExpense.save();
             
             res.status(201).json({
                 message: "Expense created successfully!",
                 expense: newExpense,
-                accountBalance: bankAccount.balance
             });
         } catch (error) {
-            if (error.message === 'Insufficient balance') {
-                return res.status(400).json({ 
-                    message: "Insufficient balance in the account." 
-                });
-            }
             throw error;
         }
 

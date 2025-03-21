@@ -1,10 +1,18 @@
 const TagManager = require('../models/Tagmanager');
+const company = require('../models/Company');
 
 exports.createTag = async (req, res) => {
   try {
     const { name, description } = req.body;
+    
+    // Check if company exists in the user object
+    if (!req.user.company || !req.user.company._id) {
+      return res.status(400).json({ error: "Company ID is missing" });
+    }
+    
+    const companyId = req.user.company._id; // Define companyId
 
-    const existingTag = await TagManager.findOne({ name: name.toLowerCase(), company: req.user.company._id });
+    const existingTag = await TagManager.findOne({ name: name.toLowerCase(), company: companyId });
     if (existingTag) {
       return res.status(400).json({ error: "Tag already exists" });
     }
@@ -12,7 +20,7 @@ exports.createTag = async (req, res) => {
     const newTag = new TagManager({ 
       name: name.toLowerCase(), 
       description, 
-      company: req.user.company._id
+      company: companyId // Ensure company is set
     });
     await newTag.save();
 
@@ -24,14 +32,20 @@ exports.createTag = async (req, res) => {
 
 exports.getTags = async (req, res) => {
   try {
+    const companyId = req.user.company._id; // Define companyId
+    console.log("Fetching tags for company ID:", companyId);
     const tags = await TagManager.find({ 
-      company: req.user.company._id
+      company: companyId
     }).sort({ usageCount: -1 });
+    
+    console.log("Tags found:", tags);
     res.json(tags);
   } catch (error) {
+    console.error("Error fetching tags:", error);
     res.status(500).json({ error: "Error fetching tags", details: error.message });
   }
 };
+
 
 exports.getTagByName = async (req, res) => {
   try {
@@ -83,8 +97,6 @@ exports.updateTag = async (req, res) => {
   }
 };
 
-
-
 exports.deleteTag = async (req, res) => {
   try {
     const tagName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
@@ -104,5 +116,32 @@ exports.deleteTag = async (req, res) => {
     res.json({ message: `Tag '${tagName}' deleted and removed from all leads and files.` });
   } catch (error) {
     res.status(500).json({ error: "Error deleting tag", details: error.message });
+  }
+};
+
+
+exports.getCommonLeadsAndFilesByTags = async (req, res) => {
+  try {
+    const { tags } = req.body; // Expecting an array of tag names
+
+    if (!tags || !Array.isArray(tags) || tags.length === 0) {
+      return res.status(400).json({ error: "Tags must be a non-empty array" });
+    }
+
+    // Find leads and files that contain ALL specified tags
+    const leads = await Lead.find({ tags: { $all: tags } });
+    const files = await File.find({ tags: { $all: tags } });
+
+    if (leads.length === 0 && files.length === 0) {
+      return res.status(404).json({ message: "No common leads or files found for the given tags" });
+    }
+
+    res.json({ 
+      message: "Common leads and files retrieved successfully", 
+      leads, 
+      files 
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Error retrieving common leads and files", details: error.message });
   }
 };
