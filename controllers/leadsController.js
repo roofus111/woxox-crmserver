@@ -47,7 +47,8 @@ exports.getLeadById = async (req, res) => {
     // Fetch the lead from the database
     const lead = await Lead.findById(leadId)
       .populate("assignedTo", "firstName lastName email")
-      .populate("campaignid"); // Populate the 'assignedTo' field if needed
+      .populate("campaignid")
+      .populate("tags", "name"); // Populate the 'assignedTo' field if needed
 
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
@@ -1234,44 +1235,65 @@ exports.addTagsToLead = async (req, res) => {
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
     // Validate all tags exist
-    const validTags = await TagManager.find({ _id: { $in: tags } });
+    const validTags = await TagManager.find({ _id: { $in: tags } }).populate('name'); // Populate tag names
     if (validTags.length !== tags.length) {
       return res.status(400).json({ error: "One or more tags are invalid" });
     }
 
-    // Update lead with tags
-    lead.tags.push(...tags);
-    await lead.save();
+    // Check for existing tags
+    const existingTags = lead.tags.filter(tag => tags.includes(tag.toString()));
+    if (existingTags.length > 0) {
+      return res.status(409).json({ 
+        error: "Tags already exist", 
+        existingTags: existingTags 
+      });
+    }
 
-    res.json({ message: "Tags added successfully", lead });
+    // Filter out tags that are already associated with the lead
+    const newTags = tags.filter(tag => !lead.tags.includes(tag));
+
+    // Update lead with new tags only if there are any new tags
+    if (newTags.length > 0) {
+      lead.tags.push(...newTags);
+      await lead.save();
+
+      // Increment leads count for each tag
+      await Promise.all(validTags.map(tag => tag.incrementLeadsCount()));
+    }
+
+    res.json({ message: "Tags added successfully", lead, tags: validTags }); // Include populated tags in the response
   } catch (error) {
     res.status(500).json({ error: "Error adding tags to lead", details: error.message });
   }
 };
 
-/**
- * Remove a tag from a lead
- */
-exports.removeTagFromLead = async (req, res) => {
+exports.removeTagsFromLead = async (req, res) => {
   try {
-    const { tagId } = req.body; // Tag ID to remove
+    const { tags } = req.body; // Array of tag IDs
     const leadId = req.params.id;
 
     // Validate lead exists
     const lead = await Lead.findById(leadId);
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
-    // Remove tag from lead
-    lead.tags = lead.tags.filter(tag => tag.toString() !== tagId);
+    // Validate all tags exist
+    const validTags = await TagManager.find({ _id: { $in: tags } });
+    if (validTags.length !== tags.length) {
+      return res.status(400).json({ error: "One or more tags are invalid" });
+    }
+
+    // Remove tags from lead
+    lead.tags = lead.tags.filter(tag => !tags.includes(tag.toString()));
     await lead.save();
 
-    res.json({ message: "Tag removed successfully", lead });
+    // Decrement leads count for each tag
+    await Promise.all(validTags.map(tag => tag.decrementLeadsCount()));
+
+    res.json({ message: "Tags removed successfully", lead });
   } catch (error) {
-    res.status(500).json({ error: "Error removing tag from lead", details: error.message });
+    res.status(500).json({ error: "Error removing tags from lead", details: error.message });
   }
 };
-
-
 
 
 

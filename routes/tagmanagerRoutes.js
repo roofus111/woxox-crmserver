@@ -8,8 +8,9 @@ router.use(authenticateUser);
 router.post('/createTag', tagManagerController.createTag);
 router.get("/alltags", tagManagerController.getTags);
 router.get("/tag/:name", tagManagerController.getTagByName);
-router.put("/updatetags/:name", tagManagerController.updateTag);
-router.delete("/deletetags/:name", tagManagerController.deleteTag);
-router.post('/common-tags', tagManagerController.getCommonLeadsAndFilesByTags);
+router.put("/updatetags/:id", tagManagerController.updateTag);
+router.delete("/deletetags/:id", tagManagerController.deleteTag);
+router.post('/common-leads', tagManagerController.getCommonLeadsInTags);
+router.get('/tags-with-counts', tagManagerController.getAllTagsWithCounts);
 
 module.exports = router;

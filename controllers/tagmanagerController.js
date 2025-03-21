@@ -20,7 +20,9 @@ exports.createTag = async (req, res) => {
     const newTag = new TagManager({ 
       name: name.toLowerCase(), 
       description, 
-      company: companyId // Ensure company is set
+      company: companyId, // Ensure company is set
+      leadsCount: 0,      // Initialize leadsCount to 0
+      filesCount: 0       // Initialize filesCount to 0
     });
     await newTag.save();
 
@@ -68,7 +70,7 @@ const File = require('../models/Filehandler');
 exports.updateTag = async (req, res) => {
   try {
     const { newName, description } = req.body;
-    const oldName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
+    const tagId = req.params.id; // Get the tag ID from the request parameters
 
     // Validate input
     if (!newName || typeof newName !== "string") {
@@ -78,18 +80,24 @@ exports.updateTag = async (req, res) => {
       return res.status(400).json({ error: "Invalid or missing description" });
     }
 
-    // Find and update the tag
-    const tag = await TagManager.findOneAndUpdate(
-      { name: oldName, company: req.user.company._id },
+    // Find and update the tag by ID
+    const tag = await TagManager.findByIdAndUpdate(
+      tagId,
       { name: newName.toLowerCase().trim(), description },
       { new: true, runValidators: true }
     );
 
-    if (!tag) return res.status(404).json({ error: `Tag '${oldName}' not found` });
+    if (!tag) return res.status(404).json({ error: `Tag with ID '${tagId}' not found` });
 
-    // Update references in Leads and Files
-    await Lead.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
-    await File.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
+    // Update references in Leads and Files using the tag's ObjectId
+    await Lead.updateMany(
+      { tags: tagId }, // Find leads that have the tag by ObjectId
+      { $set: { "tags.$": tagId } } // Update to the new tag ObjectId
+    );
+    await File.updateMany(
+      { tags: tagId }, // Find files that have the tag by ObjectId
+      { $set: { "tags.$": tagId } } // Update to the new tag ObjectId
+    );
 
     res.json({ message: "Tag updated successfully", tag });
   } catch (error) {
@@ -97,51 +105,72 @@ exports.updateTag = async (req, res) => {
   }
 };
 
+
+exports.getAllTagsWithCounts = async (req, res) => {
+  try {
+    const tags = await TagManager.find().select("name leadsCount filesCount"); // Fetch relevant fields
+
+    const formattedTags = tags.reduce((acc, tag) => {
+      acc[tag.name] = {
+        leads: tag.leadsCount,
+        files: tag.filesCount
+      };
+      return acc;
+    }, {});
+
+    return res.status(200).json({ success: true, data: formattedTags });
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// Controller to get details of leads that are commonly present in all the given tags
+exports.getCommonLeadsInTags = async (req, res) => {
+    try {
+        const { tagNames } = req.body; // Expecting an array of tag names in the request body
+        if (!Array.isArray(tagNames) || tagNames.length === 0) {
+            return res.status(400).json({ error: "Invalid or missing tag names" });
+        }
+
+        // Find leads that are associated with all the given tags
+        const leads = await Lead.find({ tags: { $all: tagNames.map(name => name.toLowerCase()) } });
+
+        // Return detailed information about each lead
+        res.status(200).json({
+            success: true,
+            data: leads // This will return the entire lead objects
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: error.message
+        });
+    }
+};
+
+// Controller to delete a tag by ID
 exports.deleteTag = async (req, res) => {
+  const { id } = req.params; // Get the tag ID from the request parameters
+
   try {
-    const tagName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
+    const tag = await TagManager.findByIdAndDelete(id); // Attempt to delete the tag
 
-    // Find and delete the tag
-    const tag = await TagManager.findOneAndDelete({ 
-      name: tagName, 
-      company: req.user.company._id
-    });
+    if (!tag) {
+      return res.status(404).json({ message: 'Tag not found' }); // Handle case where tag does not exist
+    }
 
-    if (!tag) return res.status(404).json({ error: `Tag '${tagName}' not found` });
+    // Remove the tag from all leads using the tag's ObjectId
+    await Lead.updateMany(
+      { tags: id }, // Find leads that have the deleted tag by ObjectId
+      { $pull: { tags: id } } // Remove the tag from their tags array
+    );
 
-    // Remove tag from Leads and Files
-    await Lead.updateMany({}, { $pull: { tags: tagName } });
-    await File.updateMany({}, { $pull: { tags: tagName } });
-
-    res.json({ message: `Tag '${tagName}' deleted and removed from all leads and files.` });
+    return res.status(200).json({ message: 'Tag deleted successfully' }); // Success response
   } catch (error) {
-    res.status(500).json({ error: "Error deleting tag", details: error.message });
+    return res.status(500).json({ message: 'Error deleting tag', error }); // Handle errors
   }
 };
 
 
-exports.getCommonLeadsAndFilesByTags = async (req, res) => {
-  try {
-    const { tags } = req.body; // Expecting an array of tag names
-
-    if (!tags || !Array.isArray(tags) || tags.length === 0) {
-      return res.status(400).json({ error: "Tags must be a non-empty array" });
-    }
-
-    // Find leads and files that contain ALL specified tags
-    const leads = await Lead.find({ tags: { $all: tags } });
-    const files = await File.find({ tags: { $all: tags } });
-
-    if (leads.length === 0 && files.length === 0) {
-      return res.status(404).json({ message: "No common leads or files found for the given tags" });
-    }
-
-    res.json({ 
-      message: "Common leads and files retrieved successfully", 
-      leads, 
-      files 
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Error retrieving common leads and files", details: error.message });
-  }
-};
