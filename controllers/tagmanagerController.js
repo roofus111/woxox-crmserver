@@ -20,7 +20,9 @@ exports.createTag = async (req, res) => {
     const newTag = new TagManager({ 
       name: name.toLowerCase(), 
       description, 
-      company: companyId // Ensure company is set
+      company: companyId, // Ensure company is set
+      leadsCount: 0,      // Initialize leadsCount to 0
+      filesCount: 0       // Initialize filesCount to 0
     });
     await newTag.save();
 
@@ -145,3 +147,24 @@ exports.getCommonLeadsAndFilesByTags = async (req, res) => {
     res.status(500).json({ error: "Error retrieving common leads and files", details: error.message });
   }
 };
+
+exports.getAllTagsWithCounts = async (req, res) => {
+  try {
+    const tags = await TagManager.find().select("name leadsCount filesCount"); // Fetch relevant fields
+
+    const formattedTags = tags.reduce((acc, tag) => {
+      acc[tag.name] = {
+        leads: tag.leadsCount,
+        files: tag.filesCount
+      };
+      return acc;
+    }, {});
+
+    return res.status(200).json({ success: true, data: formattedTags });
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+

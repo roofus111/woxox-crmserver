@@ -14,47 +14,57 @@ const tagSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true,
+    // required: true,
     trim: true
   },
-  usageCount: {
+  leadsCount: {
     type: Number,
-    default: 0,
-    min: 0 // Ensures usageCount doesn't go negative
-  }
+    default: 0
+  },
+  filesCount: {
+    type: Number,
+    default: 0
+  },
 }, { timestamps: true });
 
-/**
- * Increment or decrement the usageCount of a tag.
- * If the tag does not exist and is being added, it will be created.
- * If the usageCount reaches 0, the tag will be deleted.
- *
- * @param {String} tagName - The name of the tag to update.
- * @param {Boolean} isAdding - True to increment, False to decrement.
- */
-tagSchema.statics.updateUsage = async function (tagName, isAdding) {
-  try {
-    if (isAdding) {
-      await this.findOneAndUpdate(
-        { name: tagName },
-        { $inc: { usageCount: 1 } },
-        { new: true, upsert: true } // Create tag if it doesn't exist
-      );
-    } else {
-      const tag = await this.findOneAndUpdate(
-        { name: tagName, usageCount: { $gt: 0 } },
-        { $inc: { usageCount: -1 } },
-        { new: true }
-      );
+// Method to increment leads count
+tagSchema.methods.incrementLeadsCount = function() {
+  this.leadsCount += 1;
+  return this.save();
+};
 
-      if (tag && tag.usageCount === 0) {
-        await this.deleteOne({ name: tagName });
-        console.log(`Tag "${tagName}" deleted as its usage count reached 0.`);
-      }
-    }
-  } catch (error) {
-    console.error("Error updating tag usage:", error);
+// Method to decrement leads count
+tagSchema.methods.decrementLeadsCount = function() {
+  if (this.leadsCount > 0) {
+    this.leadsCount -= 1;
+    return this.save();
   }
+  return Promise.resolve(); // No change if count is already 0
+};
+
+// Method to increment files count
+tagSchema.methods.incrementFilesCount = function() {
+  this.filesCount += 1;
+  return this.save();
+};
+
+// Method to decrement files count
+tagSchema.methods.decrementFilesCount = function() {
+  if (this.filesCount > 0) {
+    this.filesCount -= 1;
+    return this.save();
+  }
+  return Promise.resolve(); // No change if count is already 0
+};
+
+// Method to get counts in the desired format
+tagSchema.methods.getCounts = function() {
+  return {
+    [this.name]: {
+      leads: this.leadsCount,
+      files: this.filesCount
+    }
+  };
 };
 
 const TagManager = mongoose.model('TagManager', tagSchema);

@@ -2192,5 +2192,5 @@ router.get('/leadInsight/:assigneeId' ,leadsController.homeInsight);
 router.get('/count-by-campaign',leadsController. getLeadsCountByCampaignAndStatus);
 router.get('/count',leadsController.getLeadStatus)
 router.put('/:id/tags/add', leadsController.addTagsToLead); // Add tags to lead
-router.put('/:id/tags/remove', leadsController.removeTagFromLead);
+router.put('/:id/tags/remove', leadsController.removeTagsFromLead);
 module.exports = router;
