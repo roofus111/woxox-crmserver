@@ -1235,7 +1235,7 @@ exports.addTagsToLead = async (req, res) => {
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
     // Validate all tags exist
-    const validTags = await TagManager.find({ _id: { $in: tags } });
+    const validTags = await TagManager.find({ _id: { $in: tags } }).populate('name'); // Populate tag names
     if (validTags.length !== tags.length) {
       return res.status(400).json({ error: "One or more tags are invalid" });
     }
@@ -1261,7 +1261,7 @@ exports.addTagsToLead = async (req, res) => {
       await Promise.all(validTags.map(tag => tag.incrementLeadsCount()));
     }
 
-    res.json({ message: "Tags added successfully", lead });
+    res.json({ message: "Tags added successfully", lead, tags: validTags }); // Include populated tags in the response
   } catch (error) {
     res.status(500).json({ error: "Error adding tags to lead", details: error.message });
   }

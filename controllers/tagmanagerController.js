@@ -70,7 +70,7 @@ const File = require('../models/Filehandler');
 exports.updateTag = async (req, res) => {
   try {
     const { newName, description } = req.body;
-    const oldName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
+    const tagId = req.params.id; // Get the tag ID from the request parameters
 
     // Validate input
     if (!newName || typeof newName !== "string") {
@@ -80,47 +80,30 @@ exports.updateTag = async (req, res) => {
       return res.status(400).json({ error: "Invalid or missing description" });
     }
 
-    // Find and update the tag
-    const tag = await TagManager.findOneAndUpdate(
-      { name: oldName, company: req.user.company._id },
+    // Find and update the tag by ID
+    const tag = await TagManager.findByIdAndUpdate(
+      tagId,
       { name: newName.toLowerCase().trim(), description },
       { new: true, runValidators: true }
     );
 
-    if (!tag) return res.status(404).json({ error: `Tag '${oldName}' not found` });
+    if (!tag) return res.status(404).json({ error: `Tag with ID '${tagId}' not found` });
 
-    // Update references in Leads and Files
-    await Lead.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
-    await File.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
+    // Update references in Leads and Files using the tag's ObjectId
+    await Lead.updateMany(
+      { tags: tagId }, // Find leads that have the tag by ObjectId
+      { $set: { "tags.$": tagId } } // Update to the new tag ObjectId
+    );
+    await File.updateMany(
+      { tags: tagId }, // Find files that have the tag by ObjectId
+      { $set: { "tags.$": tagId } } // Update to the new tag ObjectId
+    );
 
     res.json({ message: "Tag updated successfully", tag });
   } catch (error) {
     res.status(500).json({ error: "Error updating tag", details: error.message });
   }
 };
-
-exports.deleteTag = async (req, res) => {
-  try {
-    const tagName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
-
-    // Find and delete the tag
-    const tag = await TagManager.findOneAndDelete({ 
-      name: tagName, 
-      company: req.user.company._id
-    });
-
-    if (!tag) return res.status(404).json({ error: `Tag '${tagName}' not found` });
-
-    // Remove tag from Leads and Files
-    await Lead.updateMany({}, { $pull: { tags: tagName } });
-    await File.updateMany({}, { $pull: { tags: tagName } });
-
-    res.json({ message: `Tag '${tagName}' deleted and removed from all leads and files.` });
-  } catch (error) {
-    res.status(500).json({ error: "Error deleting tag", details: error.message });
-  }
-};
-
 
 
 exports.getAllTagsWithCounts = async (req, res) => {
@@ -165,6 +148,29 @@ exports.getCommonLeadsInTags = async (req, res) => {
             error: error.message
         });
     }
+};
+
+// Controller to delete a tag by ID
+exports.deleteTag = async (req, res) => {
+  const { id } = req.params; // Get the tag ID from the request parameters
+
+  try {
+    const tag = await TagManager.findByIdAndDelete(id); // Attempt to delete the tag
+
+    if (!tag) {
+      return res.status(404).json({ message: 'Tag not found' }); // Handle case where tag does not exist
+    }
+
+    // Remove the tag from all leads using the tag's ObjectId
+    await Lead.updateMany(
+      { tags: id }, // Find leads that have the deleted tag by ObjectId
+      { $pull: { tags: id } } // Remove the tag from their tags array
+    );
+
+    return res.status(200).json({ message: 'Tag deleted successfully' }); // Success response
+  } catch (error) {
+    return res.status(500).json({ message: 'Error deleting tag', error }); // Handle errors
+  }
 };
 
 
