@@ -48,7 +48,7 @@ exports.getLeadById = async (req, res) => {
     const lead = await Lead.findById(leadId)
       .populate("assignedTo", "firstName lastName email")
       .populate("campaignid")
-      .populate("tags"); // Populate the 'assignedTo' field if needed
+      .populate("tags", "name"); // Populate the 'assignedTo' field if needed
 
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
