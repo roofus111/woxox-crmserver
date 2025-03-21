@@ -353,6 +353,8 @@ router.get("/files/:leadId", fileController.getFilesByLeadId);
  *         description: Unauthorized
  */
 router.get("/leads", fileController.listAllLeadsFromFilesAndFolders);
+router.put('/:id/tags/add', fileController.addTagsToFile); // Add tags to file
+router.put('/:id/tags/remove', fileController.removeTagFromFile);
 
 
 module.exports = router;

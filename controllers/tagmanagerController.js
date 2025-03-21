@@ -1,136 +1,147 @@
-const Tag = require("../models/Tagmanager");
+const TagManager = require('../models/Tagmanager');
+const company = require('../models/Company');
 
-// Add a tag to an item in a collection
-exports.addTag = async (req, res) => {
+exports.createTag = async (req, res) => {
   try {
-    const { tagName, itemId, collectionName } = req.body;
+    const { name, description } = req.body;
+    
+    // Check if company exists in the user object
+    if (!req.user.company || !req.user.company._id) {
+      return res.status(400).json({ error: "Company ID is missing" });
+    }
+    
+    const companyId = req.user.company._id; // Define companyId
 
-    if (!tagName || !itemId || !collectionName) {
-      return res.status(400).json({ message: "All fields are required" });
+    const existingTag = await TagManager.findOne({ name: name.toLowerCase(), company: companyId });
+    if (existingTag) {
+      return res.status(400).json({ error: "Tag already exists" });
     }
 
-    const tag = await Tag.findOneAndUpdate(
-      { name: tagName },
-      { $addToSet: { taggedItems: { itemId, collectionName } } },
-      { upsert: true, new: true }
+    const newTag = new TagManager({ 
+      name: name.toLowerCase(), 
+      description, 
+      company: companyId // Ensure company is set
+    });
+    await newTag.save();
+
+    res.status(201).json({ message: "Tag created successfully", tag: newTag });
+  } catch (error) {
+    res.status(500).json({ error: "Error creating tag", details: error.message });
+  }
+};
+
+exports.getTags = async (req, res) => {
+  try {
+    const companyId = req.user.company._id; // Define companyId
+    console.log("Fetching tags for company ID:", companyId);
+    const tags = await TagManager.find({ 
+      company: companyId
+    }).sort({ usageCount: -1 });
+    
+    console.log("Tags found:", tags);
+    res.json(tags);
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    res.status(500).json({ error: "Error fetching tags", details: error.message });
+  }
+};
+
+
+exports.getTagByName = async (req, res) => {
+  try {
+    const tag = await TagManager.findOne({ 
+      name: req.params.name.toLowerCase(), 
+      company: req.user.company._id
+    });
+
+    if (!tag) return res.status(404).json({ error: "Tag not found" });
+
+    res.json(tag);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching tag", details: error.message });
+  }
+};
+
+const Lead = require('../models/Lead');
+const File = require('../models/Filehandler');
+
+exports.updateTag = async (req, res) => {
+  try {
+    const { newName, description } = req.body;
+    const oldName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
+
+    // Validate input
+    if (!newName || typeof newName !== "string") {
+      return res.status(400).json({ error: "Invalid or missing new tag name" });
+    }
+    if (!description || typeof description !== "string") {
+      return res.status(400).json({ error: "Invalid or missing description" });
+    }
+
+    // Find and update the tag
+    const tag = await TagManager.findOneAndUpdate(
+      { name: oldName, company: req.user.company._id },
+      { name: newName.toLowerCase().trim(), description },
+      { new: true, runValidators: true }
     );
 
-    res.status(200).json({ message: "Tag added successfully", tag });
+    if (!tag) return res.status(404).json({ error: `Tag '${oldName}' not found` });
+
+    // Update references in Leads and Files
+    await Lead.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
+    await File.updateMany({ tags: oldName }, { $set: { "tags.$": newName } });
+
+    res.json({ message: "Tag updated successfully", tag });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ error: "Error updating tag", details: error.message });
   }
 };
 
-// Get multiple tags along with their tagged items and counts
-exports.getMultipleTags = async (req, res) => {
-    try {
-      const { tagNames } = req.body; // Expecting an array of tag names
-  
-      if (!Array.isArray(tagNames) || tagNames.length === 0) {
-        return res.status(400).json({ message: "tagNames must be a non-empty array" });
-      }
-  
-      const tags = await Tag.find({ name: { $in: tagNames } });
-  
-      if (!tags.length) {
-        return res.status(404).json({ message: "No tags found" });
-      }
-  
-      const response = tags.map(tag => ({
-        tagName: tag.name,
-        count: tag.taggedItems.length,
-        taggedItems: tag.taggedItems,
-      }));
-  
-      res.status(200).json(response);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Internal Server Error" });
-    }
-  };
-  
-// Update tag name
-const mongoose = require("mongoose");
-
-// Update a tag name by ID
-exports.updateTagById = async (req, res) => {
+exports.deleteTag = async (req, res) => {
   try {
-    const { tagId, newTagName } = req.body;
+    const tagName = req.params.name.toLowerCase().trim(); // Ensure lowercase & trimmed
 
-    if (!mongoose.Types.ObjectId.isValid(tagId) || !newTagName) {
-      return res.status(400).json({ message: "Valid tagId and newTagName are required" });
-    }
+    // Find and delete the tag
+    const tag = await TagManager.findOneAndDelete({ 
+      name: tagName, 
+      company: req.user.company._id
+    });
 
-    const updatedTag = await Tag.findByIdAndUpdate(
-      tagId,
-      { $set: { name: newTagName } },
-      { new: true }
-    );
+    if (!tag) return res.status(404).json({ error: `Tag '${tagName}' not found` });
 
-    if (!updatedTag) {
-      return res.status(404).json({ message: "Tag not found" });
-    }
+    // Remove tag from Leads and Files
+    await Lead.updateMany({}, { $pull: { tags: tagName } });
+    await File.updateMany({}, { $pull: { tags: tagName } });
 
-    res.status(200).json({ message: "Tag updated successfully", updatedTag });
+    res.json({ message: `Tag '${tagName}' deleted and removed from all leads and files.` });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ error: "Error deleting tag", details: error.message });
   }
 };
 
-// Update tagged items by tag ID (Add or Remove)
-exports.updateTaggedItemsById = async (req, res) => {
+
+exports.getCommonLeadsAndFilesByTags = async (req, res) => {
   try {
-    const { tagId, itemId, collectionName, action } = req.body;
+    const { tags } = req.body; // Expecting an array of tag names
 
-    if (!mongoose.Types.ObjectId.isValid(tagId) || !itemId || !collectionName || !action) {
-      return res.status(400).json({ message: "Valid tagId, itemId, collectionName, and action are required" });
+    if (!tags || !Array.isArray(tags) || tags.length === 0) {
+      return res.status(400).json({ error: "Tags must be a non-empty array" });
     }
 
-    let updateOperation;
-    if (action === "add") {
-      updateOperation = { $addToSet: { taggedItems: { itemId, collectionName } } };
-    } else if (action === "remove") {
-      updateOperation = { $pull: { taggedItems: { itemId, collectionName } } };
-    } else {
-      return res.status(400).json({ message: "Invalid action. Use 'add' or 'remove'." });
+    // Find leads and files that contain ALL specified tags
+    const leads = await Lead.find({ tags: { $all: tags } });
+    const files = await File.find({ tags: { $all: tags } });
+
+    if (leads.length === 0 && files.length === 0) {
+      return res.status(404).json({ message: "No common leads or files found for the given tags" });
     }
 
-    const updatedTag = await Tag.findByIdAndUpdate(tagId, updateOperation, { new: true });
-
-    if (!updatedTag) {
-      return res.status(404).json({ message: "Tag not found" });
-    }
-
-    res.status(200).json({ message: `Tag ${action}ed successfully`, updatedTag });
+    res.json({ 
+      message: "Common leads and files retrieved successfully", 
+      leads, 
+      files 
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ error: "Error retrieving common leads and files", details: error.message });
   }
 };
-
-
-// Delete a tag by ID
-exports.deleteTagById = async (req, res) => {
-  try {
-    const { tagId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(tagId)) {
-      return res.status(400).json({ message: "Invalid tag ID" });
-    }
-
-    const deletedTag = await Tag.findByIdAndDelete(tagId);
-
-    if (!deletedTag) {
-      return res.status(404).json({ message: "Tag not found" });
-    }
-
-    res.status(200).json({ message: "Tag deleted successfully", deletedTag });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-

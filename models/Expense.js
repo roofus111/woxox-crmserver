@@ -27,11 +27,11 @@ const expenseSchema = new mongoose.Schema({
         ref: "User",
         required: true,
     },
-    bankAccountId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'BankAccount',
-        required: true
-    },
+    // bankAccountId: {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: 'BankAccount',
+    //     required: true
+    // },
     amount: {
         type: Number,
         required: true,
@@ -48,9 +48,9 @@ const expenseSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['Cash', 'Credit Card', 'Debit Card', 'Bank Transfer', 'Other'],
-        default: 'Cash'
-    },
+        enum: ['Cash', 'Cheque', 'Credit Card', 'Debit Card', 'UPI', 'Bank Transfer', 'Other'],
+        required: true
+      },
     receipt: {
         type: String,
         default: ''
@@ -60,7 +60,7 @@ const expenseSchema = new mongoose.Schema({
         ref: 'Project',
         default: null
     },
-    categories: [categorySchema], // Embedded categories with _id
+    category: [categorySchema], // Embedded categories with _id
     recurring: {
         type: Boolean,
         default: false

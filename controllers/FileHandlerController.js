@@ -470,3 +470,53 @@ exports.listAllLeadsFromFilesAndFolders = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+
+const TagManager = require('../models/Tagmanager');
+
+
+exports.addTagsToFile = async (req, res) => {
+  try {
+    const { tags } = req.body; // Array of tag IDs
+    const fileId = req.params.id;
+
+    // Validate file exists
+    const file = await File.findById(fileId);
+    if (!file) return res.status(404).json({ error: "File not found" });
+
+    // Validate all tags exist
+    const validTags = await TagManager.find({ _id: { $in: tags } });
+    if (validTags.length !== tags.length) {
+      return res.status(400).json({ error: "One or more tags are invalid" });
+    }
+
+    // Update file with tags
+    file.tags.push(...tags);
+    await file.save();
+
+    res.json({ message: "Tags added successfully", file });
+  } catch (error) {
+    res.status(500).json({ error: "Error adding tags to file", details: error.message });
+  }
+};
+
+/**
+ * Remove a tag from a file
+ */
+exports.removeTagFromFile = async (req, res) => {
+  try {
+    const { tagId } = req.body; // Tag ID to remove
+    const fileId = req.params.id;
+
+    // Validate file exists
+    const file = await File.findById(fileId);
+    if (!file) return res.status(404).json({ error: "File not found" });
+
+    // Remove tag from file
+    file.tags = file.tags.filter(tag => tag.toString() !== tagId);
+    await file.save();
+
+    res.json({ message: "Tag removed successfully", file });
+  } catch (error) {
+    res.status(500).json({ error: "Error removing tag from file", details: error.message });
+  }
+};

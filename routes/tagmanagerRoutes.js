@@ -5,12 +5,11 @@ const authenticateUser = require('../middleware/authenticateUser');
 
 router.use(authenticateUser);
 
-router.post('/createTag', tagManagerController.addTag);
-router.get("/multiple", tagManagerController.getMultipleTags);
-router.put("/update-name", tagManagerController.updateTagById);
-router.put("/update-items", tagManagerController.updateTaggedItemsById);
-router.delete("/delete/:tagId", tagManagerController.deleteTagById);
-
-
+router.post('/createTag', tagManagerController.createTag);
+router.get("/alltags", tagManagerController.getTags);
+router.get("/tag/:name", tagManagerController.getTagByName);
+router.put("/updatetags/:name", tagManagerController.updateTag);
+router.delete("/deletetags/:name", tagManagerController.deleteTag);
+router.post('/common-tags', tagManagerController.getCommonLeadsAndFilesByTags);
 
 module.exports = router;

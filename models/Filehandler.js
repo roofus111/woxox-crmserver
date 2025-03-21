@@ -32,6 +32,7 @@ const FileSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Lead", // Assuming you have a Lead model already
   },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
   docName: {
     type: String,
     required: true,

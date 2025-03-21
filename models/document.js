@@ -22,6 +22,7 @@ const fileSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
   uploadedAt: {
     type: Date,
     default: Date.now,
