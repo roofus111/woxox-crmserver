@@ -22,11 +22,11 @@ const incomeSchema = new mongoose.Schema({
         ref: "Company",
         required: true,
     },
-    user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-    },
+    // user: {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "User",
+    //     required: true,
+    // },
     amount: {
         type: Number,
         required: true,
@@ -43,7 +43,7 @@ const incomeSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['Cash', 'Cheque', 'Bank Transfer', 'Other'],
+        enum: ['Cash', 'Cheque', 'Credit Card', 'Debit Card', 'UPI', 'Bank Transfer', 'Other'],
         required: true
     },
     currency: {
@@ -70,4 +70,4 @@ const incomeSchema = new mongoose.Schema({
 
 const Income = mongoose.model('Income', incomeSchema);
 
-module.exports = { Income };
+module.exports = Income ;

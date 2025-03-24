@@ -176,7 +176,7 @@ exports.deleteTag = async (req, res) => {
 // Controller to get leads by tag IDs
 exports.getLeadsByTags = async (req, res) => {
   try {
-    const { tagIds } = req.body; // Expecting an array of tag IDs in the request body
+    const tagIds = req.query.tagIds; // Expecting an array of tag IDs in the query parameters
     if (!Array.isArray(tagIds) || tagIds.length === 0) {
       return res.status(400).json({ error: "Invalid or missing tag IDs" });
     }

@@ -35,6 +35,7 @@ const expenseRouter=require('./routes/ExpenseRouter')
 const accountRoutes=require('./routes/accountRoutes')
 const tagMManagerRoutes=require('./routes/tagmanagerRoutes')
 const InsightsRoutes=require('./routes/InsightsRoutes')
+const incomeRoutes=require('./routes/incomeRoutes')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -101,7 +102,7 @@ app.use("/api/blog",Blog)
 app.use("/api/account",accountRoutes)
 app.use("/api/tagmanager",tagMManagerRoutes)
 app.use("/api/Insights",InsightsRoutes)
-
+app.use("/api/income",incomeRoutes)
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
