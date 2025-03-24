@@ -41,6 +41,11 @@ const incomeSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    bankAccountId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Account',
+        required: true
+    },
     paymentMethod: {
         type: String,
         enum: ['Cash', 'Cheque', 'Credit Card', 'Debit Card', 'UPI', 'Bank Transfer', 'Other'],

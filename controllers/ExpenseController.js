@@ -1,5 +1,5 @@
 const { Expense } = require("../models/Expense");
-// const BankAccount = require("../models/Account");
+const BankAccount = require("../models/Account");
 
 // Create a new expense
 exports.createExpense = async (req, res) => {
@@ -20,12 +20,28 @@ exports.createExpense = async (req, res) => {
             refundAmount,
             refundReason,
             originalExpense,
+            bankAccountId
         } = req.body;
 
         // Validate required fields
-        if (!amount) { // Removed bankAccountId check
+        if (!amount || !bankAccountId) {
             return res.status(400).json({ 
-                message: "Amount is required." 
+                message: "Amount and bank account ID are required." 
+            });
+        }
+
+        // Find the bank account
+        const bankAccount = await BankAccount.findById(bankAccountId);
+        if (!bankAccount) {
+            return res.status(404).json({
+                message: "Bank account not found."
+            });
+        }
+
+        // Check if there's sufficient balance
+        if (bankAccount.balance < amount) {
+            return res.status(400).json({
+                message: "Insufficient balance in the bank account."
             });
         }
 
@@ -48,13 +64,26 @@ exports.createExpense = async (req, res) => {
             refundAmount: isRefunded ? refundAmount : 0,
             refundReason: isRefunded ? refundReason : '',
             refundDate: isRefunded ? Date.now() : null,
-            originalExpense: originalExpense || null
+            originalExpense: originalExpense || null,
+            bankAccountId
         });
 
-       
         try {
+            // Create the expense
             await newExpense.save();
             
+            // Add transaction to bank account
+            await bankAccount.addTransaction({
+                company: req.user.company._id,
+                date: date || Date.now(),
+                type: 'expense',
+                amount: amount,
+                description: description,
+                category: categories?.[0]?.name || 'Uncategorized',
+                paymentMethod: paymentMethod,
+                reference: newExpense._id
+            }, req.user._id);
+
             res.status(201).json({
                 message: "Expense created successfully!",
                 expense: newExpense,

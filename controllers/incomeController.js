@@ -1,12 +1,40 @@
 const Income = require("../models/Income");
+const BankAccount = require("../models/Account");
+
 // Create a new income entry
 exports.createIncome = async (req, res) => {
     try {
+        // Create the income entry
         const income = new Income({
             ...req.body,
             company: req.user.company._id
         });
         await income.save();
+
+        // Update the account balance
+        if (req.body.bankAccountId) {
+            const account = await BankAccount.findOne({ 
+                _id: req.body.bankAccountId,
+                company: req.user.company._id 
+            });
+
+            if (!account) {
+                return res.status(404).json({ message: "Account not found" });
+            }
+
+            // Add transaction to account
+            await account.addTransaction({
+                company: req.user.company._id,
+                date: income.date,
+                type: 'income',
+                amount: income.amount,
+                description: income.description,
+                category: income.category[0]?.name || 'Uncategorized',
+                paymentMethod: income.paymentMethod,
+                reference: income._id
+            }, req.user._id);
+        }
+
         res.status(201).json(income);
     } catch (error) {
         res.status(400).json({ message: error.message });
