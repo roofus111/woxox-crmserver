@@ -56,16 +56,32 @@ exports.getBankAccounts = async (req, res) => {
 
 exports.getBankAccountById = async (req, res) => {
   try {
+    // Validate if ID is provided
+    if (!req.params.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Account ID is required'
+      });
+    }
+
+    // Log the search parameters for debugging
+    console.log('Searching for account with:', {
+      accountId: req.params.id,
+      companyId: req.user.company._id
+    });
+
     const account = await Account.findOne({
       _id: req.params.id,
-      company: req.user.company._id,
-      isActive: true
+      company: req.user.company._id
     });
 
     if (!account) {
+      // Log the failed search for debugging
+      console.log('Account not found with the provided parameters');
       return res.status(404).json({
         success: false,
-        error: 'Bank account not found'
+        error: 'Bank account not found',
+        details: 'The account either does not exist or does not belong to your company'
       });
     }
 
@@ -74,6 +90,7 @@ exports.getBankAccountById = async (req, res) => {
       data: account
     });
   } catch (error) {
+    console.error('Error in getBankAccountById:', error);
     res.status(500).json({
       success: false,
       error: error.message
