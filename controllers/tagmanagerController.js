@@ -173,4 +173,29 @@ exports.deleteTag = async (req, res) => {
   }
 };
 
+// Controller to get leads by tag IDs
+exports.getLeadsByTags = async (req, res) => {
+  try {
+    const { tagIds } = req.body; // Expecting an array of tag IDs in the request body
+    if (!Array.isArray(tagIds) || tagIds.length === 0) {
+      return res.status(400).json({ error: "Invalid or missing tag IDs" });
+    }
+
+    // Find leads that are associated with any of the given tag IDs
+    const leads = await Lead.find({ tags: { $in: tagIds } });
+
+    // Return detailed information about each lead
+    res.status(200).json({
+      success: true,
+      data: leads // This will return the entire lead objects
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server Error',
+      error: error.message
+    });
+  }
+};
+
 
