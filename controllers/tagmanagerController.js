@@ -182,7 +182,8 @@ exports.getLeadsByTags = async (req, res) => {
     }
 
     // Find leads that are associated with any of the given tag IDs
-    const leads = await Lead.find({ tags: { $in: tagIds } });
+    const leads = await Lead.find({ tags: { $in: tagIds } })
+    .populate('campaignid', 'name');
 
     // Return detailed information about each lead
     res.status(200).json({
