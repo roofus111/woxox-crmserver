@@ -143,6 +143,96 @@ exports.getLeadActivitiesByCompany = async (req, res) => {
   }
 };
 
+exports.getActivityLogsByDate = async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate, 
+      assignedTo, 
+      action, 
+      sort = '-timestamp',
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    if (!req.user || !req.user.company || !req.user.company._id) {
+      return res.status(403).json({ message: 'Unauthorized: Invalid company information in token' });
+    }
+
+    const companyId = req.user.company._id;
+    
+    // Build the query filter
+    const filter = { company: companyId };
+    
+    // Date filters
+    if (startDate || endDate) {
+      filter.timestamp = {};
+      if (startDate) filter.timestamp.$gte = new Date(startDate);
+      if (endDate) {
+        // Add one day to endDate and subtract 1 millisecond to include the entire day
+        const nextDay = new Date(endDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        nextDay.setMilliseconds(nextDay.getMilliseconds() - 1);
+        filter.timestamp.$lte = nextDay;
+      }
+    }
+    
+    // User filter (assignedTo)
+    if (assignedTo) {
+      filter.userId = assignedTo;
+    }
+    
+    // Action filter
+    if (action) {
+      filter.action = action;
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Query the database for activities
+    const activities = await LeadActivity.find(filter)
+      .populate('userId', 'name email')
+      .populate('leadId', 'name status')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get the total count for pagination metadata
+    const totalActivities = await LeadActivity.countDocuments(filter);
+
+    // Group activities by date
+    const groupedByDate = activities.reduce((acc, activity) => {
+      const date = moment(activity.timestamp).format('YYYY-MM-DD');
+      
+      if (!acc[date]) {
+        acc[date] = [];
+      }
+      
+      acc[date].push(activity);
+      return acc;
+    }, {});
+
+    // Format the response
+    const formattedResponse = Object.keys(groupedByDate).map(date => ({
+      date,
+      activities: groupedByDate[date]
+    })).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+
+    // Send the response
+    res.status(200).json({
+      totalActivities,
+      totalPages: Math.ceil(totalActivities / parseInt(limit)),
+      currentPage: parseInt(page),
+      groupedActivities: formattedResponse
+    });
+    
+  } catch (error) {
+    console.error('Error fetching grouped activity logs:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 
 
 

@@ -379,4 +379,5 @@ router.delete('/:leadId', leadActivityController.deleteLeadActivities);
  *       bearerFormat: JWT
  */
 router.get('/get/insight',leadActivityController.getLeadActivitiesByCompany);
+router.get('/get/activitylogs',leadActivityController.getActivityLogsByDate);
 module.exports = router;
