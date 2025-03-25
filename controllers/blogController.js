@@ -43,100 +43,102 @@ exports.createPost = async (req, res) => {
 };
 
   
-  exports.getAllPosts = async (req, res) => {
-    try {
-      const posts = await Blog.find().populate('author', 'name email'); // Populate author details
-      res.status(200).json(posts);
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+exports.getAllPosts = async (req, res) => {
+  try {
+    const posts = await Blog.find()
+      .sort({ createdAt: -1 }) // Sort by creation date in descending order (newest first)
+      .populate('author', 'name email'); // Populate author details
+    res.status(200).json(posts);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+// exports.getPostById = async (req, res) => {
+//   try {
+//     const post = await Blog.findById(req.params.id).populate('author', 'name email');
+//     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+//     res.status(200).json(post);
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+exports.updatePost = async (req, res) => {
+  try {
+    const { id } = req.params; // Get post ID from URL params
+    const { title, content, excerpt, status, tags, seo } = req.body;
+    const featuredImage = req.file ? req.file.filename : null;
+    // Handle new image upload
+
+    // Find the post by ID
+    const post = await Blog.findById(id);
+    if (!post) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
     }
-  };
-  // exports.getPostById = async (req, res) => {
-  //   try {
-  //     const post = await Blog.findById(req.params.id).populate('author', 'name email');
-  //     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-  //     res.status(200).json(post);
-  //   } catch (error) {
-  //     res.status(500).json({ success: false, message: error.message });
-  //   }
-  // };
-  exports.updatePost = async (req, res) => {
-    try {
-      const { id } = req.params; // Get post ID from URL params
-      const { title, content, excerpt, status, tags, seo } = req.body;
-      const featuredImage = req.file ? req.file.filename : null;
-      // Handle new image upload
-  
-      // Find the post by ID
-      const post = await Blog.findById(id);
-      if (!post) {
-        return res.status(404).json({ success: false, message: 'Post not found' });
+
+    // Update slug if the title changes
+    if (title && title !== post.title) {
+      post.slug = slugify(title, { lower: true, strict: true });
+
+      // Ensure slug is unique
+      const existingPost = await Blog.findOne({ slug: post.slug, _id: { $ne: id } });
+      if (existingPost) {
+        return res.status(400).json({ success: false, message: 'A post with this title already exists' });
       }
-  
-      // Update slug if the title changes
-      if (title && title !== post.title) {
-        post.slug = slugify(title, { lower: true, strict: true });
-  
-        // Ensure slug is unique
-        const existingPost = await Blog.findOne({ slug: post.slug, _id: { $ne: id } });
-        if (existingPost) {
-          return res.status(400).json({ success: false, message: 'A post with this title already exists' });
-        }
-      }
-  
-      // Ensure tags is always an array
-      const tagsArray = Array.isArray(tags) ? tags : post.tags;
-  
-      // Generate excerpt if not provided
-      post.excerpt = excerpt || content?.substring(0, 300) + '...';
-  
-      // Update related posts based on new tags
-      if (tagsArray.length > 0) {
-        const relatedPosts = await Blog.find({
-          tags: { $in: tagsArray },
-          _id: { $ne: post._id }
-        }).limit(5);
-        post.relatedPosts = relatedPosts.map(p => p._id);
-      }
-  
-      // Update the `publishedAt` field when transitioning to `published`
-      if (status && status === 'published' && !post.publishedAt) {
-        post.publishedAt = new Date();
-      }
-  
-      // Apply updates
-      post.title = title || post.title;
-      post.content = content || post.content;
-      post.status = status || post.status;
-      post.tags = tagsArray;
-      post.seo = seo || post.seo;
-      post.featuredImage = featuredImage || post.featuredImage;
-      post.updatedAt = new Date();
-      post.version += 1; // Increment version
-  
-      await post.save();
-  
-      res.status(200).json({ success: true, message: 'Post updated successfully', post });
-  
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal Server Error',
-        error: error.message
-      });
     }
-  };
-  exports.deletePost = async (req, res) => {
-    try {
-      const deletedPost = await Blog.findByIdAndDelete(req.params.id);
-      if (!deletedPost) return res.status(404).json({ success: false, message: 'Post not found' });
-  
-      res.status(200).json({ success: true, message: 'Post deleted successfully' });
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+
+    // Ensure tags is always an array
+    const tagsArray = Array.isArray(tags) ? tags : post.tags;
+
+    // Generate excerpt if not provided
+    post.excerpt = excerpt || content?.substring(0, 300) + '...';
+
+    // Update related posts based on new tags
+    if (tagsArray.length > 0) {
+      const relatedPosts = await Blog.find({
+        tags: { $in: tagsArray },
+        _id: { $ne: post._id }
+      }).limit(5);
+      post.relatedPosts = relatedPosts.map(p => p._id);
     }
-  };
+
+    // Update the `publishedAt` field when transitioning to `published`
+    if (status && status === 'published' && !post.publishedAt) {
+      post.publishedAt = new Date();
+    }
+
+    // Apply updates
+    post.title = title || post.title;
+    post.content = content || post.content;
+    post.status = status || post.status;
+    post.tags = tagsArray;
+    post.seo = seo || post.seo;
+    post.featuredImage = featuredImage || post.featuredImage;
+    post.updatedAt = new Date();
+    post.version += 1; // Increment version
+
+    await post.save();
+
+    res.status(200).json({ success: true, message: 'Post updated successfully', post });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+      error: error.message
+    });
+  }
+};
+exports.deletePost = async (req, res) => {
+  try {
+    const deletedPost = await Blog.findByIdAndDelete(req.params.id);
+    if (!deletedPost) return res.status(404).json({ success: false, message: 'Post not found' });
+
+    res.status(200).json({ success: true, message: 'Post deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
  
 
 exports.getPostById = async (req, res) => {
