@@ -30,7 +30,7 @@ const expenseSchema = new mongoose.Schema({
     bankAccountId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Account',
-        required: true
+        // required: true
     },
     amount: {
         type: Number,

@@ -251,4 +251,177 @@ router.put('/updateexpense/:id', ExpenseController.updateExpense);
  */
 router.delete('/deleteexpense/:id', ExpenseController.deleteExpense);
 
+/**
+ * @swagger
+ * /api/expense/{expenseId}/category:
+ *   post:
+ *     tags: [Expenses]
+ *     summary: Add a category to an expense
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: Name of the category
+ *               description:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Optional description of the category
+ *     responses:
+ *       200:
+ *         description: Category added successfully
+ *       400:
+ *         description: Invalid input or category already exists
+ *       404:
+ *         description: Expense not found
+ */
+router.post('/category/:expenseId', ExpenseController.addCategory);
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}/categories:
+ *   get:
+ *     tags: [Expenses]
+ *     summary: Get all categories for an expense
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Categories retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 categories:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Category'
+ *       404:
+ *         description: Expense not found
+ */
+router.get('/categories/:expenseId', ExpenseController.getCategories);
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}/category/{categoryId}:
+ *   get:
+ *     tags: [Expenses]
+ *     summary: Get a specific category by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Category retrieved successfully
+ *       404:
+ *         description: Expense or category not found
+ */
+router.get('/get/:expenseId/:categoryId', ExpenseController.getCategoryById);
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}/category/{categoryId}:
+ *   put:
+ *     tags: [Expenses]
+ *     summary: Update a specific category
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *                 description: New name for the category
+ *               description:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: New description for the category
+ *     responses:
+ *       200:
+ *         description: Category updated successfully
+ *       400:
+ *         description: Invalid input or category name already exists
+ *       404:
+ *         description: Expense or category not found
+ */
+router.put('/update/:expenseId/:categoryId', ExpenseController.updateCategory);
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}/category/{categoryId}:
+ *   delete:
+ *     tags: [Expenses]
+ *     summary: Delete a specific category
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: categoryId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Category deleted successfully
+ *       404:
+ *         description: Expense or category not found
+ */
+router.delete('/delete/:expenseId/:categoryId', ExpenseController.deleteCategory);
+
 module.exports = router; 
+
