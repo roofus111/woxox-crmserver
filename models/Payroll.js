@@ -82,11 +82,11 @@ const PayrollSchema = new mongoose.Schema({
   // Payment History as Array
   paymentHistory: [PaymentHistorySchema], // ✅ Stores multiple payments
 
-  // bankAccount: {
-  //   type: mongoose.Schema.Types.ObjectId,
-  //   ref: 'BankAccount',  // References the BankAccount model
-  //   required: true
-  // },
+  bankAccountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Account',
+    required: true
+},
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

@@ -341,37 +341,6 @@ router.put('/payroll/:id', payrollController.updatePayroll);
  */
 router.delete('/payroll/:id', payrollController.deletePayroll);
 
-/**
- * @swagger
- * /api/payroll/payroll/{id}/pay:
- *   put:
- *     tags:
- *       - Payroll
- *     summary: Add partial payment
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - amountPaid
- *             properties:
- *               amountPaid:
- *                 type: number
- *     responses:
- *       200:
- *         description: Payment added successfully
- *       404:
- *         description: Payroll not found
- */
-router.put('/payroll/:id/pay', payrollController.addPartialPayment);
 
 /**
  * @swagger

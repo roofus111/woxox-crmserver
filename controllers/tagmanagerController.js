@@ -3,7 +3,7 @@ const company = require('../models/Company');
 
 exports.createTag = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, color } = req.body;
     
     // Check if company exists in the user object
     if (!req.user.company || !req.user.company._id) {
@@ -20,6 +20,7 @@ exports.createTag = async (req, res) => {
     const newTag = new TagManager({ 
       name: name.toLowerCase(), 
       description, 
+      color,
       company: companyId, // Ensure company is set
       leadsCount: 0,      // Initialize leadsCount to 0
       filesCount: 0       // Initialize filesCount to 0
@@ -69,21 +70,21 @@ const File = require('../models/Filehandler');
 
 exports.updateTag = async (req, res) => {
   try {
-    const { newName, description } = req.body;
+    const { newName, description, color } = req.body;
     const tagId = req.params.id; // Get the tag ID from the request parameters
 
     // Validate input
     if (!newName || typeof newName !== "string") {
       return res.status(400).json({ error: "Invalid or missing new tag name" });
     }
-    if (!description || typeof description !== "string") {
-      return res.status(400).json({ error: "Invalid or missing description" });
-    }
+    // if (!description || typeof description !== "string") {
+    //   return res.status(400).json({ error: "Invalid or missing description" });
+    // }
 
     // Find and update the tag by ID
     const tag = await TagManager.findByIdAndUpdate(
       tagId,
-      { name: newName.toLowerCase().trim(), description },
+      { name: newName.toLowerCase().trim(), description, color },
       { new: true, runValidators: true }
     );
 

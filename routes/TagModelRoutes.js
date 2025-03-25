@@ -8,4 +8,4 @@ router.get('/getalltag', TagModelController.getAllTag);
 router.get('/gettagById/:id',TagModelController.getTagById );
 router.put('/updatetagById/:tagid',TagModelController.updateTag );
 router.delete('/deletetagById/:tagid',TagModelController.deleteTag );
-module.exports = router;
+module.exports = router;9

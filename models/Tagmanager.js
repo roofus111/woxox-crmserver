@@ -17,6 +17,11 @@ const tagSchema = new mongoose.Schema({
     // required: true,
     trim: true
   },
+  color: {
+    type: String,
+    default: '#FFFFFF',
+    trim: true
+  },
   leadsCount: {
     type: Number,
     default: 0

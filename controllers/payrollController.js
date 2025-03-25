@@ -7,10 +7,10 @@ exports.createPayroll = async (req, res) => {
     const {
       employeeId, employeeName, department, monthlySalary,
       totalWorkingDays, daysWorked, extraEarnings, deductions,
-      tax, paymentDate, paymentMethod
+      tax, paymentDate, paymentMethod, bankAccountId
     } = req.body;
 
-    if (!employeeId || !employeeName || !department || !monthlySalary || !totalWorkingDays || !daysWorked || !paymentDate || !paymentMethod) {
+    if (!employeeId || !employeeName || !department || !monthlySalary || !totalWorkingDays || !daysWorked || !paymentDate || !paymentMethod || !bankAccountId) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
@@ -19,6 +19,18 @@ exports.createPayroll = async (req, res) => {
     const totalDeductions = deductions?.reduce((sum, d) => sum + d.amount, 0) || 0;
     const netSalary = baseSalary + totalExtraEarnings - totalDeductions - tax;
 
+    // Find the bank account
+    const bankAccountDoc = await BankAccount.findById(bankAccountId);
+    if (!bankAccountDoc) {
+      return res.status(404).json({ message: 'Bank account not found' });
+    }
+
+    // Check if sufficient balance
+    if (bankAccountDoc.balance < netSalary) {
+      return res.status(400).json({ message: 'Insufficient balance in bank account' });
+    }
+
+    // Create payroll record
     const payroll = new Payroll({
       employeeId,
       employeeName,
@@ -33,19 +45,43 @@ exports.createPayroll = async (req, res) => {
       totalDeductions,
       tax,
       netSalary,
-      paidAmount: 0,
-      remainingSalary: netSalary,
+      paidAmount: netSalary, // Set paid amount to net salary since we're paying in full
+      remainingSalary: 0,
       paymentDate,
       paymentMethod,
-      paymentStatus: 'Pending',
+      paymentStatus: 'Paid',
+      bankAccountId
     });
 
+    // Create transaction in bank account
+    const transaction = {
+      company: bankAccountDoc.company,
+      date: paymentDate,
+      type: 'expense',
+      amount: netSalary,
+      description: `Salary payment for ${employeeName}`,
+      category: 'Salary',
+      paymentMethod: paymentMethod
+    };
+
+    // Add transaction to bank account
+    await bankAccountDoc.addTransaction(transaction, req.user._id);
+
+    // Save payroll record
     await payroll.save();
-    return res.status(201).json({ message: 'Payroll created successfully', payroll });
+
+    return res.status(201).json({ 
+      message: 'Payroll created and payment processed successfully', 
+      payroll,
+      bankAccount: {
+        id: bankAccountDoc._id,
+        newBalance: bankAccountDoc.balance
+      }
+    });
 
   } catch (error) {
     console.error('Error:', error);
-    return res.status(500).json({ message: 'Server error', error });
+    return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
@@ -90,30 +126,6 @@ exports.deletePayroll = async (req, res) => {
     const payroll = await Payroll.findByIdAndDelete(req.params.id);
     if (!payroll) return res.status(404).json({ message: 'Payroll not found' });
     return res.status(200).json({ message: 'Payroll deleted successfully' });
-  } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Add Partial Payment
-exports.addPartialPayment = async (req, res) => {
-  try {
-    const { amountPaid, paymentMethod } = req.body;
-    const payroll = await Payroll.findById(req.params.id);
-    
-    if (!payroll) return res.status(404).json({ message: 'Payroll not found' });
-    if (amountPaid <= 0) return res.status(400).json({ message: 'Invalid payment amount' });
-    if (payroll.remainingSalary <= 0) return res.status(400).json({ message: 'Salary already fully paid' });
-
-    payroll.paymentHistory.push({ amountPaid, paymentMethod, paymentDate: new Date() });
-    payroll.paidAmount += amountPaid;
-    payroll.remainingSalary = payroll.netSalary - payroll.paidAmount;
-    payroll.paymentStatus = payroll.paidAmount === payroll.netSalary ? 'Paid' : 'Half Paid';
-
-    await payroll.save();
-    return res.status(200).json({ message: 'Payment added successfully', payroll });
-
   } catch (error) {
     console.error('Error:', error);
     return res.status(500).json({ message: 'Server error' });

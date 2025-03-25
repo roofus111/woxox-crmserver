@@ -45,7 +45,9 @@ exports.createPost = async (req, res) => {
   
   exports.getAllPosts = async (req, res) => {
     try {
-      const posts = await Blog.find().populate('author', 'name email'); // Populate author details
+      const posts = await Blog.find()
+        .sort({ createdAt: -1 }) // Sort by creation date in descending order (newest first)
+        .populate('author', 'name email'); // Populate author details
       res.status(200).json(posts);
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
