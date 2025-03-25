@@ -321,46 +321,47 @@ class InsightsController {
 
       // Calculate overall metrics
       const totalLeads = leads.length;
-      
-      // Status breakdown
+ 
+      // Status breakdown - handle null/undefined status
       const statusBreakdown = leads.reduce((acc, lead) => {
-        acc[lead.status] = (acc[lead.status] || 0) + 1;
+        const status = lead.status || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {});
       
-      // Source breakdown
+      // Source breakdown - remove console.log and handle null/undefined
       const sourceBreakdown = leads.reduce((acc, lead) => {
-        if (lead.source) {
-          acc[lead.source] = (acc[lead.source] || 0) + 1;
-        }
+        const source = lead.source || 'Unknown';
+        acc[source] = (acc[source] || 0) + 1;
         return acc;
       }, {});
       
-      // Campaign breakdown
+      // Campaign breakdown - handle null/undefined campaign
       const campaignBreakdown = leads.reduce((acc, lead) => {
-        if (lead.campaign) {
-          acc[lead.campaign] = (acc[lead.campaign] || 0) + 1;
+        if (lead.campaignid && lead.campaignid.name) {
+          acc[lead.campaignid.name] = (acc[lead.campaignid.name] || 0) + 1;
+        } else {
+          acc['No Campaign'] = (acc['No Campaign'] || 0) + 1;
         }
         return acc;
       }, {});
       
-      // Assigned to breakdown
+      // Assigned to breakdown - safer property access
       const assignedToBreakdown = leads.reduce((acc, lead) => {
-        if (lead.assignedTo) {
-          const assigneeName = lead.assignedTo.name || 'Unknown';
-          acc[assigneeName] = (acc[assigneeName] || 0) + 1;
+        if (lead.assignedTo && lead.assignedTo.name) {
+          acc[lead.assignedTo.name] = (acc[lead.assignedTo.name] || 0) + 1;
         } else {
           acc['Unassigned'] = (acc['Unassigned'] || 0) + 1;
         }
         return acc;
       }, {});
       
-      // Monthly trends (last 6 months)
+      // Monthly trends (last 6 months) - handle missing createdAt
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       
       const monthlyTrends = leads
-        .filter(lead => lead.createdAt >= sixMonthsAgo)
+        .filter(lead => lead.createdAt && lead.createdAt >= sixMonthsAgo)
         .reduce((acc, lead) => {
           const monthYear = `${lead.createdAt.getMonth() + 1}/${lead.createdAt.getFullYear()}`;
           if (!acc[monthYear]) {
@@ -370,12 +371,12 @@ class InsightsController {
           return acc;
         }, {});
       
-      // Conversion rate
+      // Conversion rate - handle null/undefined status
       const convertedLeads = leads.filter(lead => lead.status === 'Converted').length;
-      const conversionRate = (convertedLeads / totalLeads) * 100;
+      const conversionRate = totalLeads > 0 ? (convertedLeads / totalLeads) * 100 : 0;
       
-      // Untouched leads
-      const untouchedLeads = leads.filter(lead => lead.untouched).length;
+      // Untouched leads - handle null/undefined untouched
+      const untouchedLeads = leads.filter(lead => lead.untouched === true).length;
       
       res.json({
         overallSummary: {
@@ -383,7 +384,7 @@ class InsightsController {
           convertedLeads,
           conversionRate,
           untouchedLeads,
-          untouchedPercentage: (untouchedLeads / totalLeads) * 100
+          untouchedPercentage: totalLeads > 0 ? (untouchedLeads / totalLeads) * 100 : 0
         },
         statusBreakdown,
         sourceBreakdown,
@@ -391,10 +392,11 @@ class InsightsController {
         assignedToBreakdown,
         monthlyTrends,
         metrics: {
-          averageNotesPerLead: leads.reduce((sum, lead) => sum + (lead.notes ? lead.notes.length : 0), 0) / totalLeads,
-          mostCommonStatus: getMostFrequentFromObject(statusBreakdown),
-          mostCommonSource: getMostFrequentFromObject(sourceBreakdown),
-          mostActiveAssignee: getMostFrequentFromObject(assignedToBreakdown)
+          averageNotesPerLead: totalLeads > 0 ? 
+            leads.reduce((sum, lead) => sum + (lead.notes && Array.isArray(lead.notes) ? lead.notes.length : 0), 0) / totalLeads : 0,
+          mostCommonStatus: Object.keys(statusBreakdown).length > 0 ? getMostFrequentFromObject(statusBreakdown) : 'None',
+          mostCommonSource: Object.keys(sourceBreakdown).length > 0 ? getMostFrequentFromObject(sourceBreakdown) : 'None',
+          mostActiveAssignee: Object.keys(assignedToBreakdown).length > 0 ? getMostFrequentFromObject(assignedToBreakdown) : 'None'
         }
       });
 
