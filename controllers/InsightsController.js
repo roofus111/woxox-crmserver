@@ -336,6 +336,26 @@ class InsightsController {
         return acc;
       }, {});
       
+      // Source vs Conversion breakdown - analyze which sources convert best
+      const sourceConversionBreakdown = leads.reduce((acc, lead) => {
+        const source = lead.source || 'Unknown';
+        if (!acc[source]) {
+          acc[source] = { total: 0, converted: 0, conversionRate: 0 };
+        }
+        acc[source].total += 1;
+        if (lead.status === 'Converted') {
+          acc[source].converted += 1;
+        }
+        return acc;
+      }, {});
+      
+      // Calculate conversion rates for each source
+      Object.keys(sourceConversionBreakdown).forEach(source => {
+        const { total, converted } = sourceConversionBreakdown[source];
+        sourceConversionBreakdown[source].conversionRate = total > 0 ? 
+          (converted / total) * 100 : 0;
+      });
+      
       // Campaign breakdown - handle null/undefined campaign
       const campaignBreakdown = leads.reduce((acc, lead) => {
         if (lead.campaignid && lead.campaignid.name) {
@@ -388,6 +408,7 @@ class InsightsController {
         },
         statusBreakdown,
         sourceBreakdown,
+        sourceConversionBreakdown,
         campaignBreakdown,
         assignedToBreakdown,
         monthlyTrends,
@@ -396,6 +417,10 @@ class InsightsController {
             leads.reduce((sum, lead) => sum + (lead.notes && Array.isArray(lead.notes) ? lead.notes.length : 0), 0) / totalLeads : 0,
           mostCommonStatus: Object.keys(statusBreakdown).length > 0 ? getMostFrequentFromObject(statusBreakdown) : 'None',
           mostCommonSource: Object.keys(sourceBreakdown).length > 0 ? getMostFrequentFromObject(sourceBreakdown) : 'None',
+          mostEffectiveSource: Object.keys(sourceConversionBreakdown).length > 0 ? 
+            Object.entries(sourceConversionBreakdown)
+              .filter(([_, data]) => data.total >= 5) // Only consider sources with at least 5 leads
+              .sort(([k1, a], [k2, b]) => b.conversionRate - a.conversionRate)[0]?.[0] || 'None' : null,
           mostActiveAssignee: Object.keys(assignedToBreakdown).length > 0 ? getMostFrequentFromObject(assignedToBreakdown) : 'None'
         }
       });
