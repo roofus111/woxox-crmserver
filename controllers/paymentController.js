@@ -57,7 +57,7 @@ exports.createPayment = async (req, res) => {
       const transactionData = {
         company: req.user.company._id,
         date: new Date(),
-        type: 'expense',
+        type: 'income',
         amount: payment.amount,
         description: `Payment for invoice ${payment.paymentId}`,
         category: 'Invoice Payment',
