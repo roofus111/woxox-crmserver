@@ -20,7 +20,6 @@ exports.createPayment = async (req, res) => {
   session.startTransaction();
   try {
     // Generate a unique payment ID
-   
     const count = await getTotalCount(req.user.company);
 
     // Merge the generated payment ID with the body data
@@ -34,48 +33,49 @@ exports.createPayment = async (req, res) => {
 
     // Update the invoice
     const updatedInvoice = await Invoice.findByIdAndUpdate(
-      req.body.invoice, // Ensure the field is named correctly
-      { $inc: { paid: payment.amount } }, // Increment the 'paid' field by the payment amount
-      { new: true, session } // Use the transaction session
+      req.body.invoice,
+      { $inc: { paid: payment.amount } },
+      { new: true, session }
     );
 
     if (!updatedInvoice) {
-      await session.abortTransaction(); // Abort transaction if the invoice update fails
+      await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ message: "Invoice not found" });
     }
 
-    // Find and update the bank account
-    // const bankAccount = await BankAccount.findOne({ 
-    //   company: req.user.company._id,
-    //   _id: req.body.bankAccountId 
-    // }).session(session);
+    // Update bank account balance
+    if (req.body.bankAccountId) {
+      const bankAccount = await BankAccount.findById(req.body.bankAccountId);
+      if (!bankAccount) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ message: "Bank account not found" });
+      }
 
-    // if (!bankAccount) {
-    //   await session.abortTransaction();
-    //   session.endSession();
-    //   return res.status(404).json({ message: "Bank account not found" });
-    // }
+      // Create transaction record
+      const transactionData = {
+        company: req.user.company._id,
+        date: new Date(),
+        type: 'expense',
+        amount: payment.amount,
+        description: `Payment for invoice ${payment.paymentId}`,
+        category: 'Invoice Payment',
+        paymentMethod: payment.paymentMethod || 'Bank Transfer',
+        reference: payment.paymentId
+      };
 
-    // Add transaction to bank account
-    // await bankAccount.addTransaction({
-    //   company: req.user.company._id,
-    //   date: new Date(),
-    //   type: 'income',
-    //   amount: payment.amount,
-    //   description: `Payment received for invoice ${updatedInvoice.invoiceId}`,
-    //   category: 'payment',
-    //   paymentMethod: payment.paymentMethod,
-    //   reference: payment.paymentId
-    // }, req.user._id);
+      // Add transaction to bank account
+      await bankAccount.addTransaction(transactionData, req.user._id);
+    }
 
-    await payment.save({ session }); // Save the payment within the transaction
-    await session.commitTransaction(); // Commit the transaction
+    await payment.save({ session });
+    await session.commitTransaction();
     session.endSession();
 
-    res.status(201).json(payment); // Send back the newly created payment record
+    res.status(201).json(payment);
   } catch (error) {
-    await session.abortTransaction(); // Ensure transaction is aborted on error
+    await session.abortTransaction();
     session.endSession();
     res
       .status(400)

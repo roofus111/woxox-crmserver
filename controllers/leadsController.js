@@ -655,7 +655,7 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
 };
 
 exports.createLead = async (req, res) => {
-  const { name, phone, email, campaignid, district, assignedTo } = req.body; // Extract relevant fields from the request
+  const { name, phone, email, campaignid, district, assignedTo,source  } = req.body; // Extract relevant fields from the request
 
   // Validate required fields
   if (!name || !phone || !campaignid) {
@@ -701,6 +701,7 @@ exports.createLead = async (req, res) => {
       district,
       phone,
       email,
+      source,
       assignedTo: assignedTo || null,
       campaignid: campaignid, // Associate lead with the campaign ID
       Customer: customerId, // Associate the lead with the existing customer (if found)
