@@ -22,7 +22,7 @@ exports.getCampaign = async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   };
-  exports.updateCampaign = async (req, res) => {
+exports.updateCampaign = async (req, res) => {
     
     try { 
       const { campaignid } = req.params;

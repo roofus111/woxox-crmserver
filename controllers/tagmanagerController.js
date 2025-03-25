@@ -77,9 +77,9 @@ exports.updateTag = async (req, res) => {
     if (!newName || typeof newName !== "string") {
       return res.status(400).json({ error: "Invalid or missing new tag name" });
     }
-    if (!description || typeof description !== "string") {
-      return res.status(400).json({ error: "Invalid or missing description" });
-    }
+    // if (!description || typeof description !== "string") {
+    //   return res.status(400).json({ error: "Invalid or missing description" });
+    // }
 
     // Find and update the tag by ID
     const tag = await TagManager.findByIdAndUpdate(
