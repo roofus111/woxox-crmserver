@@ -1,5 +1,12 @@
 /**
  * @swagger
+ * tags:
+ *   name: Expenses
+ *   description: Expense management endpoints
+ */
+
+/**
+ * @swagger
  * components:
  *   schemas:
  *     Category:
@@ -25,6 +32,9 @@
  *         - user
  *         - amount
  *       properties:
+ *         _id:
+ *           type: string
+ *           description: Auto-generated expense ID
  *         company:
  *           type: string
  *           format: uuid
@@ -104,6 +114,12 @@
  *           type: number
  *           description: Calculated total amount including VAT and considering refunds
  *           readOnly: true
+ *     Error:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *           description: Error message
  */
 
 const express = require('express');
@@ -140,8 +156,9 @@ const authenticateUser = require('../middleware/authenticateUser');
  * @swagger
  * /api/expense/createexpense:
  *   post:
-  *     tags: [Expenses]
+ *     tags: [Expenses]
  *     summary: Create a new expense
+ *     description: Creates a new expense record with the provided details
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -153,8 +170,20 @@ const authenticateUser = require('../middleware/authenticateUser');
  *     responses:
  *       201:
  *         description: Expense created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Expense'
+ *       400:
+ *         description: Invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.use(authenticateUser);
 router.post('/createexpense', ExpenseController.createExpense);
@@ -163,7 +192,7 @@ router.post('/createexpense', ExpenseController.createExpense);
  * @swagger
  * /api/expense/getexpenses:
  *   get:
-  *     tags: [Expenses]
+ *     tags: [Expenses]
  *     summary: Get all expenses
  *     security:
  *       - bearerAuth: []
@@ -205,7 +234,7 @@ router.get('/getexpense/:id', ExpenseController.getExpenseById);
  * @swagger
  * /api/expense/updateexpense/{id}:
  *   put:
-  *     tags: [Expenses]
+ *     tags: [Expenses]
  *     summary: Update an expense
  *     security:
  *       - bearerAuth: []
@@ -233,7 +262,7 @@ router.put('/updateexpense/:id', ExpenseController.updateExpense);
  * @swagger
  * /api/expense/deleteexpense/{id}:
  *   delete:
-  *     tags: [Expenses]
+ *     tags: [Expenses]
  *     summary: Delete an expense
  *     security:
  *       - bearerAuth: []
