@@ -39,7 +39,7 @@ exports.createExpense = async (req, res) => {
         }
 
         // Check if there's sufficient balance
-        if (bankAccount.balance < amount) {
+        if (bankAccount.currentBalance < amount) {
             return res.status(400).json({
                 message: "Insufficient balance in the bank account."
             });
