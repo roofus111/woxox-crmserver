@@ -324,7 +324,7 @@ exports.getTransactionHistory = async (req, res) => {
         accountDetails: {
           accountName: bankAccount.accountName,
           accountNumber: bankAccount.accountNumber,
-          currentBalance: bankAccount.balance
+          currentBalance: bankAccount.balance + bankAccount.initialBalance
         },
         summary,
         transactions: transactions
