@@ -108,6 +108,7 @@ exports.searchLeads = async (req, res) => {
     }
     const leads = await Lead.find(searchCriteria)
       .populate("assignedTo", "_id firstName lastName")
+      .populate("tags", "name color")
       .populate("campaignid")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
