@@ -117,7 +117,8 @@ exports.getExpenses = async (req, res) => {
 //Get a single expense by ID
 exports.getExpenseById = async (req, res) => {
     try {
-        const expense = await Expense.findById(req.params.id);
+        const expense = await Expense.findById(req.params.id)
+            .populate('category', 'name');
         if (!expense) {
             return res.status(404).json({ message: 'Expense not found' });
         }

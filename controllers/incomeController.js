@@ -43,7 +43,8 @@ exports.createIncome = async (req, res) => {
 // Get all income entries for the user's company
 exports.getIncome = async (req, res) => {
     try {
-        const incomes = await Income.find({ company: req.user.company._id });
+        const incomes = await Income.find({ company: req.user.company._id })
+            .populate('category', 'name');
         res.status(200).json(incomes);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -52,7 +53,8 @@ exports.getIncome = async (req, res) => {
 // Get an income entry by ID
 exports.getIncomeById = async (req, res) => {
     try {
-        const income = await Income.findOne({ _id: req.params.id, company: req.user.company._id });
+        const income = await Income.findOne({ _id: req.params.id, company: req.user.company._id })
+            .populate('category', 'name');
         if (!income) {
             return res.status(404).json({ message: "Income entry not found" });
         }
