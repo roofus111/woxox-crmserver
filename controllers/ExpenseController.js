@@ -104,10 +104,11 @@ exports.createExpense = async (req, res) => {
 // Example: Modify error handling
 exports.getExpenses = async (req, res) => {
     try {
-        const expenses = await Expense.find({company:req.user.company._id});
+        const expenses = await Expense.find({company:req.user.company._id})
+            .populate('category', 'name'); // Populate category field, selecting only the name
         res.status(200).json(expenses);
     } catch (error) {
-        console.error("Error fetching expenses:", error); // Log error details
+        console.error("Error fetching expenses:", error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
