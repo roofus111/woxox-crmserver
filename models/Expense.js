@@ -1,20 +1,5 @@
 const mongoose = require('mongoose');
 
-// Define the Category Schema (Embedded with _id)
-const categorySchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: [100, 'Category name cannot exceed 100 characters']
-    },
-    description: {
-        type: String,
-        maxlength: [500, 'Description cannot exceed 500 characters'],
-        default: ''
-    }
-}); // _id is now automatically included for each category
-
 // Define the Expense schema with embedded categories
 const expenseSchema = new mongoose.Schema({
     company: {
@@ -60,7 +45,11 @@ const expenseSchema = new mongoose.Schema({
         ref: 'Project',
         default: null
     },
-    category: [categorySchema], // Embedded categories with _id
+    category: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        required: true
+    },
     recurring: {
         type: Boolean,
         default: false

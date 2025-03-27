@@ -15,7 +15,7 @@ const documentation = require("./routes/documentation");
 const sales = require("./routes/salesRoutes");
 const invoice = require("./routes/invoiceRoutes");
 const payment = require("./routes/paymentRoutes");
-const Note = require("./routes/noteRoutes");
+const Note = require("./routes/noteRoutes");  
 const Task = require("./routes/taskRoutes");
 const Pipeline =require("./routes/pipelineRoutes")
 const Campaign =require("./routes/campaignRoutes")
@@ -36,6 +36,7 @@ const accountRoutes=require('./routes/accountRoutes')
 const tagMManagerRoutes=require('./routes/tagmanagerRoutes')
 const InsightsRoutes=require('./routes/InsightsRoutes')
 const incomeRoutes=require('./routes/incomeRoutes')
+const categoryRoutes=require('./routes/categoryRoutes')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -103,6 +104,7 @@ app.use("/api/account",accountRoutes)
 app.use("/api/tagmanager",tagMManagerRoutes)
 app.use("/api/Insights",InsightsRoutes)
 app.use("/api/income",incomeRoutes)
+app.use("/api/category",categoryRoutes)
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
