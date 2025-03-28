@@ -249,7 +249,7 @@ router.put('/updateexpense/:id', ExpenseController.updateExpense);
  *       404:
  *         description: Expense not found
  */
-router.delete('/deleteexpense/:id', ExpenseController.deleteExpense);
+// router.delete('/deleteexpense/:id', ExpenseController.deleteExpense);
 
 
 module.exports = router; 

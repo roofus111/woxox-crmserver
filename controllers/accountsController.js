@@ -100,6 +100,20 @@ exports.getBankAccountById = async (req, res) => {
 
 exports.updateBankAccount = async (req, res) => {
   try {
+    // First get the existing account to compare initial balance
+    const existingAccount = await Account.findOne({
+      _id: req.params.id,
+      company: req.user.company._id,
+      isActive: true
+    });
+
+    if (!existingAccount) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bank account not found'
+      });
+    }
+
     const updateData = {
       accountName: req.body.accountName,
       bankName: req.body.bankName,
@@ -108,12 +122,17 @@ exports.updateBankAccount = async (req, res) => {
       accountType: req.body.accountType,
       currency: req.body.currency,
       accountNumber: req.body.accountNumber,
-      balance: req.body.balance,
       isActive: req.body.isActive,
       initialBalance: req.body.initialBalance,
       openingDate: req.body.openingDate,
       notes: req.body.notes
     };
+
+    // If initial balance is being updated, adjust the current balance accordingly
+    if (req.body.initialBalance !== undefined) {
+      const difference = req.body.initialBalance - existingAccount.initialBalance;
+      updateData.balance = existingAccount.balance + difference;
+    }
     
     // Remove undefined fields
     Object.keys(updateData).forEach(key => 
@@ -129,13 +148,6 @@ exports.updateBankAccount = async (req, res) => {
       updateData,
       { new: true }
     );
-
-    if (!updatedAccount) {
-      return res.status(404).json({
-        success: false,
-        error: 'Bank account not found'
-      });
-    }
 
     res.status(200).json({
       success: true,

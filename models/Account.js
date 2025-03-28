@@ -131,7 +131,7 @@ const bankAccountSchema = new mongoose.Schema({
 bankAccountSchema.pre('save', function(next) {
   // If this is a new document or transactions were modified
   if (this.isNew || this.isModified('transactions')) {
-    this.balance = this.transactions.reduce((total, transaction) => {
+    this.balance = this.initialBalance + this.transactions.reduce((total, transaction) => {
       return transaction.type === 'income' 
         ? total + transaction.amount 
         : total - transaction.amount;
@@ -165,7 +165,7 @@ bankAccountSchema.methods.addTransaction = async function(transactionData, userI
 
 // Method to calculate current balance
 bankAccountSchema.methods.calculateBalance = function() {
-  return this.transactions.reduce((balance, transaction) => {
+  return this.initialBalance + this.transactions.reduce((balance, transaction) => {
     return transaction.type === 'income' 
       ? balance + transaction.amount 
       : balance - transaction.amount;
