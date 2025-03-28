@@ -8,6 +8,11 @@ const StageSchema = new mongoose.Schema({
   description: {
     type: String
   },
+  property: {
+    type: String,
+    enum: ['Pending', 'Processing', 'Won', 'Lost'],
+    default: 'Pending'
+  },
   status: {
     type: String,
     enum: ['Not Started', 'In Progress', 'Completed'],
