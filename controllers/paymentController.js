@@ -124,16 +124,95 @@ exports.getPaymentById = async (req, res) => {
 // Update a payment by ID
 exports.updatePayment = async (req, res) => {
   try {
-    const payment = await Payment.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
+    // First get the original payment with company check
+    const originalPayment = await Payment.findOne({
+      _id: req.params.id,
+      company: req.user.company._id  // Ensure we're finding payment for the correct company
     });
-    if (!payment) {
-      return res.status(404).send();
+
+    if (!originalPayment) {
+      console.log('Payment not found:', req.params.id);
+      return res.status(404).send({ error: 'Payment not found' });
     }
-    res.status(200).send(payment);
+
+    // Find the bank account
+    const bankAccount = await BankAccount.findOne({
+      _id: originalPayment.bankAccountId,
+      company: req.user.company._id
+    });
+
+    if (!bankAccount) {
+      console.log('Bank account not found:', originalPayment.bankAccountId);
+      return res.status(404).send({ error: 'Bank account not found' });
+    }
+
+    // Calculate amount difference
+    const oldAmount = originalPayment.amount;
+    const newAmount = req.body.amount || oldAmount;
+    const amountDifference = newAmount - oldAmount;
+
+    // Create a reversal transaction if amount changed
+    if (amountDifference !== 0) {
+      // First reverse the old transaction
+      await bankAccount.addTransaction({
+        company: originalPayment.company,
+        date: Date.now(),
+        type: 'expense', // Reverse the original income
+        amount: oldAmount,
+        description: `Reversal for payment ${originalPayment.paymentId}`,
+        category: 'Payment Reversal',
+        paymentMethod: originalPayment.paymentMethod,
+        reference: `reversal_${originalPayment.paymentId}`
+      }, req.user._id);
+
+      // Add new transaction with updated amount
+      await bankAccount.addTransaction({
+        company: originalPayment.company,
+        date: req.body.transactionDate || Date.now(),
+        type: 'income',
+        amount: newAmount,
+        description: req.body.description || originalPayment.description,
+        category: 'Payment',
+        paymentMethod: req.body.paymentMethod || originalPayment.paymentMethod,
+        reference: originalPayment.paymentId
+      }, req.user._id);
+    }
+
+    // Update the payment document
+    const updatedPayment = await Payment.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        company: req.user.company._id
+      },
+      {
+        ...req.body,
+        amount: newAmount,
+        updatedAt: Date.now()
+      },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+
+    if (!updatedPayment) {
+      throw new Error('Failed to update payment');
+    }
+
+    await bankAccount.save();
+
+    res.status(200).json({
+      success: true,
+      data: updatedPayment,
+      message: 'Payment updated successfully'
+    });
+
   } catch (error) {
-    res.status(400).send(error);
+    console.error('Error updating payment:', error);
+    res.status(400).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 };
 
