@@ -236,6 +236,7 @@ router.use(authenticateUser)
  *         description: Invalid input
  */
 router.post('/create', upload.array('attachments'), HRController.createEmployee);
+router.post('/linkEmployeeUser/:employeeId', HRController.linkEmployeeUser);
 
 /**
  * @swagger
