@@ -16,7 +16,6 @@ const s3 = new AWS.S3({
 
 exports.createEmployee = async (req, res) => {
     try {
-
       const {
         firstName,
         lastName,
@@ -536,6 +535,80 @@ exports.getEmployeeByUserId = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+exports.linkEmployeeUser = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { email, password, role } = req.body;
+
+    // Find the employee
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    let user;
+    // Check if user with email already exists
+    user = await User.findOne({ email });
+
+    if (user) {
+      // Update existing user with employee reference
+      user.employee = employeeId;
+      user.firstName = employee.firstName;
+      user.lastName = employee.lastName;
+      user.name = `${employee.firstName} ${employee.lastName}`;
+      user.company = employee.company;
+      if (role) user.role = role;
+      await user.save();
+    } else {
+      // Create new user
+      user = new User({
+        employee: employeeId,
+        email,
+        password,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        name: `${employee.firstName} ${employee.lastName}`,
+        role: role || 'user',
+        company: employee.company,
+        phone: employee.phoneNumber
+      });
+      await user.save();
+    }
+
+    // Update employee with user reference
+    employee.User = user._id;
+    await employee.save();
+
+    // Create history entry for the employee
+    const historyEntry = {
+      activityType: 'Grant Access Online',
+      description: `Access Granted ${user.email} ${user._id ? 'updated' : 'created'} for employee by ${req.user.name}`,
+      changedBy: req.user._id,
+      changedAt: new Date()
+    };
+    employee.history.push(historyEntry);
+    await employee.save();
+
+    return res.status(200).json({
+      message: user._id ? 'User updated and linked to employee' : 'New user created and linked to employee',
+      user: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        name: user.name
+      }
+    });
+
+  } catch (error) {
+    console.error('Error linking employee to user:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message 
+    });
+  }
+};
+
 
 
 

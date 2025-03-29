@@ -40,7 +40,7 @@ const AttachmentSchema = new mongoose.Schema({
 const HistorySchema = new mongoose.Schema({
   activityType: { 
     type: String, 
-    enum: ['Employee Updated', 'Job Title Change', 'Department Change', 'Status Update', 'Attendance Added','Attendance Update', 'Salary Update', 'Leave Change', 'Performance Update', 'Training Added'], 
+    enum: ['Employee Updated', 'Job Title Change', 'Department Change', 'Status Update', 'Attendance Added','Attendance Update', 'Salary Update', 'Leave Change', 'Performance Update', 'Training Added','Grant Access Online'], 
     required: true 
   },
   description: { type: String, required: true },
