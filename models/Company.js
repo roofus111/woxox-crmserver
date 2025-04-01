@@ -3,7 +3,14 @@ const mongoose = require('mongoose');
 const CompanySchema = new mongoose.Schema({
   name: { type: String, required: true },
   website: { type: String },
-  address: { type: String },
+  profileImage: { type: String },
+  address: {
+    street: { type: String, required: true },
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    country: { type: String, required: true },
+    postalCode: { type: String, required: true },
+  },
   phone: { type: String },
   email: { type: String, required: true, unique: true },
   industry: { type: String },

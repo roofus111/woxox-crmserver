@@ -31,46 +31,85 @@ exports.getAllCompanies = async (req, res) => {
 };
 
 
-// Create a new company
+// Create a new company with a profile image
 exports.createCompany = async (req, res) => {
-  const { name, website, address, phone, email, industry, employees } = req.body;
-
-  // Validation
-  if (!name || !email) {
-    return res.status(400).json({ message: 'Company name and email are required' });
-  }
-
-  // Create the company
-  const company = new Company({
-    name,
-    website,
-    address,
-    phone,
-    email,
-    industry,
-    employees
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    // Save the new company
-    const newCompany = await company.save();
+    const { name, website, phone, email, industry, employees, address } = req.body;
 
-    // Update the user's role to 'admin' and associate them with the new company
-    const user = await UserProfile.findById(req.user._id); // Assuming req.user is set by authenticateUser
+    // Validate required fields
+    if (!name || !email) {
+      return res.status(400).json({ message: 'Company name and email are required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    // Validate address
+    if (!address || !address.street || !address.city || !address.state || !address.country || !address.postalCode) {
+      return res.status(400).json({ message: 'Complete address details are required' });
+    }
+
+    // Check if the company already exists
+    const existingCompany = await Company.findOne({ email }).session(session);
+    if (existingCompany) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'Company with this email already exists' });
+    }
+
+    // Handle profile image upload
+    let profileImageUrl = '';
+    if (req.file) {
+      profileImageUrl = `/uploads/${req.file.filename}`;
+    }
+
+    // Create the company
+    const company = new Company({
+      name,
+      website,
+      phone,
+      email,
+      industry,
+      employees,
+      profileImage: profileImageUrl, // Store profile image URL
+      address: {
+        street: address.street,
+        city: address.city,
+        state: address.state,
+        country: address.country,
+        postalCode: address.postalCode,
+      },
+    });
+
+    const newCompany = await company.save({ session });
+
+    // Update user role and associate with the company
+    const user = await UserProfile.findById(req.user._id).session(session);
     if (!user) {
+      await session.abortTransaction();
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.role = 'admin'; // Set role to admin
-    user.company = newCompany._id; // Associate user with the new company
+    user.role = 'admin';
+    user.company = newCompany._id;
+    await user.save({ session });
 
-    await user.save(); // Save the updated user
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
 
-    // Respond with the new company and updated user info
     res.status(201).json({ newCompany, user });
   } catch (err) {
-    console.error(err.message);
-    res.status(400).json({ message: err.message });
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('Error creating company:', err.message);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
