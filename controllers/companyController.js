@@ -1,9 +1,17 @@
-const Company = require('../models/Company');
-const UserProfile = require('../models/User');
 const mongoose = require('mongoose');
-const { S3 } = require('@aws-sdk/client-s3');
-const s3Client = require('../config/s3');
+const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
+const { S3 } = require("@aws-sdk/client-s3");
+const s3Client = require("../config/s3");
+const Company = require('../models/Company');
+const User = require('../models/User');
+
+// Configure AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
 
 // Get the authenticated user's company
 exports.getCompanyById = async (req, res) => {
@@ -43,6 +51,7 @@ exports.createCompany = async (req, res) => {
   try {
     const { name, website, phone, email, industry, employees, street, city, state, country, postalCode } = req.body;
 
+
     // Validate required fields
     if (!name || !email) {
       return res.status(400).json({ message: 'Company name and email are required' });
@@ -62,20 +71,42 @@ exports.createCompany = async (req, res) => {
     }
 
     // Handle profile image upload to S3
-    let profileImageUrl = '';
-    if (req.file) {
-      const fileContent = req.file.buffer;
-      const fileName = `${uuidv4()}-${req.file.originalname}`;
-      const params = {
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: `company-images/${fileName}`,
-        Body: fileContent,
-        ContentType: req.file.mimetype
-      };
+    let profileImage = null;
+    
+    if (req.file && req.file.buffer) {
+      try {
+        const fileName = `${uuidv4()}-${req.file.originalname}`;
+        const params = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: `company-images/${fileName}`,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype
+        };
 
-      const s3 = new S3({ client: s3Client });
-      const uploadResult = await s3.putObject(params);
-      profileImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`;
+
+        const uploadResult = await s3.upload(params).promise();
+
+
+        profileImage = {
+          fileName: fileName,
+          fileType: req.file.mimetype,
+          fileUrl: uploadResult.Location
+        };
+      } catch (uploadError) {
+        console.error('Error uploading file to S3:', uploadError);
+        await session.abortTransaction();
+        return res.status(500).json({ 
+          message: 'Error uploading file to S3', 
+          error: uploadError.message,
+          details: {
+            fileExists: !!req.file,
+            hasBuffer: !!req.file?.buffer,
+            bufferLength: req.file?.buffer?.length,
+            mimetype: req.file?.mimetype,
+            size: req.file?.size
+          }
+        });
+      }
     }
 
     // Create the company
@@ -86,7 +117,7 @@ exports.createCompany = async (req, res) => {
       email,
       industry,
       employees,
-      profileImage: profileImageUrl,
+      profileImage,
       address: {
         street,
         city,
@@ -99,7 +130,7 @@ exports.createCompany = async (req, res) => {
     const newCompany = await company.save({ session });
 
     // Update user role and associate with the company
-    const user = await UserProfile.findById(req.user._id).session(session);
+    const user = await User.findById(req.user._id).session(session);
     if (!user) {
       await session.abortTransaction();
       return res.status(404).json({ message: 'User not found' });
@@ -119,7 +150,7 @@ exports.createCompany = async (req, res) => {
     session.endSession();
 
     console.error('Error creating company:', err.message);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: err.message });
   }
 };
 

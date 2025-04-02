@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 const CompanySchema = new mongoose.Schema({
   name: { type: String, required: true },
   website: { type: String },
-  profileImage: { type: String },
+  profileImage: {
+    fileName: { type: String },
+    fileType: { type: String },
+    fileUrl: { type: String }
+  },
   address: {
     street: { type: String, required: true },
     city: { type: String, required: true },
