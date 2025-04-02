@@ -1,5 +1,9 @@
 const Company = require('../models/Company');
 const UserProfile = require('../models/User');
+const mongoose = require('mongoose');
+const { S3 } = require('@aws-sdk/client-s3');
+const s3Client = require('../config/s3');
+const { v4: uuidv4 } = require('uuid');
 
 // Get the authenticated user's company
 exports.getCompanyById = async (req, res) => {
@@ -15,6 +19,7 @@ exports.getCompanyById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 exports.getAllCompanies = async (req, res) => {
   try {
     const companies = await Company.find(); // Fetch all companies from the database
@@ -30,14 +35,13 @@ exports.getAllCompanies = async (req, res) => {
   }
 };
 
-
 // Create a new company with a profile image
 exports.createCompany = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { name, website, phone, email, industry, employees, address } = req.body;
+    const { name, website, phone, email, industry, employees, street, city, state, country, postalCode } = req.body;
 
     // Validate required fields
     if (!name || !email) {
@@ -50,11 +54,6 @@ exports.createCompany = async (req, res) => {
       return res.status(400).json({ message: 'Invalid email format' });
     }
 
-    // Validate address
-    if (!address || !address.street || !address.city || !address.state || !address.country || !address.postalCode) {
-      return res.status(400).json({ message: 'Complete address details are required' });
-    }
-
     // Check if the company already exists
     const existingCompany = await Company.findOne({ email }).session(session);
     if (existingCompany) {
@@ -62,10 +61,21 @@ exports.createCompany = async (req, res) => {
       return res.status(400).json({ message: 'Company with this email already exists' });
     }
 
-    // Handle profile image upload
+    // Handle profile image upload to S3
     let profileImageUrl = '';
     if (req.file) {
-      profileImageUrl = `/uploads/${req.file.filename}`;
+      const fileContent = req.file.buffer;
+      const fileName = `${uuidv4()}-${req.file.originalname}`;
+      const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: `company-images/${fileName}`,
+        Body: fileContent,
+        ContentType: req.file.mimetype
+      };
+
+      const s3 = new S3({ client: s3Client });
+      const uploadResult = await s3.putObject(params);
+      profileImageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`;
     }
 
     // Create the company
@@ -76,13 +86,13 @@ exports.createCompany = async (req, res) => {
       email,
       industry,
       employees,
-      profileImage: profileImageUrl, // Store profile image URL
+      profileImage: profileImageUrl,
       address: {
-        street: address.street,
-        city: address.city,
-        state: address.state,
-        country: address.country,
-        postalCode: address.postalCode,
+        street,
+        city,
+        state,
+        country,
+        postalCode,
       },
     });
 
