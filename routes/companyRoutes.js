@@ -533,5 +533,35 @@ router.put('/company/:id', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/companies/remove-image:
+ *   delete:
+ *     summary: Remove company profile image
+ *     description: Removes the profile image of the company associated with the authenticated user
+ *     tags:
+ *       - Company
+ *     responses:
+ *       200:
+ *         description: Company profile image removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Company profile image removed successfully"
+ *       400:
+ *         description: Company has no profile image
+ *       404:
+ *         description: Company not found
+ *       500:
+ *         description: Internal server error
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/remove-image', authorizeCompanyAccess, companyController.removeCompanyImage);
+router.post('/upload-image', upload.single('profileImage'), companyController.uploadCompanyImage);
 
 module.exports = router;

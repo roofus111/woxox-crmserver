@@ -5,6 +5,7 @@ const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const Company = require('../models/Company');
 const User = require('../models/User');
+const multer = require('multer');
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -210,6 +211,102 @@ exports.updateModule = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// Remove company profile image
+exports.removeCompanyImage = async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.company._id);
+    
+    if (!company) {
+      return res.status(404).json({ message: 'Company not found' });
+    }
+
+    if (!company.profileImage || !company.profileImage.fileUrl) {
+      return res.status(400).json({ message: 'Company has no profile image' });
+    }
+
+    // Get the S3 key from the file URL
+    const key = company.profileImage.fileUrl.split('.com/')[1];
+
+    // Delete the file from S3
+    const params = {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+    };
+    
+    await s3.deleteObject(params).promise();
+
+    // Remove the profile image from the company document
+    company.profileImage = null;
+    await company.save();
+
+    res.status(200).json({ message: 'Company profile image removed successfully' });
+  } catch (error) {
+    console.error('Error removing company profile image:', error);
+    res.status(500).json({ 
+      message: 'Error removing company profile image', 
+      error: error.message 
+    });
+  }
+};
+
+// Upload company profile image
+exports.uploadCompanyImage = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const company = await Company.findById(req.user.company._id).session(session);
+    
+    if (!company) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: 'Company not found' });
+    }
+
+    // Handle profile image upload to S3
+    if (req.file && req.file.buffer) {
+      try {
+        const fileName = `${uuidv4()}-${req.file.originalname}`;
+        const params = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: `company-images/${fileName}`,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype
+        };
+
+        const uploadResult = await s3.upload(params).promise();
+
+        // Update the company's profile image
+        company.profileImage = {
+          fileName: fileName,
+          fileType: req.file.mimetype,
+          fileUrl: uploadResult.Location
+        };
+
+        await company.save({ session });
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({ message: 'Profile image uploaded successfully', profileImage: company.profileImage });
+      } catch (uploadError) {
+        console.error('Error uploading file to S3:', uploadError);
+        await session.abortTransaction();
+        return res.status(500).json({ 
+          message: 'Error uploading file to S3', 
+          error: uploadError.message 
+        });
+      }
+    } else {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error uploading company image:', err.message);
+    res.status(500).json({ message: 'Internal server error', error: err.message });
   }
 };
 
