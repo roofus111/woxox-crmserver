@@ -563,5 +563,6 @@ router.put('/company/:id', async (req, res) => {
  */
 router.delete('/remove-image', authorizeCompanyAccess, companyController.removeCompanyImage);
 router.post('/upload-image', upload.single('profileImage'), companyController.uploadCompanyImage);
+router.get('/get-image', companyController.getCompanyImage);
 
 module.exports = router;

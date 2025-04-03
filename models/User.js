@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Company",
   },
+  profileImage: {
+    fileName: { type: String },
+    fileType: { type: String },
+    fileUrl: { type: String }
+  },
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
 });
