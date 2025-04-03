@@ -44,7 +44,20 @@ exports.createIncome = async (req, res) => {
 // Get all income entries for the user's company
 exports.getIncome = async (req, res) => {
     try {
-        const incomes = await Income.find({ company: req.user.company._id })
+        const { month, year } = req.query;
+        let query = { company: req.user.company._id };
+
+        // Add date filtering if month and year are provided
+        if (month && year) {
+            const startDate = new Date(year, month - 1, 1); // Month is 0-based in JS Date
+            const endDate = new Date(year, month, 0); // Last day of the month
+            query.date = {
+                $gte: startDate,
+                $lte: endDate
+            };
+        }
+
+        const incomes = await Income.find(query)
             .populate('category', 'name');
         res.status(200).json(incomes);
     } catch (error) {

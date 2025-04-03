@@ -171,7 +171,7 @@ router.post('/createexpense', ExpenseController.createExpense);
  *       200:
  *         description: List of expenses
  *         content:
- *           application/json:
+ *           application/json: 
  *             schema:
  *               type: array
  *               items:
