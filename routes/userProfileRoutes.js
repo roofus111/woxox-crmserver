@@ -404,7 +404,7 @@ router.put("/:userId/toggle-status", userProfileController.toggleUserStatus);
 
 router.delete('/remove-image', authenticateUser, userProfileController.removeUserImage);
 router.post('/upload-image', upload.single('profileImage'), userProfileController.uploadProfileImage);
-router.get('/get-image', userProfileController.getUserImage);
+
 
 module.exports = router;
  

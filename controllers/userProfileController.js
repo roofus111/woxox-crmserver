@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const multer = require('multer');
+const mongoose =require('mongoose')
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -196,40 +197,6 @@ exports.uploadProfileImage = async (req, res) => {
   }
 };
 
-exports.getUserImage = async (req, res) => {
-  try {
-    const id = req.user._id;
-    const fileRecord = await UserProfile.findById(id);
-    
-    if (!fileRecord) {
-      return res.status(404).json({ error: "File not found" });
-    }
-
-    const params = {
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: `user-images/${fileRecord.profileImage.fileName}`, // Update path based on actual file structure
-    };
-
-    // Create an instance of S3 client
-    const s3 = new S3({ client: s3Client });
-
-    // Get the file from S3
-    const data = await s3.getObject(params);
-
-    // Set the response headers
-    res.setHeader("Content-Type", fileRecord.profileImage.fileType);
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${fileRecord.profileImage.fileName}"` // Use docName but keep original file extension
-    );
-
-    // Pipe the data to the response
-    data.Body.pipe(res);
-  } catch (error) {
-    console.error('Error downloading file:', error);
-    res.status(500).json({ error: error.message });
-  }
-};
 // Remove user profile image
 exports.removeUserImage = async (req, res) => {
   try {
