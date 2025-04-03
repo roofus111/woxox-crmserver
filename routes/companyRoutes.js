@@ -1,4 +1,3 @@
-
 /**
  * @swagger
  * components:
@@ -64,6 +63,24 @@ const Company=require("../models/Company")
 const companyController = require('../controllers/companyController');
 const authenticateUser = require('../middleware/authenticateUser');
 const authorizeCompanyAccess = require('../middleware/authorizeCompanyAccess');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept images only
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 router.use(authenticateUser); // Apply authentication to all routes
 /**
@@ -191,62 +208,72 @@ router.get('/', companyController.getCompanyById);
 router.get('/getall', companyController.getAllCompanies);
 /**
  * @swagger
- * /api/companies/:
+ * /api/companies:
  *   post:
- *     summary: Create a new company and associate an admin user.
- *     description: Creates a new company and automatically updates the authenticated user as an 'admin' of that company.
+ *     summary: Create a new company with profile image
+ *     description: Creates a new company with profile image and associates it with the authenticated user
  *     tags:
  *       - Company
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
  *               - name
  *               - email
+ *               - address
  *             properties:
  *               name:
  *                 type: string
- *                 description: The name of the company.
- *                 example: "Tech Innovations Inc."
+ *                 description: Company name
  *               website:
  *                 type: string
- *                 description: The website of the company.
- *                 example: "https://www.techinnovations.com"
- *               address:
- *                 type: string
- *                 description: The address of the company.
- *                 example: "123 Tech Street, Silicon Valley, CA"
+ *                 description: Company website
  *               phone:
  *                 type: string
- *                 description: The phone number of the company.
- *                 example: "+1 (123) 456-7890"
+ *                 description: Company phone number
  *               email:
  *                 type: string
- *                 description: The email of the company (must be unique).
- *                 example: "contact@techinnovations.com"
+ *                 description: Company email (must be unique)
  *               industry:
  *                 type: string
- *                 description: The industry the company belongs to.
- *                 example: "Technology"
+ *                 description: Company industry
  *               employees:
  *                 type: integer
- *                 description: The number of employees in the company.
- *                 example: 250
+ *                 description: Number of employees
+ *               address:
+ *                 type: object
+ *                 required:
+ *                   - street
+ *                   - city
+ *                   - state
+ *                   - country
+ *                   - postalCode
+ *                 properties:
+ *                   street:
+ *                     type: string
+ *                   city:
+ *                     type: string
+ *                   state:
+ *                     type: string
+ *                   country:
+ *                     type: string
+ *                   postalCode:
+ *                     type: string
+ *               profileImage:
+ *                 type: string
+ *                 format: binary
+ *                 description: Company profile image (jpg, jpeg, png, gif)
  *     responses:
  *       201:
- *         description: Company created successfully and user role updated.
+ *         description: Company created successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   description: Success message.
- *                   example: "Company created successfully"
  *                 newCompany:
  *                   $ref: '#/components/schemas/Company'
  *                 user:
@@ -254,61 +281,17 @@ router.get('/getall', companyController.getAllCompanies);
  *                   properties:
  *                     _id:
  *                       type: string
- *                       description: User ID.
- *                       example: "60d21b4667d0d8992e610c85"
  *                     role:
  *                       type: string
- *                       description: User role (set to 'admin').
- *                       example: "admin"
  *                     company:
  *                       type: string
- *                       description: Company ID associated with the user.
- *                       example: "60d21b4667d0d8992e610c86"
  *       400:
- *         description: Bad request (validation failed).
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: Error message.
- *                   example: "Company name and email are required"
- *       404:
- *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: Error message.
- *                   example: "User not found"
+ *         description: Invalid input or company already exists
  *       500:
- *         description: Server error.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   description: Error message.
- *                   example: "Server error. Please try again later."
-  *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
+ *         description: Internal server error
  */
 
-
-router.post('/', companyController.createCompany);
+router.post('/', upload.single('profileImage'), companyController.createCompany);
 /**
  * @swagger
  * /api/companies/:
@@ -550,5 +533,36 @@ router.put('/company/:id', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/companies/remove-image:
+ *   delete:
+ *     summary: Remove company profile image
+ *     description: Removes the profile image of the company associated with the authenticated user
+ *     tags:
+ *       - Company
+ *     responses:
+ *       200:
+ *         description: Company profile image removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Company profile image removed successfully"
+ *       400:
+ *         description: Company has no profile image
+ *       404:
+ *         description: Company not found
+ *       500:
+ *         description: Internal server error
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/remove-image', authorizeCompanyAccess, companyController.removeCompanyImage);
+router.post('/upload-image', upload.single('profileImage'), companyController.uploadCompanyImage);
+router.get('/get-image', companyController.getCompanyImage);
 
 module.exports = router;

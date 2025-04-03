@@ -142,6 +142,7 @@ router.get('/getcategory/:id', CategoryController.getCategoryById);
 router.put('/updatecategory/:id', CategoryController.updateCategory);
 
 /**
+ * 
  * @swagger
  * /api/category/deletecategory/{id}:
  *   delete:

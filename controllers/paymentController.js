@@ -2,6 +2,7 @@ const Payment = require("../models/payment");
 const Invoice = require("../models/invoice");
 const mongoose = require("mongoose");
 const BankAccount = require("../models/Account");
+const Income = require("../models/Income");
 // Add a new payment
 
 
@@ -70,6 +71,23 @@ exports.createPayment = async (req, res) => {
     }
 
     await payment.save({ session });
+    
+    // Create an Income record
+    const incomeData = {
+      company: req.user.company._id,
+      amount: payment.amount,
+      description: `Income from payment ${payment.paymentId}`,
+      date: new Date(),
+      bankAccountId: req.body.bankAccountId,
+      paymentMethod: payment.paymentMethod || 'Bank Transfer',
+      currency: 'USD', // or any other currency you want to set
+      isRecurring: false, // set this based on your logic
+      category: req.body.category // assuming you have a category in the request body
+    };
+    
+    const income = new Income(incomeData);
+    await income.save({ session }); // Save the income record within the transaction
+
     await session.commitTransaction();
     session.endSession();
 
