@@ -70,7 +70,10 @@ exports.searchLeads = async (req, res) => {
       assignedTo,
       status,
       campaign,
+      sort = "updatedAt", // Default sort field
+      order = -1, // Default sort order (descending)
     } = req.query;
+
     const regex = new RegExp(search, "i");
     const searchCriteria = {
       $or: [
@@ -79,10 +82,10 @@ exports.searchLeads = async (req, res) => {
         { lastName: { $regex: regex } },
         { email: { $regex: regex } },
         { phone: { $regex: regex } },
-        // Add more fields as necessary
       ],
-      company: req.user.company, // Assuming each lead is tied to a company from the user's context
+      company: req.user.company,
     };
+
     // Add filters for assignedTo and status if provided
     if (assignedTo) {
       searchCriteria.assignedTo = assignedTo; // assuming assignedTo is an ID
@@ -106,11 +109,15 @@ exports.searchLeads = async (req, res) => {
     if (status) {
       searchCriteria.status = status; // assuming status is a string (e.g., "active", "inactive")
     }
+
+    // Create sort object dynamically
+    const sortObj = { [sort]: parseInt(order) };
+
     const leads = await Lead.find(searchCriteria)
       .populate("assignedTo", "_id firstName lastName")
       .populate("tags", "name color")
       .populate("campaignid")
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
