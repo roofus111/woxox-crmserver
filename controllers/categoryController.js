@@ -20,7 +20,8 @@ exports.createCategory = async (req, res) => {
       description,
       type,
       color,
-      parentCategory
+      parentCategory,
+      company: req.user.company._id
     });
 
     const savedCategory = await category.save();
@@ -43,7 +44,7 @@ exports.createCategory = async (req, res) => {
 // Get all categories
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await Category.find();
+    const categories = await Category.find({company: req.user.company._id});
     
     res.status(200).json({
       success: true,
