@@ -125,6 +125,8 @@ const LeadSchema = new mongoose.Schema({
   profile: FormSchema,
   stages: { type: Number, default: null },
   additionalFields: { type: mongoose.Schema.Types.Mixed } 
-});
+  
+},
+{ timestamps: true });
 
 module.exports = mongoose.model('Lead', LeadSchema);
