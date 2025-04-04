@@ -802,15 +802,23 @@ exports.getworkflowLeads = async (req, res) => {
     }
     let leads = await Promise.all(
       campaign.map(async (item) => {
-        return await Lead.find({ campaignid: item._id,status:"Converted" })
-        .populate("assignedTo", "_id firstName lastName")
-        .populate("campaignid", "_id name description")
-        .exec();
+        return await Lead.find({ campaignid: item._id, status: "Converted" })
+          .populate("assignedTo", "_id firstName lastName")
+          .populate("campaignid", "_id name description")
+          .populate("tags", "name color")
+          .exec();
       })
     );
     
     // Flatten the leads array if needed
-    leads = leads.flat();
+    leads = leads.flat().map(lead => ({
+      ...lead.toObject(), // Convert Mongoose document to plain object
+      status: lead.status, // Include status directly
+      tags: lead.tags.map(tag => ({
+        name: tag.name,
+        color: tag.color // Ensure color is included
+      }))
+    }));
 
     res.status(200).json(leads);
   } catch (error) {
