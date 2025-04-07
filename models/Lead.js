@@ -129,4 +129,12 @@ const LeadSchema = new mongoose.Schema({
 },
 { timestamps: true });
 
+
+LeadSchema.pre('save', function (next) {
+  if (this._skipUpdatedAt) {
+    this.$__.saveOptions.timestamps = false;
+  }
+  next();
+});
+
 module.exports = mongoose.model('Lead', LeadSchema);

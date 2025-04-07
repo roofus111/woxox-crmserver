@@ -199,7 +199,6 @@ exports.getInvoicesByLeads = async (req, res) => {
       address: invoice.customer?.phone, 
       company: invoice.customer?.name, 
       companyEmail: invoice.customer?.email, 
-      country: invoice.customer?.profile.countryOfInterest, 
       contact: invoice.customer?.phone, 
       name: invoice.customer?.name, 
       service: "Some Service", 

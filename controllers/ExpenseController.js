@@ -107,8 +107,21 @@ exports.createExpense = async (req, res) => {
 // Example: Modify error handling
 exports.getExpenses = async (req, res) => {
     try {
-        const expenses = await Expense.find({company:req.user.company._id})
-            .populate('category', 'name'); // Populate category field, selecting only the name
+        const { month, year } = req.query;
+        let query = { company: req.user.company._id };
+
+        // Add date filtering if month and year are provided
+        if (month && year) {
+            const startDate = new Date(year, month - 1, 1); // Month is 0-based in JS Date
+            const endDate = new Date(year, month, 0); // Last day of the month
+            query.date = {
+                $gte: startDate,
+                $lte: endDate
+            };
+        }
+
+        const expenses = await Expense.find(query)
+            .populate('category', 'name');
         res.status(200).json(expenses);
     } catch (error) {
         console.error("Error fetching expenses:", error);

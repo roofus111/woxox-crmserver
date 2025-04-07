@@ -16,7 +16,9 @@ exports.createCampaign = async (req, res) => {
 };
 exports.getCampaign = async (req, res) => {
     try {
-      const campaigns = await Campaign.find({ company: req.user.company._id }).populate('User', 'name email'); // Populate user data
+      const campaigns = await Campaign.find({ company: req.user.company._id })
+        .populate('User', 'name email')
+        .sort({ updatedAt: -1 }); // Sort by updatedAt in descending order
       res.status(200).json(campaigns);
     } catch (error) {
       res.status(500).json({ error: error.message });

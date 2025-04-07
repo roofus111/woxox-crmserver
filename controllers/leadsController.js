@@ -70,7 +70,10 @@ exports.searchLeads = async (req, res) => {
       assignedTo,
       status,
       campaign,
+      sort = "updatedAt",
+      order,
     } = req.query;
+
     const regex = new RegExp(search, "i");
     const searchCriteria = {
       $or: [
@@ -79,21 +82,19 @@ exports.searchLeads = async (req, res) => {
         { lastName: { $regex: regex } },
         { email: { $regex: regex } },
         { phone: { $regex: regex } },
-        // Add more fields as necessary
       ],
-      company: req.user.company, // Assuming each lead is tied to a company from the user's context
+      company: req.user.company,
     };
+
     // Add filters for assignedTo and status if provided
     if (assignedTo) {
-      searchCriteria.assignedTo = assignedTo; // assuming assignedTo is an ID
+      searchCriteria.assignedTo = assignedTo;
     }
 
     if (campaign && campaign != "undefined") {
-      {
-        mongoose.Types.ObjectId.isValid(campaign)
-          ? (searchCriteria.campaignid = campaign)
-          : (searchCriteria.campaign = campaign);
-      }
+      mongoose.Types.ObjectId.isValid(campaign)
+        ? (searchCriteria.campaignid = campaign)
+        : (searchCriteria.campaign = campaign);
     }
 
     if (req.user.role == "user") {
@@ -104,19 +105,63 @@ exports.searchLeads = async (req, res) => {
     }
 
     if (status) {
-      searchCriteria.status = status; // assuming status is a string (e.g., "active", "inactive")
+      searchCriteria.status = status;
     }
+
+    // Calculate insights using aggregation
+    const insights = await Lead.aggregate([
+      { $match: searchCriteria },
+      {
+        $group: {
+          _id: null,
+          totalLeads: { $sum: 1 },
+          newLeads: { $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] } },
+          contactedLeads: { $sum: { $cond: [{ $eq: ["$status", "Contacted"] }, 1, 0] } },
+          interestedLeads: { $sum: { $cond: [{ $eq: ["$status", "Interested"] }, 1, 0] } },
+          convertedLeads: { $sum: { $cond: [{ $eq: ["$status", "Converted"] }, 1, 0] } },
+          notInterestedLeads: { $sum: { $cond: [{ $eq: ["$status", "Not Interested"] }, 1, 0] } },
+          pendingLeads: { $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] } },
+          inProgressLeads: { $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] } },
+          wonLeads: { $sum: { $cond: [{ $eq: ["$status", "Won"] }, 1, 0] } },
+          lostLeads: { $sum: { $cond: [{ $eq: ["$status", "Lost"] }, 1, 0] } },
+          unassignedLeads: { $sum: { $cond: [{ $eq: ["$assignedTo", null] }, 1, 0] } },
+        }
+      }
+    ]);
+
+    // Create sort object dynamically
+    const sortObj = order ? { [sort]: parseInt(order) } : undefined;
+
+    // Fetch paginated leads
     const leads = await Lead.find(searchCriteria)
       .populate("assignedTo", "_id firstName lastName")
       .populate("tags", "name color")
       .populate("campaignid")
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
 
     res.status(200).json({
       leads: leads,
+      insights: insights[0] || {
+        totalLeads: 0,
+        newLeads: 0,
+        contactedLeads: 0,
+        interestedLeads: 0,
+        convertedLeads: 0,
+        notInterestedLeads: 0,
+        pendingLeads: 0,
+        inProgressLeads: 0,
+        wonLeads: 0,
+        lostLeads: 0,
+        unassignedLeads: 0,
+      },
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil((insights[0]?.totalLeads || 0) / limit),
+        pageSize: parseInt(limit),
+      }
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -146,6 +191,7 @@ exports.AssignLeadEqual = async (req, res) => {
 
     for (let lead of unassignedLeads) {
       lead.assignedTo = users[userIndex]._id;
+      lead._skipUpdatedAt = true;
       await lead.save();
       userIndex = (userIndex + 1) % totalUsers;
     }
@@ -183,7 +229,8 @@ exports.AssignUserToLead = async (req, res) => {
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
       { assignedTo: user._id },
-      { new: true } // Return the updated object and run validation
+      { new: true },
+      { timestamps: false }// Return the updated object and run validation
     ).populate("assignedTo", "_id firstName lastName");
 
     if (!updatedLead) {
