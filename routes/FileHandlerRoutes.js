@@ -355,7 +355,8 @@ router.get("/files/:leadId", fileController.getFilesByLeadId);
 router.get("/leads", fileController.listAllLeadsFromFilesAndFolders);
 router.put('/:id/tags/add', fileController.addTagsToFile); // Add tags to file
 router.put('/:id/tags/remove', fileController.removeTagFromFile);
-
+router.post("/requestupload",  fileController.requestUpload);
+router.post("/upload/:fileId", upload.single('file'), fileController.uploadFile);
 
 module.exports = router;
 

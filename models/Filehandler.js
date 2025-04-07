@@ -32,7 +32,7 @@ const FileSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Lead", // Assuming you have a Lead model already
   },
-  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }],
   docName: {
     type: String,
     required: true,
@@ -53,7 +53,15 @@ const FileSchema = new mongoose.Schema({
     type: Boolean, // Changed to Boolean
     default: false, // Default value for root (false indicating not a root file)
   },
-
+  request: {
+    type: Boolean,
+    default: false
+  },
+  requestBy:{
+    type:mongoose.Schema.Types.ObjectId,
+    ref:"User",
+    required:false
+  },
   uploadedAt: {
     type: Date,
     default: Date.now,

@@ -520,3 +520,74 @@ exports.removeTagFromFile = async (req, res) => {
     res.status(500).json({ error: "Error removing tag from file", details: error.message });
   }
 };
+
+
+// Request a file upload
+exports.requestUpload = async (req, res) => {
+  try {
+    const { docName, leadId} = req.body;
+
+    const newFileRequest = new Files({
+      docName,
+      leadId,
+      request: true,
+      requestBy: req.user._id,
+      createdBy: req.user._id,
+      company: req.user.company._id
+    });
+
+    const saved = await newFileRequest.save();
+    res.status(201).json({ message: "File upload requested", data: saved });
+  } catch (err) {
+    console.error("Request upload error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Upload a file to an existing file request
+exports.uploadFile = async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const uploadedFile = await Files.findById(fileId);
+
+    if (!uploadedFile) {
+      return res.status(404).json({ error: "File entry not found" });
+    }
+
+    // Ensure req.file is defined
+    if (!req.file) {
+      console.error("File upload failed: req.file is undefined");
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // Generate a unique file name for S3
+    const timestamp = Date.now();
+    const uniqueFileName = `${timestamp}-${req.file.originalname}`; // Append timestamp to original name
+    const fileKey = `requestuploads/${uniqueFileName}`; // Use the unique file name for S3 key
+
+    const params = {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: fileKey,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    };
+
+    // Upload the file to S3
+    const uploadResult = await s3.upload(params).promise();
+
+    // Update the file details in MongoDB
+    uploadedFile.fileName = uniqueFileName; // Store the unique name in MongoDB
+    uploadedFile.fileType = req.file.mimetype;
+    uploadedFile.fileUrl = uploadResult.Location; // Use the S3 URL
+    uploadedFile.request = false;
+    uploadedFile.User = req.user._id;
+    uploadedFile.uploadedAt = Date.now();
+
+    await uploadedFile.save();
+
+    res.status(200).json({ message: "File uploaded successfully", data: uploadedFile });
+  } catch (err) {
+    console.error("Upload file error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
