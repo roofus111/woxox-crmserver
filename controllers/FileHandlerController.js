@@ -544,61 +544,67 @@ exports.requestUpload = async (req, res) => {
   }
 };
 
+
 exports.uploadFile = async (req, res) => {
   try {
-    const { requestId } = req.params; // Get requestId from parameters
+    const { requestId } = req.params;
 
-    // Ensure user has a company ID
     if (!req.user || !req.user.company || !req.user.company._id) {
-      return res
-        .status(403)
-        .json({ error: "Unauthorized: Company ID is required" });
+      return res.status(403).json({ error: "Unauthorized: Company ID is required" });
     }
 
     const companyId = req.user.company._id;
-    const file = req.file; // Assuming multer is handling single file uploads
+    const file = req.file;
 
-    // Validate file upload
     if (!file) {
       return res.status(400).json({ message: "No file uploaded." });
     }
 
-    const fileContent = file.buffer;
+    // Optional: Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ message: "Invalid file type." });
+    }
+
+    // Generate unique file key
     const fileKey = `${uuidv4()}-${file.originalname}`;
     const params = {
       Bucket: process.env.AWS_BUCKET_NAME,
-      Key: `fileuploads/${companyId}/${fileKey}`, // Store file under company ID
-      Body: fileContent,
+      Key: `fileuploads/${companyId}/${fileKey}`,
+      Body: file.buffer,
       ContentType: file.mimetype,
     };
 
-    // Upload the file to S3 and get its URL
+    // Upload to S3
     const uploadResult = await s3.upload(params).promise();
 
-    // Create new file document with requestId
-    const newFile = new Files({
-      User: req.user._id,
-      docName: file.originalname,
-      fileName: fileKey,
-      fileType: file.mimetype,
-      fileUrl: uploadResult.Location, // S3 file URL
-      uploadedAt: new Date(),
-      createdBy: req.user._id,
-      company: companyId, // Ensure file is linked to the company
-      requestId, // Associate with the request ID
+    // Find and update the requested file document
+    const updatedFile = await Files.findByIdAndUpdate(
+      requestId,
+      {
+        $set: {
+          fileName: fileKey,
+          fileType: file.mimetype,
+          fileUrl: uploadResult.Location,
+          uploadedAt: new Date(),
+          request: false,
+          updatedBy: req.user._id,
+        },
+      },
+      { new: true } // Return the updated document
+    );
+
+    if (!updatedFile) {
+      return res.status(404).json({ message: "File request not found." });
+    }
+
+    res.status(200).json({
+      message: "File uploaded and request fulfilled successfully",
+      file: updatedFile,
     });
-
-    // Save the file to the database
-    const savedFile = await newFile.save();
-
-    return res
-      .status(201)
-      .json({ message: "File uploaded successfully", file: savedFile });
   } catch (error) {
     console.error("Error uploading file:", error);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
