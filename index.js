@@ -37,6 +37,8 @@ const tagMManagerRoutes=require('./routes/tagmanagerRoutes')
 const InsightsRoutes=require('./routes/InsightsRoutes')
 const incomeRoutes=require('./routes/incomeRoutes')
 const categoryRoutes=require('./routes/categoryRoutes')
+const departmentRoutes=require('./routes/departmentRoutes')
+const teamRoutes=require('./routes/teamRouter')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -105,6 +107,8 @@ app.use("/api/tagmanager",tagMManagerRoutes)
 app.use("/api/Insights",InsightsRoutes)
 app.use("/api/income",incomeRoutes)
 app.use("/api/category",categoryRoutes)
+app.use("/api/department",departmentRoutes)
+app.use("/api/team",teamRoutes)
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,

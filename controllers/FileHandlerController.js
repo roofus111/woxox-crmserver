@@ -544,50 +544,78 @@ exports.requestUpload = async (req, res) => {
   }
 };
 
-// Upload a file to an existing file request
 exports.uploadFile = async (req, res) => {
   try {
-    const fileId = req.params.fileId;
-    const uploadedFile = await Files.findById(fileId);
+    const { requestId } = req.params; // Get requestId from parameters
 
-    if (!uploadedFile) {
-      return res.status(404).json({ error: "File entry not found" });
+    // Ensure user has a company ID
+    if (!req.user || !req.user.company || !req.user.company._id) {
+      return res
+        .status(403)
+        .json({ error: "Unauthorized: Company ID is required" });
     }
 
-    // Ensure req.file is defined
-    if (!req.file) {
-      console.error("File upload failed: req.file is undefined");
-      return res.status(400).json({ error: "No file uploaded" });
+    const companyId = req.user.company._id;
+    const file = req.file; // Assuming multer is handling single file uploads
+
+    // Validate file upload
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded." });
     }
 
-    // Generate a unique file name for S3
-    const timestamp = Date.now();
-    const uniqueFileName = `${timestamp}-${req.file.originalname}`; // Append timestamp to original name
-    const fileKey = `requestuploads/${uniqueFileName}`; // Use the unique file name for S3 key
-
+    const fileContent = file.buffer;
+    const fileKey = `${uuidv4()}-${file.originalname}`;
     const params = {
       Bucket: process.env.AWS_BUCKET_NAME,
-      Key: fileKey,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
+      Key: `fileuploads/${companyId}/${fileKey}`, // Store file under company ID
+      Body: fileContent,
+      ContentType: file.mimetype,
     };
 
-    // Upload the file to S3
+    // Upload the file to S3 and get its URL
     const uploadResult = await s3.upload(params).promise();
 
-    // Update the file details in MongoDB
-    uploadedFile.fileName = uniqueFileName; // Store the unique name in MongoDB
-    uploadedFile.fileType = req.file.mimetype;
-    uploadedFile.fileUrl = uploadResult.Location; // Use the S3 URL
-    uploadedFile.request = false;
-    uploadedFile.User = req.user._id;
-    uploadedFile.uploadedAt = Date.now();
+    // Create new file document with requestId
+    const newFile = new Files({
+      User: req.user._id,
+      docName: file.originalname,
+      fileName: fileKey,
+      fileType: file.mimetype,
+      fileUrl: uploadResult.Location, // S3 file URL
+      uploadedAt: new Date(),
+      createdBy: req.user._id,
+      company: companyId, // Ensure file is linked to the company
+      requestId, // Associate with the request ID
+    });
 
-    await uploadedFile.save();
+    // Save the file to the database
+    const savedFile = await newFile.save();
 
-    res.status(200).json({ message: "File uploaded successfully", data: uploadedFile });
+    return res
+      .status(201)
+      .json({ message: "File uploaded successfully", file: savedFile });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+};
+
+// controllers/FileHandlerController.js (lines 547-570)
+exports.deleteRequest = async (req, res) => {
+  try {
+    const { requestId } = req.params; // Assuming the request ID is passed as a URL parameter
+
+    const deletedRequest = await Files.findByIdAndDelete(requestId);
+    
+    if (!deletedRequest) {
+      return res.status(404).json({ error: "File request not found" });
+    }
+
+    res.status(200).json({ message: "File request deleted successfully", data: deletedRequest });
   } catch (err) {
-    console.error("Upload file error:", err);
+    console.error("Delete request error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
