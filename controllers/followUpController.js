@@ -100,7 +100,10 @@ exports.getMyfollowUps = async (req, res) => {
       .populate("leadId")
       .populate("assignedTo",'name')
       .populate("createdBy",'name')
-      .populate("tags", "name color");
+      .populate({
+        path: 'leadId', // Populate the leadId field
+        populate: { path: 'tags', select: 'name color' } // Populate tags within the Lead model
+      });
     res.status(200).json(followUp);
   } catch (err) {
     res.status(500).json({ message: err.message });
