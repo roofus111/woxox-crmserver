@@ -625,3 +625,29 @@ exports.deleteRequest = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+const XLSX = require('xlsx');
+const fs = require('fs');
+
+exports.getHeaders = (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
+        const workbook = XLSX.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        const headers = jsonData[0] || [];
+
+        // Delete the uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.json({ headers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Failed to process Excel file' });
+    }
+};
