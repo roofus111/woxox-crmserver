@@ -99,7 +99,8 @@ exports.getMyfollowUps = async (req, res) => {
     )
       .populate("leadId")
       .populate("assignedTo",'name')
-      .populate("createdBy",'name');
+      .populate("createdBy",'name')
+      .populate("tags", "name color");
     res.status(200).json(followUp);
   } catch (err) {
     res.status(500).json({ message: err.message });
