@@ -194,6 +194,10 @@ exports.getActivityLogsByDate = async (req, res) => {
     const activities = await LeadActivity.find(filter)
       .populate('userId', 'name email')
       .populate('leadId', 'name status')
+      .populate({
+        path: 'leadId', // Populate the leadId field
+        populate: { path: 'tags', select: 'name color' } // Populate tags within the Lead model
+      })
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));

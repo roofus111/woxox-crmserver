@@ -634,6 +634,8 @@ exports.getHeaders = (req, res) => {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    console.log("Uploaded file:", req.file); // Log the uploaded file
+
     try {
         const workbook = XLSX.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
@@ -647,7 +649,7 @@ exports.getHeaders = (req, res) => {
 
         res.json({ headers });
     } catch (error) {
-        console.error(error);
+        console.error("Error processing Excel file:", error);
         res.status(500).json({ error: 'Failed to process Excel file' });
     }
 };

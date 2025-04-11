@@ -35,7 +35,8 @@ const LeadActivitySchema = new Schema({
   },
   userAgent: {
     type: String,
-  }
+  },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
 });
 
 const LeadActivity = mongoose.model('LeadActivityLog', LeadActivitySchema);

@@ -361,7 +361,7 @@ router.delete('/uploadcancel/:requestId', fileController.deleteRequest);
 
 
 // Define route
-router.post('/get-headers', upload.single('file'), fileController.getHeaders);
+router.post('/get-headers', upload.single('files'), fileController.getHeaders);
 
 module.exports = router;
 
