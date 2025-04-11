@@ -50,6 +50,7 @@ const leadFollowUpSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
 });
 
 leadFollowUpSchema.pre("save", function (next) {
