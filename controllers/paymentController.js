@@ -104,9 +104,10 @@ exports.createPayment = async (req, res) => {
 // Retrieve all payments
 exports.getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find({ company: req.user.company }).populate(
-      "leadId"
-    ).populate("invoice");
+    const payments = await Payment.find({ company: req.user.company })
+      .populate("leadId")
+      .populate("invoice")
+      .populate("company");
     res.status(200).send(payments);
   } catch (error) {
     res.status(500).send(error);

@@ -1372,12 +1372,21 @@ exports.getExcelHeaders = (req, res) => {
         const worksheet = workbook.Sheets[firstSheetName];
         const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
 
-        res.json({ headers });
+        // Get dynamic fields from req.body
+        const leadSchemaFields = req.body.dynamicFields || [
+            "name", "district", "email", "phone", "campaign", "campaignid",
+            "status", "source", "Customer", "company", "tags", "assignedTo",
+            "untouched", "notes", "createdAt", "profile", "stages", "additionalFields"
+        ];
+
+        // Extract dynamic fields that are present in the headers
+        const dynamicFieldsFromHeaders = leadSchemaFields.filter(field => headers.includes(field));
+
+        res.json({ headers, leadSchemaFields, dynamicFieldsFromHeaders });
     } catch (error) {
         console.error("Error reading Excel file:", error);
         res.status(500).json({ error: "Failed to read Excel file." });
     }
 };
-
 
 
