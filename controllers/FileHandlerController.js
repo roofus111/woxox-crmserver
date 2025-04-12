@@ -626,30 +626,22 @@ exports.deleteRequest = async (req, res) => {
   }
 };
 
-const XLSX = require('xlsx');
-const fs = require('fs');
+const xlsx = require("xlsx");
 
-exports.getHeaders = (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    console.log("Uploaded file:", req.file); // Log the uploaded file
-
+exports.getExcelHeaders = (req, res) => {
     try {
-        const workbook = XLSX.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
 
-        const headers = jsonData[0] || [];
-
-        // Delete the uploaded file
-        fs.unlinkSync(req.file.path);
+        const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
 
         res.json({ headers });
     } catch (error) {
-        console.error("Error processing Excel file:", error);
-        res.status(500).json({ error: 'Failed to process Excel file' });
+        console.error("Error reading Excel file:", error);
+        res.status(500).json({ error: "Failed to read Excel file." });
     }
 };

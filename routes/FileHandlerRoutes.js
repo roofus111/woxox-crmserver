@@ -360,8 +360,10 @@ router.post("/upload/:requestId", upload.single('files'), fileController.uploadF
 router.delete('/uploadcancel/:requestId', fileController.deleteRequest);
 
 
-// Define route
-router.post('/get-headers', upload.single('files'), fileController.getHeaders);
+router.post("/headers", upload.single("file"), fileController.getExcelHeaders);
+
+module.exports = router;
+
 
 module.exports = router;
 

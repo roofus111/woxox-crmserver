@@ -72,6 +72,7 @@ exports.searchLeads = async (req, res) => {
       campaign,
       sort = "updatedAt",
       order,
+      tags,
     } = req.query;
 
     const regex = new RegExp(search, "i");
@@ -106,6 +107,10 @@ exports.searchLeads = async (req, res) => {
 
     if (status) {
       searchCriteria.status = status;
+    }
+
+    if (tags) {
+        searchCriteria.tags = tags;
     }
 
     // Calculate insights using aggregation
