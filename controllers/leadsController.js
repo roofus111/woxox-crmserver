@@ -110,7 +110,9 @@ exports.searchLeads = async (req, res) => {
     }
 
     if (tags) {
-        searchCriteria.tags = tags;
+      // Split the tags by comma and trim whitespace
+      const tagsArray = tags.split(',').map(tag => tag.trim());
+      searchCriteria.tags = { $in: tagsArray }; // Match any of the tags
     }
 
     // Calculate insights using aggregation
@@ -1355,6 +1357,26 @@ exports.removeTagsFromLead = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Error removing tags from lead", details: error.message });
   }
+};
+
+const xlsx = require("xlsx");
+
+exports.getExcelHeaders = (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
+
+        res.json({ headers });
+    } catch (error) {
+        console.error("Error reading Excel file:", error);
+        res.status(500).json({ error: "Failed to read Excel file." });
+    }
 };
 
 
