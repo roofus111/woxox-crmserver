@@ -49,6 +49,11 @@ const FileSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
+  template: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "DocumentTemplate",
+    required: false,
+  },
   root: {
     type: Boolean, // Changed to Boolean
     default: false, // Default value for root (false indicating not a root file)

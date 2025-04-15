@@ -625,7 +625,6 @@ exports.deleteRequest = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
 // Create a new document
 exports.createDocument = async (req, res) => {
   try {
@@ -717,4 +716,3 @@ exports.getDocumentById = async (req, res) => {
     return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
-
