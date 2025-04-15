@@ -626,22 +626,95 @@ exports.deleteRequest = async (req, res) => {
   }
 };
 
-const xlsx = require("xlsx");
+// Create a new document
+exports.createDocument = async (req, res) => {
+  try {
+    const { title, content, docName } = req.body; // Ensure docName is included
 
-exports.getExcelHeaders = (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded" });
-        }
-
-        const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
-
-        res.json({ headers });
-    } catch (error) {
-        console.error("Error reading Excel file:", error);
-        res.status(500).json({ error: "Failed to read Excel file." });
+    // Validate required fields
+    if (!docName) {
+      return res.status(400).json({ message: "docName is required." });
     }
+
+    const newDocument = new Files({
+      title,
+      content,
+      docName, // Include docName in the document
+      createdBy: req.user._id,
+      company: req.user.company._id,
+      createdAt: new Date(),
+      isCreated: true, // Add this line to indicate the document has been created
+    });
+
+    await newDocument.save();
+    return res.status(201).json({ message: "Document created successfully", document: newDocument });
+  } catch (error) {
+    console.error("Error creating document:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
 };
+
+// Edit an existing document
+exports.editDocument = async (req, res) => {
+  try {
+    const { documentId } = req.params; // Get document ID from request parameters
+    const { content, docName } = req.body; // New content and docName for the document
+
+    const document = await Files.findById(documentId);
+    if (!document) {
+      return res.status(404).json({ message: "Document not found." });
+    }
+
+    // Validate required fields
+    if (!docName) {
+      return res.status(400).json({ message: "docName is required." });
+    }
+
+    document.content = content; // Update the content
+    document.docName = docName; // Update the docName
+    await document.save();
+
+    return res.status(200).json({ message: "Document updated successfully", document });
+  } catch (error) {
+    console.error("Error editing document:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+// Get all documents for the authenticated user
+exports.getAllDocuments = async (req, res) => {
+  try {
+    const companyId = req.user.company._id; // Get the company ID from the authenticated user
+
+    // Fetch all documents for the user's company
+    const documents = await Files.find({ company: companyId });
+
+    if (!documents.length) {
+      return res.status(404).json({ message: "No documents found." });
+    }
+
+    return res.status(200).json({ message: "Documents retrieved successfully", documents });
+  } catch (error) {
+    console.error("Error retrieving documents:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+// Get a document by ID
+exports.getDocumentById = async (req, res) => {
+  try {
+    const { documentId } = req.params; // Get document ID from request parameters
+
+    // Find the document by ID
+    const document = await Files.findById(documentId);
+    if (!document) {
+      return res.status(404).json({ message: "Document not found." });
+    }
+
+    return res.status(200).json({ message: "Document retrieved successfully", document });
+  } catch (error) {
+    console.error("Error retrieving document:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+

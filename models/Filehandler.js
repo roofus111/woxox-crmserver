@@ -53,6 +53,18 @@ const FileSchema = new mongoose.Schema({
     type: Boolean, // Changed to Boolean
     default: false, // Default value for root (false indicating not a root file)
   },
+  title: {
+    type: String,
+    required: false,
+  },
+  content: {
+    type: String, 
+    required: false,
+  },
+  isCreated: {
+    type: Boolean,
+    default: false,
+  },
   request: {
     type: Boolean,
     default: false

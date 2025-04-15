@@ -359,7 +359,10 @@ router.post("/requestupload",  fileController.requestUpload);
 router.post("/upload/:requestId", upload.single('files'), fileController.uploadFile);
 router.delete('/uploadcancel/:requestId', fileController.deleteRequest);
 
-
+router.post('/documents', fileController.createDocument);
+router.put('/documents/:documentId', fileController.editDocument);
+router.get('/getdocuments', fileController.getAllDocuments);
+router.get('/getdocuments/:documentId', fileController.getDocumentById);
 module.exports = router;
 
 
