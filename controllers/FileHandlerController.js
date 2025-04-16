@@ -625,19 +625,57 @@ exports.deleteRequest = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+// // Create a new document
+// exports.createDocument = async (req, res) => {
+//   try {
+//     const { title, content, docName } = req.body; // Ensure docName is included
+
+//     // Validate required fields
+//     if (!docName) {
+//       return res.status(400).json({ message: "docName is required." });
+//     }
+
+//     const newDocument = new Files({
+//       title,
+//       content,
+//       docName, // Include docName in the document
+//       createdBy: req.user._id,
+//       company: req.user.company._id,
+//       createdAt: new Date(),
+//       isCreated: true, // Add this line to indicate the document has been created
+//     });
+
+//     await newDocument.save();
+//     return res.status(201).json({ message: "Document created successfully", document: newDocument });
+//   } catch (error) {
+//     console.error("Error creating document:", error);
+//     return res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+const DocumentTemplate = require('../models/Template'); // Adjust the path as necessary
 // Create a new document
 exports.createDocument = async (req, res) => {
   try {
-    const { title, content, docName } = req.body; // Ensure docName is included
+    const { title, content, docName, templateId } = req.body; // Ensure templateId is included
 
     // Validate required fields
     if (!docName) {
       return res.status(400).json({ message: "docName is required." });
     }
 
+    // Fetch the template if templateId is provided
+    let template = null;
+    if (templateId) {
+      template = await DocumentTemplate.findById(templateId); // Fetch the template
+      if (!template) {
+        return res.status(404).json({ message: "Template not found." });
+      }
+    }
+
+    // Create a new document using the template if available
     const newDocument = new Files({
-      title,
-      content,
+      title: title || template.title, // Use template title if provided
+      content: content || template.body, // Use template body if provided
       docName, // Include docName in the document
       createdBy: req.user._id,
       company: req.user.company._id,
