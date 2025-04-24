@@ -1557,7 +1557,7 @@ exports.matchHeadersWithSchema = async (req, res) => {
 exports.webhookReceiver = async (req, res) => {
   try {
     // Extract data from the webhook payload
-    const { name, email, phone, source, campaign, additionalData = {} } = req.body;
+    const { name, email, phone, source, campaign, profile, additionalData = {} } = req.body;
 
     // Basic validation
     if (!name || !phone) {
@@ -1575,6 +1575,7 @@ exports.webhookReceiver = async (req, res) => {
       source: source || 'webhook',
       campaignid : "680a32a22bc5f561a2216b41",
       company: "6723a86ae3bc2fcb385cdcb1",
+      profile: profile,
       additionalFields: additionalData // Store any additional fields
     });
 
