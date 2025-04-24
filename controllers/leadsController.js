@@ -781,6 +781,51 @@ exports.createLead = async (req, res) => {
   }
 };
 
+exports.webhookReceiver = async (req, res) => {
+  try {
+    // Extract data from the webhook payload
+    const { name, email, phone, source, campaign, additionalData = {} } = req.body;
+
+    // Basic validation
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and phone are required fields"
+      });
+    }
+
+    // Check for duplicate leads based on phone number
+  
+    // Create new lead
+    const newLead = new Lead({
+      name,
+      email,
+      phone,
+      source: source || 'webhook',
+      campaign,
+      company: req.user.company._id,
+      additionalFields: additionalData // Store any additional fields
+    });
+
+    await newLead.save();
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: "Lead created successfully",
+      data: newLead
+    });
+
+  } catch (error) {
+    console.error("Webhook Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error processing webhook data",
+      error: error.message
+    });
+  }
+};
+
 exports.getLeadsByCampaignId = async (req, res) => {
   const { campaignid } = req.params;
   const { page = 1, limit = 100, sort = "createdAt", order = -1 } = req.query;
@@ -1434,12 +1479,13 @@ exports.getExcelHeaders = (req, res) => {
   }
 };
 
-exports.matchHeadersWithSchema = (req, res) => {
+
+exports.matchHeadersWithSchema = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const { fieldMap } = req.body;
+    const { fieldMap, campaignId } = req.body;
     const parsedMap = JSON.parse(fieldMap);
 
     const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
@@ -1447,39 +1493,106 @@ exports.matchHeadersWithSchema = (req, res) => {
     const worksheet = workbook.Sheets[firstSheetName];
     const jsonData = xlsx.utils.sheet_to_json(worksheet);
 
-    const customersToInsert = jsonData.map((row) => {
-      const customer = {};
+    // Transform Excel data to Lead documents
+    const leadsToInsert = jsonData.map(row => {
+      const lead = {
+        company: req.user.company._id,
+        campaignid: campaignId,
+        status: 'New',
+        untouched: true
+      };
+
+      // Map Excel columns to Lead schema fields
       for (let header in parsedMap) {
         const schemaField = parsedMap[header];
-        customer[schemaField] = row[schemaField];
+        console.log(schemaField);
+        // Handle nested profile fields
+        if (schemaField.startsWith('profile.')) {
+          const profileField = schemaField.split('.')[1];
+          lead.profile = lead.profile || {};
+          lead.profile[profileField] = row[header];
+        } else {
+          lead[header] = row[schemaField];
+        }
       }
-      return customer;
+     
+      return lead;
     });
-    res.json({ customersToInsert });
+
+    // Validate required fields
+    const invalidLeads = leadsToInsert.filter(lead => !lead.name || !lead.phone);
+    if (invalidLeads.length > 0) {
+      return res.status(400).json({
+        error: "Some leads are missing required fields (name or phone)",
+        invalidLeads
+      });
+    }
+
+    // Insert leads in batches of 100
+    const batchSize = 100;
+    const results = [];
+    
+    for (let i = 0; i < leadsToInsert.length; i += batchSize) {
+      const batch = leadsToInsert.slice(i, i + batchSize);
+      const savedLeads = await Lead.insertMany(batch, { ordered: false });
+      results.push(...savedLeads);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully imported ${results.length} leads`,
+      leads: results
+    });
+
   } catch (error) {
-    console.error("Error reading Excel file:", error);
-    res.status(500).json({ error: "Failed to read Excel file." });
+    console.error("Error importing leads:", error);
+    res.status(500).json({ 
+      error: "Failed to import leads",
+      details: error.message 
+    });
   }
 };
+
 
 exports.webhookReceiver = async (req, res) => {
   try {
     // Extract data from the webhook payload
-    const  data1  = req.body;
+    const { name, email, phone, source, campaign, additionalData = {} } = req.body;
 
-    console.log(data1);
+    // Basic validation
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and phone are required fields"
+      });
+    }
+
+    // Create new lead
+    const newLead = new Lead({
+      name,
+      email,
+      phone,
+      source: source || 'webhook',
+      campaignid : "680a32a22bc5f561a2216b41",
+      company: "6723a86ae3bc2fcb385cdcb1",
+      additionalFields: additionalData // Store any additional fields
+    });
+
+    await newLead.save();
 
     // Return success response
     res.status(201).json({
       success: true,
-      message: "SUCCESS",
+      message: "Lead created successfully",
+      data: newLead
     });
+
   } catch (error) {
     console.error("Webhook Error:", error);
     res.status(500).json({
       success: false,
       message: "Error processing webhook data",
-      error: error.message,
+      error: error.message
     });
   }
 };
