@@ -316,6 +316,7 @@ router.get("/docs/:id", async (req, res) => {
 });
 
 router.post('/webhook/202504/cd202504/leads',leadsController.webhookReceiver);
+router.get('/webhook/leads',leadsController.getWebhookLeads);
 
 router.use(authenticateUser); // Apply authentication to all routes
 /**

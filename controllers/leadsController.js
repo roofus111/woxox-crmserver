@@ -1597,3 +1597,48 @@ exports.webhookReceiver = async (req, res) => {
     });
   }
 };
+
+exports.getWebhookLeads = async (req, res) => {
+  try {
+    const { page = 1, limit = 100} = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build query filters
+    const filters = {
+      company: "6723a86ae3bc2fcb385cdcb1" // Filter by company
+    };
+
+      filters.campaignid = "680a32a22bc5f561a2216b41";
+ 
+
+    // Execute query with pagination
+    const leads = await Lead.find(filters)
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalCount = await Lead.countDocuments(filters);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        leads,
+        pagination: {
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          currentPage: parseInt(page),
+          perPage: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching webhook leads:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching leads",
+      error: error.message
+    });
+  }
+};
