@@ -42,19 +42,45 @@ exports.getAllLeads = async (req, res) => {
 
 exports.getLeadById = async (req, res) => {
   try {
-    const leadId = req.params.id; // Get the ID from the request parameters
+    const leadId = req.params.id;
 
-    // Fetch the lead from the database
+    // Fetch the current lead
     const lead = await Lead.findById(leadId)
       .populate("assignedTo", "firstName lastName email")
       .populate("campaignid")
-      .populate("tags", "name color"); // Populate the 'assignedTo' field if needed
+      .populate("tags", "name color");
 
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    res.status(200).json(lead);
+    // Find the previous and next leads based on creation date
+    const [prevLead, nextLead] = await Promise.all([
+      Lead.findOne({
+        company: lead.company,
+        createdAt: { $lt: lead.createdAt }
+      })
+        .sort({ createdAt: -1 })
+        .select('_id name')
+        .limit(1),
+      
+      Lead.findOne({
+        company: lead.company,
+        createdAt: { $gt: lead.createdAt }
+      })
+        .sort({ createdAt: 1 })
+        .select('_id name')
+        .limit(1)
+    ]);
+
+    res.status(200).json({
+      lead,
+      navigation: {
+        prev: prevLead ? { _id: prevLead._id, name: prevLead.name } : null,
+        next: nextLead ? { _id: nextLead._id, name: nextLead.name } : null
+      }
+    });
+
   } catch (err) {
     console.error("Error fetching lead by ID:", err);
     res.status(500).json({ message: "Failed to retrieve lead" });
