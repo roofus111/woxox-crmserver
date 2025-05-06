@@ -783,8 +783,7 @@ exports.createLead = async (req, res) => {
 
 exports.webhookReceiver = async (req, res) => {
   try {
-    // Extract data from the webhook payload
-    const { name, email, phone, source, campaign, additionalData = {} } = req.body;
+    const { name, email, phone, source, campaign, state, district, country, ...restPayload } = req.body;
 
     // Basic validation
     if (!name || !phone) {
@@ -794,17 +793,23 @@ exports.webhookReceiver = async (req, res) => {
       });
     }
 
-    // Check for duplicate leads based on phone number
-  
+    // Create profile object with known fields
+    const profile = {
+      state,
+      district,
+      country
+    };
+
     // Create new lead
     const newLead = new Lead({
       name,
       email,
       phone,
       source: source || 'webhook',
-      campaign,
-      company: req.user.company._id,
-      additionalFields: additionalData // Store any additional fields
+      campaignid: "680a32a22bc5f561a2216b41",
+      company: "6723a86ae3bc2fcb385cdcb1",
+      profile,
+      additionalFields: restPayload // Store all remaining fields from payload
     });
 
     await newLead.save();
@@ -1549,51 +1554,6 @@ exports.matchHeadersWithSchema = async (req, res) => {
     res.status(500).json({ 
       error: "Failed to import leads",
       details: error.message 
-    });
-  }
-};
-
-
-exports.webhookReceiver = async (req, res) => {
-  try {
-    // Extract data from the webhook payload
-    const { name, email, phone, source, campaign, profile, additionalData = {} } = req.body;
-
-    // Basic validation
-    if (!name || !phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and phone are required fields"
-      });
-    }
-
-    // Create new lead
-    const newLead = new Lead({
-      name,
-      email,
-      phone,
-      source: source || 'webhook',
-      campaignid : "680a32a22bc5f561a2216b41",
-      company: "6723a86ae3bc2fcb385cdcb1",
-      profile: profile,
-      additionalFields: additionalData // Store any additional fields
-    });
-
-    await newLead.save();
-
-    // Return success response
-    res.status(201).json({
-      success: true,
-      message: "Lead created successfully",
-      data: newLead
-    });
-
-  } catch (error) {
-    console.error("Webhook Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error processing webhook data",
-      error: error.message
     });
   }
 };
