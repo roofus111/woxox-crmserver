@@ -54,7 +54,8 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"],  // Allow requests from this origin and my frontend port = 5173
+    // origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
+    origin: ["http://localhost:3000"],  // Allow requests from this origin and my frontend port = 5173
     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
@@ -345,44 +346,89 @@ cron.schedule("0,30 * * * *", async () => {
   console.log("Running follow-up check");
   try {
     const now = new Date();
-    const alertBeforeMinutes = 30; // Adjust this value as needed
-    const upcomingFollowUps = await LeadFollowUp.find({
-      nextFollowUpDate: {
-        $gte: now,
-        $lte: new Date(now.getTime() + alertBeforeMinutes * 60000),
-      },
-      status: { $in: ["Pending", "In Progress"] },
+    const alertBeforeMinutes = 30;
+    
+    // Check for upcoming and overdue follow-ups
+    const followUps = await LeadFollowUp.find({
+      $or: [
+        // Upcoming follow-ups (original check)
+        {
+          nextFollowUpDate: {
+            $gte: now,
+            $lte: new Date(now.getTime() + alertBeforeMinutes * 60000),
+          },
+          status: { $in: ["Pending", "In Progress"] },
+        },
+        // Overdue follow-ups (1hr, 24hr, 48hr checks)
+        {
+          nextFollowUpDate: {
+            $lt: now,
+          },
+          status: { $in: ["Pending", "In Progress"] },
+          lastAlertSent: { $exists: false },
+        }
+      ]
     })
       .populate("assignedTo")
-      .populate("leadId") 
+      .populate("leadId")
       .exec();
 
-    if (upcomingFollowUps.length) {
-      console.log(`Found ${upcomingFollowUps.length} upcoming follow-ups`);
-    }
-    console.log(upcomingFollowUps);
+    for (const followUp of followUps) {
+      const userId = followUp.assignedTo.toString();
+      const followUpTime = followUp.nextFollowUpDate.getTime();
+      const timeDifference = now.getTime() - followUpTime;
+      const hoursDifference = timeDifference / (1000 * 60 * 60);
 
-    upcomingFollowUps.forEach((followUp) => {
-      const userId = followUp.assignedTo._id.toString();
+      let alertMessage;
+      let shouldSendAlert = false;
 
-      const hours = followUp.nextFollowUpDate.getHours();
-      const minutes = followUp.nextFollowUpDate.getMinutes().toString().padStart(2, "0");
-      const ampm = hours >= 12 ? "PM" : "AM";
-
-      const formattedHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
-      const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
-
-      if (onlineUsers.has(userId)) {
-        const message = `You have a Follow-up Meeting with ${followUp.leadId.name} today at ${formattedTime}`;
-        io.to(userId).emit("followUpAlert", {
-          message: message,
-          details: followUp,
-        });
-        console.log(`Alert sent to user ${userId}: ${message}`);
+      if (timeDifference < 0) {
+        // Upcoming follow-up (original alert)
+        const hours = followUp.nextFollowUpDate.getHours();
+        const minutes = followUp.nextFollowUpDate.getMinutes().toString().padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const formattedHours = hours % 12 || 12;
+        const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
+        
+        alertMessage = `You have a Follow-up Meeting with ${followUp.leadId.name} today at ${formattedTime}`;
+        shouldSendAlert = true;
       } else {
+        // Overdue follow-up alerts
+        if (hoursDifference >= 1 && hoursDifference < 2 && followUp.lastAlertType !== '1hr') {
+          alertMessage = `⚠️ Follow-up with ${followUp.leadId.name} is overdue by 1 hour`;
+          shouldSendAlert = true;
+          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
+            lastAlertSent: now,
+            lastAlertType: '1hr'
+          });
+        } else if (hoursDifference >= 24 && hoursDifference < 25 && followUp.lastAlertType !== '24hr') {
+          alertMessage = `⚠️ Follow-up with ${followUp.leadId.name} is overdue by 24 hours`;
+          shouldSendAlert = true;
+          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
+            lastAlertSent: now,
+            lastAlertType: '24hr'
+          });
+        } else if (hoursDifference >= 48 && hoursDifference < 49 && followUp.lastAlertType !== '48hr') {
+          alertMessage = `⚠️ URGENT: Follow-up with ${followUp.leadId.name} is overdue by 48 hours`;
+          shouldSendAlert = true;
+          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
+            lastAlertSent: now,
+            lastAlertType: '48hr'
+          });
+        }
+      }
+
+      if (shouldSendAlert && onlineUsers.has(userId)) {
+        io.to(userId).emit("followUpAlert", {
+          message: alertMessage,
+          details: followUp,
+          isOverdue: timeDifference > 0
+        });
+        console.log(`Alert sent to user ${userId}: ${alertMessage}`);
+      } else if (shouldSendAlert) {
         console.log(`User ${userId} not connected, skipping notification`);
       }
-    });
+    }
   } catch (error) {
     console.error("Cron job failed:", error);
   }

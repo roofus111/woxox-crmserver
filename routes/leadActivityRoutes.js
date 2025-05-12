@@ -380,4 +380,6 @@ router.delete('/:leadId', leadActivityController.deleteLeadActivities);
  */
 router.get('/get/insight',leadActivityController.getLeadActivitiesByCompany);
 router.get('/get/activitylogs',leadActivityController.getActivityLogsByDate);
+router.get('/get/activityKPI',leadActivityController.getActivityKPIs);
+router.get('/get/leaderboard',leadActivityController.getLeaderboard);
 module.exports = router;

@@ -314,6 +314,10 @@ router.get("/docs/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.post('/webhook/202504/cd202504/leads',leadsController.webhookReceiver);
+router.get('/webhook/leads',leadsController.getWebhookLeads);
+
 router.use(authenticateUser); // Apply authentication to all routes
 /**
  * @swagger
@@ -2194,5 +2198,7 @@ router.get('/count',leadsController.getLeadStatus)
 router.put('/:id/tags/add', leadsController.addTagsToLead); // Add tags to lead
 router.put('/:id/tags/remove', leadsController.removeTagsFromLead);
 router.post("/headers", upload.single("file"), leadsController.getExcelHeaders);
+router.post("/match-headers", upload.single("file"), leadsController.matchHeadersWithSchema);
+
 
 module.exports = router;

@@ -51,6 +51,13 @@ const leadFollowUpSchema = new mongoose.Schema({
     required: false,
   },
   tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
+  lastAlertSent: {
+    type: Date
+  },
+  lastAlertType: {
+    type: String,
+    enum: ['1hr', '24hr', '48hr']
+  }
 });
 
 leadFollowUpSchema.pre("save", function (next) {

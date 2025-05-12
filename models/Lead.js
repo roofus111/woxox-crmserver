@@ -94,7 +94,7 @@ const FormSchema = new mongoose.Schema({
     type: String,
   },
   tuitionFeePreference: {
-    type: Number,
+    type: Number,                                                                                                   
   }
 });
 const NoteSchema = new mongoose.Schema({

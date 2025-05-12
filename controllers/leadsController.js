@@ -42,19 +42,45 @@ exports.getAllLeads = async (req, res) => {
 
 exports.getLeadById = async (req, res) => {
   try {
-    const leadId = req.params.id; // Get the ID from the request parameters
+    const leadId = req.params.id;
 
-    // Fetch the lead from the database
+    // Fetch the current lead
     const lead = await Lead.findById(leadId)
       .populate("assignedTo", "firstName lastName email")
       .populate("campaignid")
-      .populate("tags", "name color"); // Populate the 'assignedTo' field if needed
+      .populate("tags", "name color");
 
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    res.status(200).json(lead);
+    // Find the previous and next leads based on creation date
+    const [prevLead, nextLead] = await Promise.all([
+      Lead.findOne({
+        company: lead.company,
+        createdAt: { $lt: lead.createdAt }
+      })
+        .sort({ createdAt: -1 })
+        .select('_id name')
+        .limit(1),
+      
+      Lead.findOne({
+        company: lead.company,
+        createdAt: { $gt: lead.createdAt }
+      })
+        .sort({ createdAt: 1 })
+        .select('_id name')
+        .limit(1)
+    ]);
+
+    res.status(200).json({
+      lead,
+      navigation: {
+        prev: prevLead ? { _id: prevLead._id, name: prevLead.name } : null,
+        next: nextLead ? { _id: nextLead._id, name: nextLead.name } : null
+      }
+    });
+
   } catch (err) {
     console.error("Error fetching lead by ID:", err);
     res.status(500).json({ message: "Failed to retrieve lead" });
@@ -111,7 +137,7 @@ exports.searchLeads = async (req, res) => {
 
     if (tags) {
       // Split the tags by comma and trim whitespace
-      const tagsArray = tags.split(',').map(tag => tag.trim());
+      const tagsArray = tags.split(",").map((tag) => tag.trim());
       searchCriteria.tags = { $in: tagsArray }; // Match any of the tags
     }
 
@@ -123,17 +149,31 @@ exports.searchLeads = async (req, res) => {
           _id: null,
           totalLeads: { $sum: 1 },
           newLeads: { $sum: { $cond: [{ $eq: ["$status", "New"] }, 1, 0] } },
-          contactedLeads: { $sum: { $cond: [{ $eq: ["$status", "Contacted"] }, 1, 0] } },
-          interestedLeads: { $sum: { $cond: [{ $eq: ["$status", "Interested"] }, 1, 0] } },
-          convertedLeads: { $sum: { $cond: [{ $eq: ["$status", "Converted"] }, 1, 0] } },
-          notInterestedLeads: { $sum: { $cond: [{ $eq: ["$status", "Not Interested"] }, 1, 0] } },
-          pendingLeads: { $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] } },
-          inProgressLeads: { $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] } },
+          contactedLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "Contacted"] }, 1, 0] },
+          },
+          interestedLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "Interested"] }, 1, 0] },
+          },
+          convertedLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "Converted"] }, 1, 0] },
+          },
+          notInterestedLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "Not Interested"] }, 1, 0] },
+          },
+          pendingLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] },
+          },
+          inProgressLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] },
+          },
           wonLeads: { $sum: { $cond: [{ $eq: ["$status", "Won"] }, 1, 0] } },
           lostLeads: { $sum: { $cond: [{ $eq: ["$status", "Lost"] }, 1, 0] } },
-          unassignedLeads: { $sum: { $cond: [{ $eq: ["$assignedTo", null] }, 1, 0] } },
-        }
-      }
+          unassignedLeads: {
+            $sum: { $cond: [{ $eq: ["$assignedTo", null] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     // Create sort object dynamically
@@ -168,7 +208,7 @@ exports.searchLeads = async (req, res) => {
         currentPage: parseInt(page),
         totalPages: Math.ceil((insights[0]?.totalLeads || 0) / limit),
         pageSize: parseInt(limit),
-      }
+      },
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -237,7 +277,7 @@ exports.AssignUserToLead = async (req, res) => {
       leadId,
       { assignedTo: user._id },
       { new: true },
-      { timestamps: false }// Return the updated object and run validation
+      { timestamps: false } // Return the updated object and run validation
     ).populate("assignedTo", "_id firstName lastName");
 
     if (!updatedLead) {
@@ -444,7 +484,6 @@ exports.getLeadsForDocs = async (req, res) => {
 //   }
 // };
 
-
 exports.getCampaigns = async (req, res) => {
   try {
     // Get all campaigns from the Campaign collection
@@ -453,12 +492,12 @@ exports.getCampaigns = async (req, res) => {
       assignedTo: req.user._id,
     });
     // Get lead counts for all campaigns
-       const campaigns = await Campaign.find({ _id: { $in: campaignid } });
+    const campaigns = await Campaign.find({ _id: { $in: campaignid } });
 
     const leadCounts = await Lead.aggregate([
       {
         $match: {
-          campaignid: { $in: campaigns.map(c => c._id) }, // Filter by assigned campaigns
+          campaignid: { $in: campaigns.map((c) => c._id) }, // Filter by assigned campaigns
           assignedTo: new mongoose.Types.ObjectId(req.user._id), // Use assignedTo instead of user
         },
       },
@@ -474,8 +513,10 @@ exports.getCampaigns = async (req, res) => {
     ]);
 
     // Merge campaigns with their respective lead statistics
-    const mergedCampaigns = campaigns.map(campaign => {
-      const leadData = leadCounts.find(lc => lc._id?.toString() === campaign._id.toString()) || {
+    const mergedCampaigns = campaigns.map((campaign) => {
+      const leadData = leadCounts.find(
+        (lc) => lc._id?.toString() === campaign._id.toString()
+      ) || {
         totalLeads: 0,
         newLeads: 0,
       };
@@ -494,8 +535,6 @@ exports.getCampaigns = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
-
 
 exports.getCounsellorLeads = async (req, res) => {
   try {
@@ -573,12 +612,10 @@ exports.updateLead = async (req, res) => {
 
     // Prevent reverting untouched back to true
     if (updates.untouched === true) {
-      return res
-        .status(400)
-        .json({
-          message:
-            'The "untouched" field cannot be reverted to true once set to false.',
-        });
+      return res.status(400).json({
+        message:
+          'The "untouched" field cannot be reverted to true once set to false.',
+      });
     }
 
     // Prepare update object
@@ -700,17 +737,16 @@ exports.AssignMultipleLeadsToUser = async (req, res) => {
       leads: populatedLeads,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "Error assigning leads to user.",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error assigning leads to user.",
+      error: error.message,
+    });
   }
 };
 
 exports.createLead = async (req, res) => {
-  const { name, phone, email, campaignid, district, assignedTo,source  } = req.body; // Extract relevant fields from the request
+  const { name, phone, email, campaignid, district, assignedTo, source } =
+    req.body; // Extract relevant fields from the request
 
   // Validate required fields
   if (!name || !phone || !campaignid) {
@@ -733,11 +769,9 @@ exports.createLead = async (req, res) => {
     });
 
     if (existingLead) {
-      return res
-        .status(409)
-        .json({
-          message: "Lead with the same phone number or email already exists.",
-        });
+      return res.status(409).json({
+        message: "Lead with the same phone number or email already exists.",
+      });
     }
 
     // Check if customer already exists based on phone or email
@@ -773,9 +807,59 @@ exports.createLead = async (req, res) => {
   }
 };
 
+exports.webhookReceiver = async (req, res) => {
+  try {
+    const { name, email, phone, source, campaign, state, district, country, ...restPayload } = req.body;
+
+    // Basic validation
+    if (!name || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and phone are required fields"
+      });
+    }
+
+    // Create profile object with known fields
+    const profile = {
+      state,
+      district,
+      country
+    };
+
+    // Create new lead
+    const newLead = new Lead({
+      name,
+      email,
+      phone,
+      source: source || 'webhook',
+      campaignid: "680a32a22bc5f561a2216b41",
+      company: "6723a86ae3bc2fcb385cdcb1",
+      profile,
+      additionalFields: restPayload // Store all remaining fields from payload
+    });
+
+    await newLead.save();
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: "Lead created successfully",
+      data: newLead
+    });
+
+  } catch (error) {
+    console.error("Webhook Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error processing webhook data",
+      error: error.message
+    });
+  }
+};
+
 exports.getLeadsByCampaignId = async (req, res) => {
   const { campaignid } = req.params;
-  const { page = 1, limit = 100, sort = 'createdAt', order = -1 } = req.query;
+  const { page = 1, limit = 100, sort = "createdAt", order = -1 } = req.query;
 
   try {
     // Validate campaignId
@@ -792,7 +876,7 @@ exports.getLeadsByCampaignId = async (req, res) => {
     // Execute queries in parallel for better performance
     const [leads, totalCount] = await Promise.all([
       Lead.find({ campaignid })
-        .select('-__v') // Exclude unnecessary fields
+        .select("-__v") // Exclude unnecessary fields
         .populate("assignedTo", "_id firstName lastName")
         .populate("campaignid", "_id name description")
         .sort(sortObj)
@@ -800,14 +884,14 @@ exports.getLeadsByCampaignId = async (req, res) => {
         .limit(parseInt(limit))
         .lean() // Convert to plain JavaScript objects for better performance
         .exec(),
-      Lead.countDocuments({ campaignid })
+      Lead.countDocuments({ campaignid }),
     ]);
 
     // Check if leads exist
     if (!leads || leads.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "No leads found for the given campaign ID." 
+        message: "No leads found for the given campaign ID.",
       });
     }
 
@@ -821,20 +905,18 @@ exports.getLeadsByCampaignId = async (req, res) => {
           totalPages: Math.ceil(totalCount / limit),
           currentPage: parseInt(page),
           perPage: parseInt(limit),
-          hasMore: skip + leads.length < totalCount
-        }
-      }
+          hasMore: skip + leads.length < totalCount,
+        },
+      },
     });
-
   } catch (error) {
     console.error("Error fetching leads by campaign ID:", error.message);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: "An error occurred while fetching leads." 
+      error: "An error occurred while fetching leads.",
     });
   }
 };
-
 
 exports.getworkflowLeads = async (req, res) => {
   const { Pipeline } = req.params;
@@ -846,7 +928,7 @@ exports.getworkflowLeads = async (req, res) => {
     }
 
     // Fetch leads from the database
-    const campaign = await Campaign.find({ Pipeline })
+    const campaign = await Campaign.find({ Pipeline });
 
     // Check if leads exist
     if (!campaign || campaign.length === 0) {
@@ -863,15 +945,15 @@ exports.getworkflowLeads = async (req, res) => {
           .exec();
       })
     );
-    
+
     // Flatten the leads array if needed
-    leads = leads.flat().map(lead => ({
+    leads = leads.flat().map((lead) => ({
       ...lead.toObject(), // Convert Mongoose document to plain object
       status: lead.status, // Include status directly
-      tags: lead.tags.map(tag => ({
+      tags: lead.tags.map((tag) => ({
         name: tag.name,
-        color: tag.color // Ensure color is included
-      }))
+        color: tag.color, // Ensure color is included
+      })),
     }));
 
     res.status(200).json(leads);
@@ -944,12 +1026,12 @@ exports.UpdateLeadStatus = async (req, res) => {
           company: req.user.company._id,
         });
         await newSales.save();
-      }  
+      }
       lead.stages = 0;
     }
 
     lead.status = status;
-  
+
     await lead.save();
 
     return res.status(200).json({
@@ -1150,7 +1232,7 @@ exports.getLeadsCountByCampaignAndStatus = async (req, res) => {
 
 exports.userPerformance = async (req, res) => {
   try {
-    const  companyId  = req.user.company;
+    const companyId = req.user.company;
     const { startDate, endDate } = req.query;
 
     // Create date filters
@@ -1168,126 +1250,140 @@ exports.userPerformance = async (req, res) => {
         $match: {
           company: companyId,
           assignedTo: { $ne: null },
-          ...dateFilter
-        }
+          ...dateFilter,
+        },
       },
       {
         $group: {
-          _id: '$assignedTo',
+          _id: "$assignedTo",
           totalLeads: { $sum: 1 },
           convertedLeads: {
             $sum: {
-              $cond: [{ $eq: ['$status', 'Converted'] }, 1, 0]
-            }
-          }
-        }
+              $cond: [{ $eq: ["$status", "Converted"] }, 1, 0],
+            },
+          },
+        },
       },
       {
         $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'userDetails'
-        }
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "userDetails",
+        },
       },
       {
-        $unwind: '$userDetails'
+        $unwind: "$userDetails",
       },
       {
         $project: {
-          userId: '$_id',
-          name: '$userDetails.name',
+          userId: "$_id",
+          name: "$userDetails.name",
           totalLeads: 1,
           convertedLeads: 1,
           conversionRate: {
-            $multiply: [
-              { $divide: ['$convertedLeads', '$totalLeads'] },
-              100
-            ]
-          }
-        }
+            $multiply: [{ $divide: ["$convertedLeads", "$totalLeads"] }, 100],
+          },
+        },
       },
       {
-        $sort: { conversionRate: -1 }
-      }
+        $sort: { conversionRate: -1 },
+      },
     ]);
 
     res.json({
       success: true,
-      data: userPerformance
+      data: userPerformance,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching user performance data',
-      error: error.message
+      message: "Error fetching user performance data",
+      error: error.message,
     });
   }
 };
 
 exports.getLeadStatus = async (req, res) => {
-    try {
-        const { startDate, endDate } = req.query;
+  try {
+    const { startDate, endDate } = req.query;
 
-        if (!startDate || !endDate) {
-            return res.status(400).json({ message: "Start date and end date are required" });
-        }
-
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Ensure the end date includes the full day
-
-        // Ensure user and company exist in the request
-        if (!req.user || !req.user.company || !req.user._id) {
-            return res.status(403).json({ message: "Unauthorized access" });
-        }
-
-        const companyId = req.user.company._id;
-        const userId = req.user._id;
-
-        // Base query for filtering leads by user and company
-        const baseQuery = { company: companyId, assignedTo: userId };
-
-        // Query for leads within date range
-        const dateRangeQuery = { 
-            ...baseQuery, 
-            createdAt: { $gte: start, $lte: end } 
-        };
-
-        // Fetch lead counts within the date range
-        const totalLeadsInRange = await Lead.countDocuments(dateRangeQuery);
-        const newLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'New' });
-        const inProgressLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'In Progress' });
-        const convertedLeadsInRange = await Lead.countDocuments({ ...dateRangeQuery, status: 'Converted' });
-
-        // Fetch overall lead counts
-        const totalLeadsOverall = await Lead.countDocuments(baseQuery);
-        const newLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'New' });
-        const inProgressLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'In Progress' });
-        const convertedLeadsOverall = await Lead.countDocuments({ ...baseQuery, status: 'Converted' });
-
-        return res.status(200).json({
-            dateRange: {
-                totalLeads: totalLeadsInRange,
-                newLeads: newLeadsInRange,
-                inProgressLeads: inProgressLeadsInRange,
-                convertedLeads: convertedLeadsInRange
-            },
-            overall: {
-                totalLeads: totalLeadsOverall,
-                newLeads: newLeadsOverall,
-                inProgressLeads: inProgressLeadsOverall,
-                convertedLeads: convertedLeadsOverall
-            }
-        });
-
-    } catch (error) {
-        console.error("Error fetching lead statistics:", error);
-        res.status(500).json({ message: "Internal server error" });
+    if (!startDate || !endDate) {
+      return res
+        .status(400)
+        .json({ message: "Start date and end date are required" });
     }
-};
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // Ensure the end date includes the full day
+
+    // Ensure user and company exist in the request
+    if (!req.user || !req.user.company || !req.user._id) {
+      return res.status(403).json({ message: "Unauthorized access" });
+    }
+
+    const companyId = req.user.company._id;
+    const userId = req.user._id;
+
+    // Base query for filtering leads by user and company
+    const baseQuery = { company: companyId, assignedTo: userId };
+
+    // Query for leads within date range
+    const dateRangeQuery = {
+      ...baseQuery,
+      createdAt: { $gte: start, $lte: end },
+    };
+
+    // Fetch lead counts within the date range
+    const totalLeadsInRange = await Lead.countDocuments(dateRangeQuery);
+    const newLeadsInRange = await Lead.countDocuments({
+      ...dateRangeQuery,
+      status: "New",
+    });
+    const inProgressLeadsInRange = await Lead.countDocuments({
+      ...dateRangeQuery,
+      status: "In Progress",
+    });
+    const convertedLeadsInRange = await Lead.countDocuments({
+      ...dateRangeQuery,
+      status: "Converted",
+    });
+
+    // Fetch overall lead counts
+    const totalLeadsOverall = await Lead.countDocuments(baseQuery);
+    const newLeadsOverall = await Lead.countDocuments({
+      ...baseQuery,
+      status: "New",
+    });
+    const inProgressLeadsOverall = await Lead.countDocuments({
+      ...baseQuery,
+      status: "In Progress",
+    });
+    const convertedLeadsOverall = await Lead.countDocuments({
+      ...baseQuery,
+      status: "Converted",
+    });
+
+    return res.status(200).json({
+      dateRange: {
+        totalLeads: totalLeadsInRange,
+        newLeads: newLeadsInRange,
+        inProgressLeads: inProgressLeadsInRange,
+        convertedLeads: convertedLeadsInRange,
+      },
+      overall: {
+        totalLeads: totalLeadsOverall,
+        newLeads: newLeadsOverall,
+        inProgressLeads: inProgressLeadsOverall,
+        convertedLeads: convertedLeadsOverall,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching lead statistics:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 exports.addTagsToLead = async (req, res) => {
   try {
@@ -1299,22 +1395,26 @@ exports.addTagsToLead = async (req, res) => {
     if (!lead) return res.status(404).json({ error: "Lead not found" });
 
     // Validate all tags exist
-    const validTags = await TagManager.find({ _id: { $in: tags } }).populate('name'); // Populate tag names
+    const validTags = await TagManager.find({ _id: { $in: tags } }).populate(
+      "name"
+    ); // Populate tag names
     if (validTags.length !== tags.length) {
       return res.status(400).json({ error: "One or more tags are invalid" });
     }
 
     // Check for existing tags
-    const existingTags = lead.tags.filter(tag => tags.includes(tag.toString()));
+    const existingTags = lead.tags.filter((tag) =>
+      tags.includes(tag.toString())
+    );
     if (existingTags.length > 0) {
-      return res.status(409).json({ 
-        error: "Tags already exist", 
-        existingTags: existingTags 
+      return res.status(409).json({
+        error: "Tags already exist",
+        existingTags: existingTags,
       });
     }
 
     // Filter out tags that are already associated with the lead
-    const newTags = tags.filter(tag => !lead.tags.includes(tag));
+    const newTags = tags.filter((tag) => !lead.tags.includes(tag));
 
     // Update lead with new tags only if there are any new tags
     if (newTags.length > 0) {
@@ -1322,12 +1422,14 @@ exports.addTagsToLead = async (req, res) => {
       await lead.save();
 
       // Increment leads count for each tag
-      await Promise.all(validTags.map(tag => tag.incrementLeadsCount()));
+      await Promise.all(validTags.map((tag) => tag.incrementLeadsCount()));
     }
 
     res.json({ message: "Tags added successfully", lead, tags: validTags }); // Include populated tags in the response
   } catch (error) {
-    res.status(500).json({ error: "Error adding tags to lead", details: error.message });
+    res
+      .status(500)
+      .json({ error: "Error adding tags to lead", details: error.message });
   }
 };
 
@@ -1347,48 +1449,186 @@ exports.removeTagsFromLead = async (req, res) => {
     }
 
     // Remove tags from lead
-    lead.tags = lead.tags.filter(tag => !tags.includes(tag.toString()));
+    lead.tags = lead.tags.filter((tag) => !tags.includes(tag.toString()));
     await lead.save();
 
     // Decrement leads count for each tag
-    await Promise.all(validTags.map(tag => tag.decrementLeadsCount()));
+    await Promise.all(validTags.map((tag) => tag.decrementLeadsCount()));
 
     res.json({ message: "Tags removed successfully", lead });
   } catch (error) {
-    res.status(500).json({ error: "Error removing tags from lead", details: error.message });
+    res
+      .status(500)
+      .json({ error: "Error removing tags from lead", details: error.message });
   }
 };
 
 const xlsx = require("xlsx");
 
 exports.getExcelHeaders = (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded" });
-        }
-
-        const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
-
-        // Get dynamic fields from req.body
-        const leadSchemaFields = req.body.dynamicFields || [
-            "name", "district", "email", "phone", "campaign", "campaignid",
-            "status", "source", "Customer", "company", "tags", "assignedTo",
-            "untouched", "notes", "createdAt", "profile", "stages", "additionalFields"
-        ];
-
-        // Extract dynamic fields that are present in the headers
-        const dynamicFieldsFromHeaders = leadSchemaFields.filter(field => headers.includes(field));
-
-        res.json({ headers, leadSchemaFields, dynamicFieldsFromHeaders });
-    } catch (error) {
-        console.error("Error reading Excel file:", error);
-        res.status(500).json({ error: "Failed to read Excel file." });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
     }
+
+<<<<<<< HEAD
+
+=======
+    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
+
+    // Get dynamic fields from req.body
+    const leadSchemaFields = req.body.dynamicFields || [
+      "name",
+      "district",
+      "email",
+      "phone",
+      "campaign",
+      "campaignid",
+      "status",
+      "source",
+      "Customer",
+      "company",
+      "tags",
+      "assignedTo",
+      "untouched",
+      "notes",
+      "createdAt",
+      "profile",
+      "stages",
+      "additionalFields",
+    ];
+
+    // Extract dynamic fields that are present in the headers
+    const dynamicFieldsFromHeaders = leadSchemaFields.filter((field) =>
+      headers.includes(field)
+    );
+
+    res.json({ headers, leadSchemaFields, dynamicFieldsFromHeaders });
+  } catch (error) {
+    console.error("Error reading Excel file:", error);
+    res.status(500).json({ error: "Failed to read Excel file." });
+  }
+};
+>>>>>>> 63cd08a0e3ac1ce66102874c9bbd2e7eaa2d411a
+
+
+exports.matchHeadersWithSchema = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const { fieldMap, campaignId } = req.body;
+    const parsedMap = JSON.parse(fieldMap);
+
+    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    const jsonData = xlsx.utils.sheet_to_json(worksheet);
+
+    // Transform Excel data to Lead documents
+    const leadsToInsert = jsonData.map(row => {
+      const lead = {
+        company: req.user.company._id,
+        campaignid: campaignId,
+        status: 'New',
+        untouched: true
+      };
+
+      // Map Excel columns to Lead schema fields
+      for (let header in parsedMap) {
+        const schemaField = parsedMap[header];
+        console.log(schemaField);
+        // Handle nested profile fields
+        if (schemaField.startsWith('profile.')) {
+          const profileField = schemaField.split('.')[1];
+          lead.profile = lead.profile || {};
+          lead.profile[profileField] = row[header];
+        } else {
+          lead[header] = row[schemaField];
+        }
+      }
+     
+      return lead;
+    });
+
+    // Validate required fields
+    const invalidLeads = leadsToInsert.filter(lead => !lead.name || !lead.phone);
+    if (invalidLeads.length > 0) {
+      return res.status(400).json({
+        error: "Some leads are missing required fields (name or phone)",
+        invalidLeads
+      });
+    }
+
+    // Insert leads in batches of 100
+    const batchSize = 100;
+    const results = [];
+    
+    for (let i = 0; i < leadsToInsert.length; i += batchSize) {
+      const batch = leadsToInsert.slice(i, i + batchSize);
+      const savedLeads = await Lead.insertMany(batch, { ordered: false });
+      results.push(...savedLeads);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully imported ${results.length} leads`,
+      leads: results
+    });
+
+  } catch (error) {
+    console.error("Error importing leads:", error);
+    res.status(500).json({ 
+      error: "Failed to import leads",
+      details: error.message 
+    });
+  }
 };
 
+exports.getWebhookLeads = async (req, res) => {
+  try {
+    const { page = 1, limit = 100} = req.query;
+    const skip = (page - 1) * limit;
 
+    // Build query filters
+    const filters = {
+      company: "6723a86ae3bc2fcb385cdcb1" // Filter by company
+    };
 
+      filters.campaignid = "680a32a22bc5f561a2216b41";
+ 
 
+    // Execute query with pagination
+    const leads = await Lead.find(filters)
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalCount = await Lead.countDocuments(filters);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        leads,
+        pagination: {
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          currentPage: parseInt(page),
+          perPage: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching webhook leads:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching leads",
+      error: error.message
+    });
+  }
+};
