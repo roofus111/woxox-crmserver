@@ -1,6 +1,6 @@
-const AWS = require("aws-sdk");
-const Files = require("../models/Filehandler");
-const User = require("../models/User");
+const AWS = require("aws-sdk"); 
+const Files = require("../models/Filehandler"); 
+const User = require("../models/User"); 
 const { v4: uuidv4 } = require("uuid"); // For generating unique file names
 const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");

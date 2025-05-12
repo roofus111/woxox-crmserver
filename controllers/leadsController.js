@@ -1483,6 +1483,9 @@ exports.getExcelHeaders = (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+<<<<<<< HEAD
+
+=======
     const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
@@ -1521,6 +1524,7 @@ exports.getExcelHeaders = (req, res) => {
     res.status(500).json({ error: "Failed to read Excel file." });
   }
 };
+>>>>>>> 63cd08a0e3ac1ce66102874c9bbd2e7eaa2d411a
 
 
 exports.matchHeadersWithSchema = async (req, res) => {

@@ -289,7 +289,7 @@ router.get("/docs/:id", async (req, res) => {
       return res.status(404).json({ error: "File not found" });
     }
 
-    const params = {
+    const params = {  
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: `fileuploads/${fileRecord.company}/${fileRecord.fileName}`, // Update path based on actual file structure
     };
