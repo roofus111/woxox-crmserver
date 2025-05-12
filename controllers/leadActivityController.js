@@ -1,4 +1,5 @@
 const LeadActivity = require('../models/LeadActivity'); // Assuming the model is in the models folder
+const LeadFollowUp = require('../models/followUp');
 
 const User = require('../models/User');
 // Controller to create a new lead activity log
@@ -264,6 +265,44 @@ exports.getActivityKPIs = async (req, res) => {
       .populate('leadId', 'name status tags')
       .sort('timestamp');
 
+    // Get follow-up statistics
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const followUpFilter = {
+      company: companyId,
+      ...(userId && { assignedTo: userId })
+    };
+
+    // Get today's follow-ups
+    const todaysFollowUps = await LeadFollowUp.find({
+      ...followUpFilter,
+      nextFollowUpDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    });
+
+    // Get all missed follow-ups
+    const missedFollowUps = await LeadFollowUp.find({
+      ...followUpFilter,
+      status: 'Pending',
+      nextFollowUpDate: { $lt: today }
+    });
+
+    // Calculate follow-up statistics
+    const followUpStats = {
+      todayTotal: todaysFollowUps.length,
+      todayPending: todaysFollowUps.filter(f => f.status === 'Pending').length,
+      todayCompleted: todaysFollowUps.filter(f => f.status === 'Closed').length,
+      todayMissed: todaysFollowUps.filter(f => 
+        f.status === 'Pending' && f.nextFollowUpDate < new Date()
+      ).length,
+      totalMissed: missedFollowUps.length
+    };
+
     // Group activities by date and then by user
     const dailyActivities = activities.reduce((acc, activity) => {
       const date = new Date(activity.timestamp).toISOString().split('T')[0];
@@ -358,7 +397,7 @@ exports.getActivityKPIs = async (req, res) => {
         ...userData,
         summary: {
           ...userData.summary,
-          leadsInteracted: userData.summary.leadsInteracted.size, // Convert Set to count
+          leadsInteracted: userData.summary.leadsInteracted.size,
           activeHours: (new Date(userData.summary.lastActivity) - new Date(userData.summary.firstActivity)) / (1000 * 60 * 60),
           timeline: userData.timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
         }
@@ -366,7 +405,8 @@ exports.getActivityKPIs = async (req, res) => {
     })).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.status(200).json({
-      dailyActivities: formattedResponse
+      dailyActivities: formattedResponse,
+      followUpStats
     });
 
   } catch (error) {
@@ -414,7 +454,7 @@ exports.getLeaderboard = async (req, res) => {
       activity.userId._id && activity.leadId._id
     );
 
-    // Group activities by user
+    // Group activities by user and calculate weighted score
     const userStats = validActivities.reduce((acc, activity) => {
       // Skip if required data is missing
       if (!activity.userId?._id || !activity.leadId?._id) {
@@ -463,37 +503,142 @@ exports.getLeaderboard = async (req, res) => {
       }
 
       // Track lead status (with null check)
-      if (activity.leadId.status === 'converted') {
+      if (activity.leadId.status === 'Converted') {
         userMetrics.convertedLeads.add(activity.leadId._id.toString());
       }
-      if (activity.leadId.status === 'interested') {
+      if (activity.leadId.status === 'Interested') {
         userMetrics.interestedLeads.add(activity.leadId._id.toString());
+      }
+
+      // --- Weighted Score Calculation ---
+      // Only count unique leads once per user
+      if (!userMetrics._uniqueLeadsSet) userMetrics._uniqueLeadsSet = new Set();
+      if (!userMetrics._uniqueLeadsSet.has(activity.leadId._id.toString())) {
+        userMetrics.weightedScore = (userMetrics.weightedScore || 0) + 20;
+        userMetrics._uniqueLeadsSet.add(activity.leadId._id.toString());
+      }
+
+      // Status change to Interested or Converted (count once per lead per user)
+      if (!userMetrics._statusChangeSet) userMetrics._statusChangeSet = new Set();
+      if (
+        (activity.leadId.status === 'Converted' || activity.leadId.status === 'Interested') &&
+        !userMetrics._statusChangeSet.has(activity.leadId._id.toString())
+      ) {
+        userMetrics.weightedScore = (userMetrics.weightedScore || 0) + 20;
+        userMetrics._statusChangeSet.add(activity.leadId._id.toString());
+      }
+
+      // Add Note or Assign Lead
+      if (['Add Note', 'Assign Lead'].includes(activity.action)) {
+        userMetrics.weightedScore = (userMetrics.weightedScore || 0) + 5;
+      }
+      // Other activity
+      else if (
+        !['Add Note', 'Assign Lead'].includes(activity.action) &&
+        !(['Answered', 'NotAnswered', 'Busy', 'Wrong Number', 'Not Reachable', 'Callback Requested'].includes(activity.action))
+      ) {
+        userMetrics.weightedScore = (userMetrics.weightedScore || 0) + 10;
+      }
+      // (Call actions are not given extra points unless you want to add them)
+
+      return acc;
+    }, {});
+
+    // Get follow-up statistics
+    const today = new Date(startDate);
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(endDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const followUpFilter = {
+      company: companyId
+    };
+
+    // Get today's follow-ups
+    const todaysFollowUps = await LeadFollowUp.find({
+      ...followUpFilter,
+      nextFollowUpDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    });
+
+    // Get all missed follow-ups
+    const missedFollowUps = await LeadFollowUp.find({
+      ...followUpFilter,
+      status: 'Pending',
+      nextFollowUpDate: { $lt: today }
+    });
+
+    // Calculate follow-up statistics
+    const followUpStats = todaysFollowUps.reduce((acc, followUp) => {
+      const userId = followUp.assignedTo.toString();
+      if (!acc[userId]) {
+        acc[userId] = {
+          total: 0,
+          completed: 0,
+          pending: 0,
+          missed: 0
+        };
+      }
+
+      acc[userId].total++;
+      if (followUp.status === 'Closed') {
+        acc[userId].completed++;
+      } else if (followUp.status === 'Pending') {
+        acc[userId].pending++;
+        if (followUp.nextFollowUpDate < new Date()) {
+          acc[userId].missed++;
+        }
       }
 
       return acc;
     }, {});
 
-    // Calculate final metrics and create leaderboard
-    const leaderboard = Object.values(userStats).map(userData => ({
-      user: userData.user,
-      metrics: {
-        ...userData.metrics,
-        uniqueLeads: userData.metrics.uniqueLeads.size,
-        convertedLeads: userData.metrics.convertedLeads.size,
-        interestedLeads: userData.metrics.interestedLeads.size,
-        callMetrics: {
-          ...userData.metrics.callMetrics,
-          successRate: (userData.metrics.callMetrics.answered / 
-            (userData.metrics.callMetrics.total || 1)) * 100
-        },
-        conversionRate: (userData.metrics.convertedLeads.size / 
-          userData.metrics.uniqueLeads.size) * 100,
-        interestRate: (userData.metrics.interestedLeads.size / 
-          userData.metrics.uniqueLeads.size) * 100,
-        averageInteractionsPerLead: userData.metrics.totalInteractions / 
-          (userData.metrics.uniqueLeads.size || 1)
+    // Add 20 points for each completed/closed follow-up
+    Object.entries(followUpStats).forEach(([userId, stats]) => {
+      if (userStats[userId]) {
+        userStats[userId].metrics.weightedScore = (userStats[userId].metrics.weightedScore || 0) + (20 * stats.completed);
       }
-    }));
+    });
+
+    // Calculate final metrics and create leaderboard
+    const leaderboard = Object.values(userStats).map(userData => {
+      const userId = userData.user.id;
+      const userFollowUps = followUpStats[userId] || {
+        total: 0,
+        completed: 0,
+        pending: 0,
+        missed: 0
+      };
+
+      return {
+        user: userData.user,
+        metrics: {
+          ...userData.metrics,
+          uniqueLeads: userData.metrics.uniqueLeads.size,
+          convertedLeads: userData.metrics.convertedLeads.size,
+          interestedLeads: userData.metrics.interestedLeads.size,
+          followUps: userFollowUps,
+          followUpCompletionRate: userFollowUps.total ? 
+            (userFollowUps.completed / userFollowUps.total) * 100 : 0,
+          effectiveScore: (userData.metrics.convertedLeads.size * 100) - 
+            (userFollowUps.missed * 10),
+          callMetrics: {
+            ...userData.metrics.callMetrics,
+            successRate: (userData.metrics.callMetrics.answered / 
+              (userData.metrics.callMetrics.total || 1)) * 100
+          },
+          conversionRate: (userData.metrics.convertedLeads.size / 
+            userData.metrics.uniqueLeads.size) * 100,
+          interestRate: (userData.metrics.interestedLeads.size / 
+            userData.metrics.uniqueLeads.size) * 100,
+          averageInteractionsPerLead: userData.metrics.totalInteractions / 
+            (userData.metrics.uniqueLeads.size || 1),
+          weightedScore: userData.metrics.weightedScore || 0
+        }
+      };
+    });
 
     // Calculate rankings for different categories (only if there are entries)
     const rankings = leaderboard.length > 0 ? {
@@ -506,13 +651,22 @@ exports.getLeaderboard = async (req, res) => {
       byConversionRate: [...leaderboard].sort((a, b) => 
         b.metrics.conversionRate - a.metrics.conversionRate),
       byCallSuccessRate: [...leaderboard].sort((a, b) => 
-        b.metrics.callMetrics.successRate - a.metrics.callMetrics.successRate)
+        b.metrics.callMetrics.successRate - a.metrics.callMetrics.successRate),
+      byEffectiveScore: [...leaderboard].sort((a, b) => 
+        b.metrics.effectiveScore - a.metrics.effectiveScore),
+      byFollowUpCompletion: [...leaderboard].sort((a, b) => 
+        b.metrics.followUpCompletionRate - a.metrics.followUpCompletionRate),
+      byWeightedScore: [...leaderboard].sort((a, b) => 
+        b.metrics.weightedScore - a.metrics.weightedScore)
     } : {
       byTotalInteractions: [],
       byUniqueLeads: [],
       byConvertedLeads: [],
       byConversionRate: [],
-      byCallSuccessRate: []
+      byCallSuccessRate: [],
+      byEffectiveScore: [],
+      byFollowUpCompletion: [],
+      byWeightedScore: []
     };
 
     // Calculate team totals

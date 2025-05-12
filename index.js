@@ -54,8 +54,8 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    // origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
-    origin: ["http://localhost:3000"],  // Allow requests from this origin and my frontend port = 5173
+    origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
+    // origin: ["http://localhost:3000"], 
     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
@@ -374,7 +374,7 @@ cron.schedule("0,30 * * * *", async () => {
       .exec();
 
     for (const followUp of followUps) {
-      const userId = followUp.assignedTo.toString();
+      const userId = followUp.assignedTo._id;
       const followUpTime = followUp.nextFollowUpDate.getTime();
       const timeDifference = now.getTime() - followUpTime;
       const hoursDifference = timeDifference / (1000 * 60 * 60);

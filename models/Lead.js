@@ -121,6 +121,7 @@ const LeadSchema = new mongoose.Schema({
   },
   untouched:{type:Boolean,default:true},
   notes: [NoteSchema],
+  reshared:{type:Boolean,default:false},
   createdAt: { type: Date, default: Date.now },
   profile: FormSchema,
   stages: { type: Number, default: null },

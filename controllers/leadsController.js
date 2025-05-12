@@ -272,10 +272,15 @@ exports.AssignUserToLead = async (req, res) => {
     if (!creator) {
       return res.status(404).json({ message: "creator not found" });
     }
+    let flag = false
+    const lead =await Lead.findById(leadId);
+    if(lead.assignedTo !== null){
+      flag = true
+    }
     // Find the lead and update it
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
-      { assignedTo: user._id },
+      { assignedTo: user._id,reshared:flag },
       { new: true },
       { timestamps: false } // Return the updated object and run validation
     ).populate("assignedTo", "_id firstName lastName");
@@ -311,6 +316,12 @@ exports.UpdateLead = async (req, res) => {
     const updateData = req.body; // Data from the request body to update the lead
 
     // Find the lead by ID and update it
+    let flag = false;
+    const lead = await Lead.findById(leadId);
+    if(lead.assignedTo !== null){
+      flag = true;
+    }
+
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
       {
@@ -323,6 +334,7 @@ exports.UpdateLead = async (req, res) => {
           source: updateData.source, // Update source if provided
           company: updateData.company, // Update company reference if provided
           assignedTo: updateData.assignedTo, // Update assigned user if provided
+          reshared:flag,
           // Update the nested profile schema fields
           profile: {
             age: updateData.age,
