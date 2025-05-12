@@ -1389,22 +1389,6 @@ exports.getExcelHeaders = (req, res) => {
     }
 };
 
-exports.matchHeadersWithSchema = (req, res) => {
-  const { headers, leadSchemaFields } = req.body; // Expecting headers and schema fields from the request body
 
-  // if (!headers || !leadSchemaFields) {
-  //   return res.status(400).json({ message: "Headers and lead schema fields are required." });
-  // }
-
-  // Create a mapping of headers to schema fields
-  const matchedFields = leadSchemaFields.filter(field => headers.includes(field));
-  const unmatchedFields = leadSchemaFields.filter(field => !headers.includes(field));
-
-  res.status(200).json({
-    matchedFields,
-    unmatchedFields,
-    message: "Matching completed successfully."
-  });
-};
 
 

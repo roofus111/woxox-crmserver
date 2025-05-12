@@ -12,7 +12,7 @@ const getTotalCount = async (companyId) => {
     const count = await Payment.countDocuments(filter); // Count documents in the Invoice collection
     return count;
   } catch (error) {
-    console.error("Error getting invoice count:", error);
+    console.error("Error getting invoice count:", error); 
     throw new Error("Unable to retrieve invoice count.");
   }
 };
