@@ -34,6 +34,10 @@ const CampaignSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Invoice", // This references the Invoice model
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
 });
 CampaignSchema.pre("save", function (next) {
   this.updatedAt = Date.now();
