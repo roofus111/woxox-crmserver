@@ -54,8 +54,8 @@ const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
 const io = new Server(server, {
   cors: {
-    origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
-    // origin: ["http://localhost:3000"], 
+    // origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
+    origin: ["http://localhost:3000"], 
     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
   },
 });
@@ -134,12 +134,49 @@ io.on("connection", (socket) => {
 
   socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
 
+  // Add this new notification handler
+  socket.on("send_notification", async (data) => {
+    try {
+      const { to, title, message, type } = data;
+      
+      // Find recipient's socket
+      const recipientSocket = onlineUsers.get(to);
+      console.log(onlineUsers);
+      console.log(to, title, message, type, recipientSocket);
+      if (recipientSocket) {
+        io.to(recipientSocket).emit("new_notification", {
+          title,
+          message,
+          type,
+          timestamp: new Date()
+        });
+      }
+      
+      socket.emit("notification_sent", { success: true, message: "your message is sent" });
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      socket.emit("notification_sent", { success: false, error: "Failed to send notification" });
+    }
+  });
+
   // Register user and update online status
   socket.on("register", async (userId) => {
     try {
+      // Remove any existing socket mapping for this user
+      // const existingSocketId = onlineUsers.get(userId);
+      // if (existingSocketId) {
+      //   socket.to(existingSocketId).emit("force_disconnect");
+      //   onlineUsers.delete(userId);
+      // }
+
       socket.join(userId);
       onlineUsers.set(userId, socket.id);
-      await User.findByIdAndUpdate(userId, { socketId: socket.id });
+      
+      // Update user's socket ID in database
+      await User.findByIdAndUpdate(userId, 
+        { socketId: socket.id },
+        { new: true } // Return updated document
+      );
       
       // Broadcast online status to all users
       io.emit("user_status_change", {
@@ -307,16 +344,21 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     try {
+      // Find user by socket ID
       const user = await User.findOne({ socketId: socket.id });
       if (user) {
-        onlineUsers.delete(user._id.toString());
-        await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
-        
-        // Broadcast offline status
-        io.emit("user_status_change", {
-          userId: user._id,
-          status: "offline"
-        });
+        // Only remove from online users if this socket ID matches the stored one
+        const currentSocketId = onlineUsers.get(user._id.toString());
+        if (currentSocketId === socket.id) {
+          onlineUsers.delete(user._id.toString());
+          await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
+          
+          // Broadcast offline status
+          io.emit("user_status_change", {
+            userId: user._id,
+            status: "offline"
+          });
+        }
       }
       console.log(`Client disconnected: ${socket.id}`);
     } catch (error) {

@@ -277,13 +277,14 @@ exports.AssignUserToLead = async (req, res) => {
     if(lead.assignedTo !== null){
       flag = true
     }
+    
     // Find the lead and update it
     const updatedLead = await Lead.findByIdAndUpdate(
       leadId,
       { assignedTo: user._id,reshared:flag },
       { new: true },
       { timestamps: false } // Return the updated object and run validation
-    ).populate("assignedTo", "_id firstName lastName");
+    ).populate("assignedTo", "_id firstName lastName socketId");
 
     if (!updatedLead) {
       return res.status(404).json({ message: "Lead not found" });
