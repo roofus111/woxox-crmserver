@@ -42,6 +42,7 @@ const teamRoutes=require('./routes/teamRouter')
 const roleRoutes=require('./routes/roleRoutes')
 const productServiceRoutes=require('./routes/productServiceRoutes')
 const templateRoutes=require('./routes/templateRoutes')
+const notificationRoutes=require('./routes/notificationRoutes')
 const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -116,6 +117,7 @@ app.use("/api/team",teamRoutes)
 app.use("/api/role",roleRoutes)
 app.use("/api/productservice",productServiceRoutes)
 app.use("/api/template",templateRoutes)
+app.use("/api/notification",notificationRoutes)
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
