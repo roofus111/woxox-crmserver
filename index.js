@@ -53,13 +53,15 @@ const server = http.createServer(app);
 const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
 const alertBeforeMinutes = 30;
-const io = new Server(server, {
-  cors: {
-    // origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
-    origin: ["http://localhost:3000"], 
-    methods: ["GET", "POST","PUT"], // Allow these HTTP methods
-  },
-});
+// const io = new Server(server, {
+//   cors: {
+//     // origin: ["https://www.woxox.canbridge.in", "https://www.app.woxox.com"], 
+//     origin: ["http://localhost:3000"], 
+//     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
+//   },
+// });
+const { initializeSocket } = require("./socketServer");
+initializeSocket(server);
 const Message = require("./models/Message");
 const ChatGroup = require("./models/ChatGroup");
 const multer = require('multer');
@@ -131,243 +133,243 @@ const s3Client = new S3Client({
 const onlineUsers = new Map();
 const typingUsers = new Map();
 
-io.on("connection", (socket) => {
-  console.log("New client connected");
+// io.on("connection", (socket) => {
+//   console.log("New client connected");
 
-  socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
+//   socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
 
-  // Add this new notification handler
-  socket.on("send_notification", async (data) => {
-    try {
-      const { to, title, message, type } = data;
+//   // Add this new notification handler
+//   socket.on("send_notification", async (data) => {
+//     try {
+//       const { to, title, message, type } = data;
       
-      // Find recipient's socket
-      const recipientSocket = onlineUsers.get(to);
-      console.log(onlineUsers);
-      console.log(to, title, message, type, recipientSocket);
-      if (recipientSocket) {
-        io.to(recipientSocket).emit("new_notification", {
-          title,
-          message,
-          type,
-          timestamp: new Date()
-        });
-      }
+//       // Find recipient's socket BMSRYpvY4cJMATkPAADQ  FoJ-PHG-ldAzLDzdAADZ
+//       const recipientSocket = onlineUsers.get(to);
+//       console.log(onlineUsers);
+//       console.log(to, title, message, type, recipientSocket);
+//       if (recipientSocket) {
+//         io.to(recipientSocket).emit("new_notification", {
+//           title,
+//           message,
+//           type,
+//           timestamp: new Date()
+//         });
+//       }
       
-      socket.emit("notification_sent", { success: true, message: "your message is sent" });
-    } catch (error) {
-      console.error("Error sending notification:", error);
-      socket.emit("notification_sent", { success: false, error: "Failed to send notification" });
-    }
-  });
+//       socket.emit("notification_sent", { success: true, message: "your message is sent" });
+//     } catch (error) {
+//       console.error("Error sending notification:", error);
+//       socket.emit("notification_sent", { success: false, error: "Failed to send notification" });
+//     }
+//   });
 
-  // Register user and update online status
-  socket.on("register", async (userId) => {
-    try {
-      // Remove any existing socket mapping for this user
-      // const existingSocketId = onlineUsers.get(userId);
-      // if (existingSocketId) {
-      //   socket.to(existingSocketId).emit("force_disconnect");
-      //   onlineUsers.delete(userId);
-      // }
+//   // Register user and update online status
+//   socket.on("register", async (userId) => {
+//     try {
+//       // Remove any existing socket mapping for this user
+//       // const existingSocketId = onlineUsers.get(userId);
+//       // if (existingSocketId) {
+//       //   socket.to(existingSocketId).emit("force_disconnect");
+//       //   onlineUsers.delete(userId);
+//       // }
 
-      socket.join(userId);
-      onlineUsers.set(userId, socket.id);
+//       socket.join(userId);
+//       onlineUsers.set(userId, socket.id);
       
-      // Update user's socket ID in database
-      await User.findByIdAndUpdate(userId, 
-        { socketId: socket.id },
-        { new: true } // Return updated document
-      );
+//       // Update user's socket ID in database
+//       await User.findByIdAndUpdate(userId, 
+//         { socketId: socket.id },
+//         { new: true } // Return updated document
+//       );
       
-      // Broadcast online status to all users
-      io.emit("user_status_change", {
-        userId,
-        status: "online"
-      });
+//       // Broadcast online status to all users
+//       io.emit("user_status_change", {
+//         userId,
+//         status: "online"
+//       });
       
-      console.log(`User ${userId} registered with socket ${socket.id}`);
-    } catch (error) {
-      console.error("Error registering user:", error);
-    }
-  });
+//       console.log(`User ${userId} registered with socket ${socket.id}`);
+//     } catch (error) {
+//       console.error("Error registering user:", error);
+//     }
+//   });
 
-  // Handle private messages
-  socket.on("private_message", async (data) => {
-    try {
-      const { from, to, message, messageType = 'text', fileData } = data;
+//   // Handle private messages
+//   socket.on("private_message", async (data) => {
+//     try {
+//       const { from, to, message, messageType = 'text', fileData } = data;
       
-      let fileUrl = null;
-      if (fileData && messageType !== 'text') {
-        fileUrl = await uploadFileToS3(fileData);
-      }
+//       let fileUrl = null;
+//       if (fileData && messageType !== 'text') {
+//         fileUrl = await uploadFileToS3(fileData);
+//       }
 
-      const newMessage = new Message({
-        from,
-        to,
-        content: message,
-        messageType,
-        fileUrl,
-        fileName: fileData?.name,
-        fileSize: fileData?.size
-      });
-      await newMessage.save();
+//       const newMessage = new Message({
+//         from,
+//         to,
+//         content: message,
+//         messageType,
+//         fileUrl,
+//         fileName: fileData?.name,
+//         fileSize: fileData?.size
+//       });
+//       await newMessage.save();
 
-      const recipientSocket = onlineUsers.get(to);
-      if (recipientSocket) {
-        io.to(recipientSocket).emit("new_message", {
-          messageId: newMessage._id,
-          from,
-          message,
-          messageType,
-          fileUrl,
-          timestamp: newMessage.timestamp
-        });
-      }
+//       const recipientSocket = onlineUsers.get(to);
+//       if (recipientSocket) {
+//         io.to(recipientSocket).emit("new_message", {
+//           messageId: newMessage._id,
+//           from,
+//           message,
+//           messageType,
+//           fileUrl,
+//           timestamp: newMessage.timestamp
+//         });
+//       }
 
-      socket.emit("message_sent", { success: true, messageId: newMessage._id });
-    } catch (error) {
-      console.error("Error sending message:", error);
-      socket.emit("message_sent", { success: false, error: "Failed to send message" });
-    }
-  });
+//       socket.emit("message_sent", { success: true, messageId: newMessage._id });
+//     } catch (error) {
+//       console.error("Error sending message:", error);
+//       socket.emit("message_sent", { success: false, error: "Failed to send message" });
+//     }
+//   });
 
-  // Handle group messages
-  socket.on("group_message", async (data) => {
-    try {
-      const { from, groupId, message, messageType = 'text', fileData } = data;
+//   // Handle group messages
+//   socket.on("group_message", async (data) => {
+//     try {
+//       const { from, groupId, message, messageType = 'text', fileData } = data;
       
-      const group = await ChatGroup.findById(groupId);
-      if (!group) throw new Error("Group not found");
+//       const group = await ChatGroup.findById(groupId);
+//       if (!group) throw new Error("Group not found");
 
-      let fileUrl = null;
-      if (fileData && messageType !== 'text') {
-        fileUrl = await uploadFileToS3(fileData);
-      }
+//       let fileUrl = null;
+//       if (fileData && messageType !== 'text') {
+//         fileUrl = await uploadFileToS3(fileData);
+//       }
 
-      const newMessage = new Message({
-        from,
-        groupId,
-        content: message,
-        messageType,
-        fileUrl,
-        fileName: fileData?.name,
-        fileSize: fileData?.size
-      });
-      await newMessage.save();
+//       const newMessage = new Message({
+//         from,
+//         groupId,
+//         content: message,
+//         messageType,
+//         fileUrl,
+//         fileName: fileData?.name,
+//         fileSize: fileData?.size
+//       });
+//       await newMessage.save();
 
-      // Emit to all group members
-      group.members.forEach(member => {
-        const memberSocket = onlineUsers.get(member.user.toString());
-        if (memberSocket) {
-          io.to(memberSocket).emit("new_group_message", {
-            messageId: newMessage._id,
-            groupId,
-            from,
-            message,
-            messageType,
-            fileUrl,
-            timestamp: newMessage.timestamp
-          });
-        }
-      });
+//       // Emit to all group members
+//       group.members.forEach(member => {
+//         const memberSocket = onlineUsers.get(member.user.toString());
+//         if (memberSocket) {
+//           io.to(memberSocket).emit("new_group_message", {
+//             messageId: newMessage._id,
+//             groupId,
+//             from,
+//             message,
+//             messageType,
+//             fileUrl,
+//             timestamp: newMessage.timestamp
+//           });
+//         }
+//       });
 
-      socket.emit("message_sent", { success: true, messageId: newMessage._id });
-    } catch (error) {
-      console.error("Error sending group message:", error);
-      socket.emit("message_sent", { success: false, error: "Failed to send message" });
-    }
-  });
+//       socket.emit("message_sent", { success: true, messageId: newMessage._id });
+//     } catch (error) {
+//       console.error("Error sending group message:", error);
+//       socket.emit("message_sent", { success: false, error: "Failed to send message" });
+//     }
+//   });
 
-  // Handle typing indicators
-  socket.on("typing_start", ({ from, to, isGroup }) => {
-    const key = isGroup ? `group:${to}` : to;
-    if (!typingUsers.has(key)) {
-      typingUsers.set(key, new Set());
-    }
-    typingUsers.get(key).add(from);
+//   // Handle typing indicators
+//   socket.on("typing_start", ({ from, to, isGroup }) => {
+//     const key = isGroup ? `group:${to}` : to;
+//     if (!typingUsers.has(key)) {
+//       typingUsers.set(key, new Set());
+//     }
+//     typingUsers.get(key).add(from);
 
-    if (isGroup) {
-      socket.to(to).emit("typing_update", {
-        groupId: to,
-        users: Array.from(typingUsers.get(key))
-      });
-    } else {
-      const recipientSocket = onlineUsers.get(to);
-      if (recipientSocket) {
-        io.to(recipientSocket).emit("typing_update", { userId: from });
-      }
-    }
-  });
+//     if (isGroup) {
+//       socket.to(to).emit("typing_update", {
+//         groupId: to,
+//         users: Array.from(typingUsers.get(key))
+//       });
+//     } else {
+//       const recipientSocket = onlineUsers.get(to);
+//       if (recipientSocket) {
+//         io.to(recipientSocket).emit("typing_update", { userId: from });
+//       }
+//     }
+//   });
 
-  socket.on("typing_end", ({ from, to, isGroup }) => {
-    const key = isGroup ? `group:${to}` : to;
-    if (typingUsers.has(key)) {
-      typingUsers.get(key).delete(from);
-    }
+//   socket.on("typing_end", ({ from, to, isGroup }) => {
+//     const key = isGroup ? `group:${to}` : to;
+//     if (typingUsers.has(key)) {
+//       typingUsers.get(key).delete(from);
+//     }
 
-    if (isGroup) {
-      socket.to(to).emit("typing_update", {
-        groupId: to,
-        users: Array.from(typingUsers.get(key))
-      });
-    } else {
-      const recipientSocket = onlineUsers.get(to);
-      if (recipientSocket) {
-        io.to(recipientSocket).emit("typing_update", { userId: null });
-      }
-    }
-  });
+//     if (isGroup) {
+//       socket.to(to).emit("typing_update", {
+//         groupId: to,
+//         users: Array.from(typingUsers.get(key))
+//       });
+//     } else {
+//       const recipientSocket = onlineUsers.get(to);
+//       if (recipientSocket) {
+//         io.to(recipientSocket).emit("typing_update", { userId: null });
+//       }
+//     }
+//   });
 
-  // Handle read receipts
-  socket.on("mark_read", async ({ messageId, userId }) => {
-    try {
-      const message = await Message.findById(messageId);
-      if (message) {
-        if (!message.readBy.some(read => read.user.toString() === userId)) {
-          message.readBy.push({ user: userId });
-          await message.save();
+//   // Handle read receipts
+//   socket.on("mark_read", async ({ messageId, userId }) => {
+//     try {
+//       const message = await Message.findById(messageId);
+//       if (message) {
+//         if (!message.readBy.some(read => read.user.toString() === userId)) {
+//           message.readBy.push({ user: userId });
+//           await message.save();
 
-          // Notify message sender
-          const senderSocket = onlineUsers.get(message.from.toString());
-          if (senderSocket) {
-            io.to(senderSocket).emit("message_read", {
-              messageId,
-              readBy: userId,
-              timestamp: new Date()
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error marking message as read:", error);
-    }
-  });
+//           // Notify message sender
+//           const senderSocket = onlineUsers.get(message.from.toString());
+//           if (senderSocket) {
+//             io.to(senderSocket).emit("message_read", {
+//               messageId,
+//               readBy: userId,
+//               timestamp: new Date()
+//             });
+//           }
+//         }
+//       }
+//     } catch (error) {
+//       console.error("Error marking message as read:", error);
+//     }
+//   });
 
-  socket.on("disconnect", async () => {
-    try {
-      // Find user by socket ID
-      const user = await User.findOne({ socketId: socket.id });
-      if (user) {
-        // Only remove from online users if this socket ID matches the stored one
-        const currentSocketId = onlineUsers.get(user._id.toString());
-        if (currentSocketId === socket.id) {
-          onlineUsers.delete(user._id.toString());
-          await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
+//   socket.on("disconnect", async () => {
+//     try {
+//       // Find user by socket ID
+//       const user = await User.findOne({ socketId: socket.id });
+//       if (user) {
+//         // Only remove from online users if this socket ID matches the stored one
+//         const currentSocketId = onlineUsers.get(user._id.toString());
+//         if (currentSocketId === socket.id) {
+//           onlineUsers.delete(user._id.toString());
+//           await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
           
-          // Broadcast offline status
-          io.emit("user_status_change", {
-            userId: user._id,
-            status: "offline"
-          });
-        }
-      }
-      console.log(`Client disconnected: ${socket.id}`);
-    } catch (error) {
-      console.error("Error handling disconnect:", error);
-    }
-  });
-});
+//           // Broadcast offline status
+//           io.emit("user_status_change", {
+//             userId: user._id,
+//             status: "offline"
+//           });
+//         }
+//       }
+//       console.log(`Client disconnected: ${socket.id}`);
+//     } catch (error) {
+//       console.error("Error handling disconnect:", error);
+//     }
+//   });
+// });
 
 // Helper function to upload files to S3
 async function uploadFileToS3(fileData) {

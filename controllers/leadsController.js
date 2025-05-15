@@ -7,6 +7,7 @@ const Customer = require("../models/Customer");
 const Company = require("../models/Company");
 const LeadActivity = require("../models/LeadActivity");
 const TagManager = require("../models/Tagmanager");
+const FollowUp = require("../models/followUp");
 
 // Get all leads belonging to the user's company
 exports.getAllLeads = async (req, res) => {
@@ -300,9 +301,19 @@ exports.AssignUserToLead = async (req, res) => {
       ipAddress: req.ip, // Capture the IP address from the request object
       userAgent: req.get("User-Agent"),
     });
-
+    const followup = new FollowUp({
+      leadId: leadId,
+      company: req.user.company._id,
+      followUpDate: new Date(),
+      notes: `${creator.name} : I am sharing a Prospect lead with you. Please review this lead.`,
+      assignedTo: userId,
+      createdBy: req.user._id,
+      action: "assigned",
+      status: "Pending"
+    });
     // Save the activity log to the database
     await activity.save();
+    await followup.save();
     res.status(200).json(updatedLead);
   } catch (error) {
     res
