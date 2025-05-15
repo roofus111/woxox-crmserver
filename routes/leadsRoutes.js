@@ -217,6 +217,7 @@
 const express = require("express");
 const router = express.Router();
 const leadsController = require("../controllers/leadsController");
+
 const authenticateUser = require("../middleware/authenticateUser");
 const multer = require("multer");
 const { S3 } = require("@aws-sdk/client-s3");
@@ -317,7 +318,7 @@ router.get("/docs/:id", async (req, res) => {
 
 router.post('/webhook/202504/cd202504/leads',leadsController.webhookReceiver);
 router.get('/webhook/leads',leadsController.getWebhookLeads);
-
+router.get('/countstatusbycampaign/:campaignid/:status',leadsController.getLeadsByCampaignIdAndStatus);
 router.use(authenticateUser); // Apply authentication to all routes
 /**
  * @swagger
