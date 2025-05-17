@@ -1002,6 +1002,7 @@ exports.UpdateLeadStatus = async (req, res) => {
     "Won",
     "Duplicate",
   ];
+  
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status" });
   }
@@ -1012,10 +1013,13 @@ exports.UpdateLeadStatus = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    const company = await Company.findById(req.user.company._id); // Fetch the company details
+    const company = await Company.findById(req.user.company._id);
     if (!company) {
       return res.status(404).json({ message: "Company not found" });
     }
+
+    // Store the old status before updating
+    const oldStatus = lead.status;
 
     if (status === "Converted") {
       // if (!lead.Customer) {
@@ -1055,8 +1059,20 @@ exports.UpdateLeadStatus = async (req, res) => {
     }
 
     lead.status = status;
-
     await lead.save();
+    
+    // Create activity log for status change
+    const activity = new LeadActivity({
+      company: req.user.company._id,
+      userId: req.user._id,
+      leadId: leadId,
+      action: 'status_change',
+      details: `Lead status changed from ${oldStatus} to ${status}`,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    await activity.save();
 
     return res.status(200).json({
       message: "Lead status updated successfully",

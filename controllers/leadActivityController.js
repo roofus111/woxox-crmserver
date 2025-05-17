@@ -1,5 +1,6 @@
 const LeadActivity = require('../models/LeadActivity'); // Assuming the model is in the models folder
 const LeadFollowUp = require('../models/followUp');
+const Lead = require('../models/Lead');
 
 const User = require('../models/User');
 // Controller to create a new lead activity log
@@ -249,7 +250,14 @@ exports.getActivityKPIs = async (req, res) => {
       timestamp: {}
     };
     
+    // Calculate date 100 days ago if no startDate provided
+    const hundredDaysAgo = new Date();
+    hundredDaysAgo.setDate(hundredDaysAgo.getDate() - 1000);
+    
     if (startDate) dateFilter.timestamp.$gte = new Date(startDate);
+    else dateFilter.timestamp.$gte = hundredDaysAgo;
+    let before100Date = new Date();
+    before100Date.setDate(before100Date.getDate() - 1000);
     if (endDate) {
       const nextDay = new Date(endDate);
       nextDay.setDate(nextDay.getDate() + 1);
@@ -258,6 +266,55 @@ exports.getActivityKPIs = async (req, res) => {
     }
     
     if (userId) dateFilter.userId = userId;
+
+    // Add lead statistics query
+    const leadFilter = {
+      company: companyId,
+      // createdAt: {
+      //   $gte: before100Date,
+      //   ...(dateFilter.timestamp.$lte && { $lte: dateFilter.timestamp.$lte })
+      // }
+    };
+
+    if (userId) {
+      leadFilter.assignedTo = userId;
+    }
+
+    // Get lead statistics
+    const leads = await Lead.find(leadFilter)
+      .populate('tags', 'name')
+      .lean();
+
+    // Calculate lead statistics
+    const leadStats = {
+      totalLeads: leads.length,
+      byStatus: {
+        new: leads.filter(l => l.status === 'New').length,
+        contacted: leads.filter(l => l.status === 'Contacted').length,
+        interested: leads.filter(l => l.status === 'Interested').length,
+        notInterested: leads.filter(l => l.status === 'Not Interested').length,
+        converted: leads.filter(l => l.status === 'Converted').length,
+        pending: leads.filter(l => l.status === 'Pending').length,
+        inProgress: leads.filter(l => l.status === 'In Progress').length,
+        processing: leads.filter(l => l.status === 'Processing').length,
+        lost: leads.filter(l => l.status === 'Lost').length,
+        won: leads.filter(l => l.status === 'Won').length,
+        duplicate: leads.filter(l => l.status === 'Duplicate').length
+      },
+      byTags: leads.reduce((acc, lead) => {
+        if (lead.tags && lead.tags.length > 0) {
+          lead.tags.forEach(tag => {
+            if (!acc[tag.name]) acc[tag.name] = 0;
+            acc[tag.name]++;
+          });
+        }
+        return acc;
+      }, {}),
+      conversionRate: leads.length ? 
+        (leads.filter(l => l.status === 'Converted').length / leads.length) * 100 : 0,
+      untouchedLeads: leads.filter(l => l.untouched).length,
+      resharedLeads: leads.filter(l => l.reshared).length
+    };
 
     // Get all activities within the date range
     const activities = await LeadActivity.find(dateFilter)
@@ -404,9 +461,53 @@ exports.getActivityKPIs = async (req, res) => {
       }))
     })).sort((a, b) => new Date(b.date) - new Date(a.date));
 
+    // Get today's status changes
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const todayStatusChanges = await LeadActivity.find({
+      company: companyId,
+      action: 'status_change',
+      timestamp: {
+        $gte: todayStart,
+        $lte: todayEnd
+      },
+      userId: userId
+    }).populate('leadId', 'status');
+
+    const statusChangeStats = {
+      total: todayStatusChanges.length,
+      byStatus: todayStatusChanges.reduce((acc, activity) => {
+        const status = activity.leadId?.status || 'Unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {})
+    };
+
+    // Modify the final response to include status change stats
     res.status(200).json({
       dailyActivities: formattedResponse,
-      followUpStats
+      followUpStats,
+      leadStats: {
+        ...leadStats,
+        todayStatusChanges: statusChangeStats,  // Add this new field
+        dailyLeadCounts: leads.reduce((acc, lead) => {
+          const date = new Date(lead.createdAt).toISOString().split('T')[0];
+          if (!acc[date]) acc[date] = 0;
+          acc[date]++;
+          return acc;
+        }, {}),
+        conversionTimeline: leads
+          .filter(l => l.status === 'Converted')
+          .reduce((acc, lead) => {
+            const date = new Date(lead.updatedAt).toISOString().split('T')[0];
+            if (!acc[date]) acc[date] = 0;
+            acc[date]++;
+            return acc;
+          }, {})
+      }
     });
 
   } catch (error) {

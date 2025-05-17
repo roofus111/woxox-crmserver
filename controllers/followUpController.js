@@ -308,3 +308,113 @@ exports.deleteLeadFollowUpsWithNoLeadId = async (req, res) => {
     });
   }
 };
+
+exports.getRecentAndUpcomingFollowUps = async (req, res) => {
+  try {
+   
+    
+    const now = new Date();
+    let searchCriteria = { company: req.user.company._id };
+    
+    // Add assignedTo criteria if user role is 'user'
+    if (req.user.role === 'user') {
+      searchCriteria.assignedTo = req.user._id;
+    }
+
+    // Get missed follow-ups (past 5 days)
+    const missedFollowUps = await LeadFollowUp.find({
+      ...searchCriteria,
+      nextFollowUpDate: {
+        $lt: now,
+        $gte: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000) // 5 days ago
+      },
+      status: { $ne: 'Completed' }
+    })
+    .sort({ followUpDate: -1 })
+    .limit(5)
+    .populate("leadId")
+    .populate("assignedTo", 'name')
+    .populate("createdBy", 'name')
+    .populate({
+      path: 'leadId',
+      populate: { path: 'tags', select: 'name color' }
+    });
+
+    // Get upcoming follow-ups (next 5 days)
+    const upcomingFollowUps = await LeadFollowUp.find({
+      ...searchCriteria,
+      nextFollowUpDate: {
+        $gt: now,
+        $lte: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000) // 5 days ahead
+      }
+    })
+    .sort({ followUpDate: 1 })
+    .limit(5)
+    .populate("leadId")
+    .populate("assignedTo", 'name')
+    .populate("createdBy", 'name')
+    .populate({
+      path: 'leadId',
+      populate: { path: 'tags', select: 'name color' }
+    });
+
+    // Additional counts
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Count follow-ups assigned to me
+    const assignedToMeCount = await LeadFollowUp.countDocuments({
+      company: req.user.company._id,
+      assignedTo: req.user._id,
+      createdBy: { $ne: req.user._id },
+      status: { $ne: 'Completed' }
+    });
+
+    // Count follow-ups created by me but assigned to others
+    const createdByMeCount = await LeadFollowUp.countDocuments({
+      company: req.user.company._id,
+      createdBy: req.user._id,
+      assignedTo: { $ne: req.user._id },
+      status: { $ne: 'Completed' }
+    });
+
+    // Count total pending follow-ups
+    const totalPendingCount = await LeadFollowUp.countDocuments({
+      ...searchCriteria,
+      status: { $ne: 'Completed' }
+    });
+
+    // Count today's follow-ups
+    const todayFollowUpsCount = await LeadFollowUp.countDocuments({
+      ...searchCriteria,
+      nextFollowUpDate: {
+        $gte: today,
+        $lt: tomorrow
+      }
+    });
+
+    // Count upcoming follow-ups (excluding today)
+    const upcomingFollowUpsCount = await LeadFollowUp.countDocuments({
+      ...searchCriteria,
+      nextFollowUpDate: {
+        $gt: tomorrow
+      }
+    });
+
+    res.status(200).json({
+      missed: missedFollowUps,
+      upcoming: upcomingFollowUps,
+      counts: {
+        assignedToMe: assignedToMeCount,
+        createdByMeForOthers: createdByMeCount,
+        totalPending: totalPendingCount,
+        today: todayFollowUpsCount,
+        upcoming: upcomingFollowUpsCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

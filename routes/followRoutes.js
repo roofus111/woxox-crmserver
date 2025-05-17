@@ -511,5 +511,6 @@ router.delete('/delete-with-no-lead', leadFollowUpController.deleteLeadFollowUps
 // Route to update all follow-up details (including nextFollowUpDate)
 router.put('/follow-up/:followUpId', leadFollowUpController.updateFollowUp);
 
+router.get('/stats/get/recentandupcoming', leadFollowUpController.getRecentAndUpcomingFollowUps);
 
 module.exports = router;
