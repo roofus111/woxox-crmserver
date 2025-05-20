@@ -418,3 +418,190 @@ exports.getRecentAndUpcomingFollowUps = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+exports.getFilteredFollowUps = async (req, res) => {
+  try {
+    const { dateRange, filterType, startDate, endDate } = req.query;
+    const userId = req.user._id;
+    const companyId = req.user.company._id;
+
+    // Set date range criteria
+    const dateRangeCriteria = {};
+    const now = new Date();
+    
+    switch (dateRange) {
+      case 'today':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now.setHours(0, 0, 0, 0)),
+          $lt: new Date(now.setHours(23, 59, 59, 999))
+        };
+        break;
+      case 'yesterday': {
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(yesterday.setHours(0, 0, 0, 0)),
+          $lt: new Date(yesterday.setHours(23, 59, 59, 999))
+        };
+        break;
+      }
+      case 'thisWeek': {
+        const firstDay = new Date(now.setDate(now.getDate() - now.getDay()));
+        const lastDay = new Date(now.setDate(now.getDate() - now.getDay() + 6));
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(firstDay.setHours(0, 0, 0, 0)),
+          $lt: new Date(lastDay.setHours(23, 59, 59, 999))
+        };
+        break;
+      }
+      case 'lastWeek': {
+        const firstDay = new Date(now.setDate(now.getDate() - now.getDay() - 7));
+        const lastDay = new Date(now.setDate(now.getDate() - now.getDay() - 1));
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(firstDay.setHours(0, 0, 0, 0)),
+          $lt: new Date(lastDay.setHours(23, 59, 59, 999))
+        };
+        break;
+      }
+      case 'thisMonth':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now.getFullYear(), now.getMonth(), 1),
+          $lt: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+        };
+        break;
+      case 'lastMonth': {
+        const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(firstDay.setHours(0, 0, 0, 0)),
+          $lt: new Date(lastDay.setHours(23, 59, 59, 999))
+        };
+        break;
+      }
+      case 'last30Days':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+          $lt: new Date(now.setHours(23, 59, 59, 999))
+        };
+        break;
+      case 'last90Days':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
+          $lt: new Date(now.setHours(23, 59, 59, 999))
+        };
+        break;
+      case 'thisYear':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now.getFullYear(), 0, 1),
+          $lt: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+        };
+        break;
+      case 'lastYear': {
+        const lastYear = now.getFullYear() - 1;
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(lastYear, 0, 1),
+          $lt: new Date(lastYear, 11, 31, 23, 59, 59, 999)
+        };
+        break;
+      }
+      case 'custom':
+        if (startDate && endDate) {
+          dateRangeCriteria.followUpDate = {
+            $gte: new Date(startDate),
+            $lt: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+          };
+        }
+        break;
+      case 'upcoming7Days':
+        dateRangeCriteria.followUpDate = {
+          $gte: new Date(now),
+          $lt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+        };
+        break;
+      case 'overdue':
+        dateRangeCriteria.followUpDate = {
+          $lt: new Date(now.setHours(0, 0, 0, 0))
+        };
+        dateRangeCriteria.status = { $ne: 'Completed' };
+        break;
+    }
+
+    // Set filter type criteria
+    let filterCriteria = { company: companyId };
+    switch (filterType) {
+      case 'assignedToMe':
+        filterCriteria = {
+          ...filterCriteria,
+          assignedTo: userId,
+          createdBy: { $ne: userId }
+        };
+        break;
+      case 'createdByMeForOthers':
+        filterCriteria = {
+          ...filterCriteria,
+          createdBy: userId,
+          assignedTo: { $ne: userId }
+        };
+        break;
+      case 'createdByMeForMe':
+        filterCriteria = {
+          ...filterCriteria,
+          createdBy: userId,
+          assignedTo: userId
+        };
+        break;
+    }
+
+    // Combine date range and filter criteria
+    const searchCriteria = {
+      ...filterCriteria,
+      ...dateRangeCriteria
+    };
+
+    // Get filtered follow-ups
+    const followUps = await LeadFollowUp.find(searchCriteria)
+      .sort({ followUpDate: dateRange === 'overdue' ? -1 : 1 })
+      .populate("leadId")
+      .populate("assignedTo", 'name')
+      .populate("createdBy", 'name')
+      .populate({
+        path: 'leadId',
+        populate: { path: 'tags', select: 'name color' }
+      });
+
+    // Get stats for pending follow-ups
+    const pendingStats = {
+      assignedToMe: await LeadFollowUp.countDocuments({
+        company: companyId,
+        assignedTo: userId,
+        createdBy: { $ne: userId },
+        status: 'Pending'
+      }),
+      createdByMeForOthers: await LeadFollowUp.countDocuments({
+        company: companyId,
+        createdBy: userId,
+        assignedTo: { $ne: userId },
+        status: 'Pending'
+      }),
+      createdByMeForMe: await LeadFollowUp.countDocuments({
+        company: companyId,
+        createdBy: userId,
+        assignedTo: userId,
+        status: 'Pending'
+      })
+    };
+
+    res.status(200).json({
+      followUps,
+      stats: pendingStats,
+      dateRange: {
+        filter: dateRange,
+        startDate: dateRangeCriteria.followUpDate?.$gte,
+        endDate: dateRangeCriteria.followUpDate?.$lt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+

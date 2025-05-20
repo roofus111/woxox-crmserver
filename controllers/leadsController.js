@@ -305,6 +305,7 @@ exports.AssignUserToLead = async (req, res) => {
       leadId: leadId,
       company: req.user.company._id,
       followUpDate: new Date(),
+      nextFollowUpDate: new Date(Date.now() + 32 * 60 * 1000),
       notes: `${creator.name} : I am sharing a Prospect lead with you. Please review this lead.`,
       assignedTo: userId,
       createdBy: req.user._id,

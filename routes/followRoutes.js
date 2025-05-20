@@ -513,4 +513,7 @@ router.put('/follow-up/:followUpId', leadFollowUpController.updateFollowUp);
 
 router.get('/stats/get/recentandupcoming', leadFollowUpController.getRecentAndUpcomingFollowUps);
 
+//Version 2
+router.get('/v2/gettasks',leadFollowUpController.getFilteredFollowUps);
+
 module.exports = router;

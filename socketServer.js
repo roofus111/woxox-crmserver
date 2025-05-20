@@ -18,7 +18,7 @@ function initializeSocket(server) {
 
   io.on("connection", (socket) => {
     console.log("New client connected:", socket.id);
-    console.log("socket", socket);
+
     socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
 
     socket.on("register", async (userId) => {
@@ -27,7 +27,6 @@ function initializeSocket(server) {
         onlineUsers.set(userId, socket.id);
         await User.findByIdAndUpdate(userId, { socketId: socket.id });
         io.emit("user_status_change", { userId, status: "online" });
-        console.log(`User ${userId} registered with socket ${socket.id}`);
       } catch (err) {
         console.error("Register error:", err);
       }
