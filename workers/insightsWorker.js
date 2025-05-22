@@ -11,9 +11,36 @@ const operations = {
   // Add more operations as needed
 };
 
-// Add CPU throttling helper
+// Memory-aware throttling
 async function throttleCPU(interval) {
-  await new Promise(resolve => setTimeout(resolve, interval));
+  const memoryUsage = process.memoryUsage().heapUsed;
+  const memoryFactor = memoryUsage > 400 * 1024 * 1024 ? 2 : 1; // Slow down if memory is high
+  await new Promise(resolve => setTimeout(resolve, interval * memoryFactor));
+}
+
+// Process data in small batches
+async function processBatch(items, processFn, cpuThrottle) {
+  const results = [];
+  const batchSize = 50; // Very small batches for memory constraint
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    
+    for (const item of batch) {
+      await throttleCPU(cpuThrottle);
+      results.push(await processFn(item));
+    }
+    
+    // Force garbage collection if available
+    if (global.gc) {
+      global.gc();
+    }
+    
+    // Yield to allow garbage collection
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  
+  return results;
 }
 
 // Handle messages from main thread
@@ -21,32 +48,31 @@ parentPort.on('message', async ({ chunk, operation, params, cpuThrottle }) => {
   try {
     let result;
     
-    // Execute the provided function on the chunk with CPU throttling
+    // Check memory before processing
+    if (process.memoryUsage().heapUsed > 450 * 1024 * 1024) {
+      throw new Error('Insufficient memory to process chunk');
+    }
+
     if (params) {
       const processFn = new Function(`return ${params}`)();
-      
-      // Process with throttling
-      const results = [];
-      for (const item of chunk) {
-        await throttleCPU(cpuThrottle);
-        const itemResult = await processFn(item);
-        results.push(itemResult);
-      }
-      result = results;
+      result = await processBatch(chunk, processFn, cpuThrottle);
     } else {
-      // Default processing based on operation type with throttling
       switch (operation) {
         case 'getCategoryFrequency':
-          let count = 0;
-          for (const t of chunk) {
-            await throttleCPU(cpuThrottle);
-            if (t.category === category) count++;
-          }
-          result = count;
+          result = await processBatch(
+            chunk,
+            async (t) => t.category === category ? 1 : 0,
+            cpuThrottle
+          );
+          result = result.reduce((a, b) => a + b, 0);
           break;
         
         case 'isRecurringTransaction':
-          result = await processRecurringTransactionsThrottled(chunk, cpuThrottle);
+          result = await processBatch(
+            chunk,
+            async (t) => processTransaction(t),
+            cpuThrottle
+          );
           break;
         
         default:
@@ -60,31 +86,20 @@ parentPort.on('message', async ({ chunk, operation, params, cpuThrottle }) => {
   }
 });
 
-// Helper functions with throttling
-async function processRecurringTransactionsThrottled(transactions, cpuThrottle) {
-  let result = false;
-  for (const transaction of transactions) {
-    await throttleCPU(cpuThrottle);
-    // Process transaction logic here
-  }
-  return result;
-}
-
-// Process monitoring
-let lastCPUTime = process.cpuUsage();
+// Memory monitoring
 setInterval(() => {
-  const currentCPUTime = process.cpuUsage(lastCPUTime);
-  const totalCPUTime = currentCPUTime.user + currentCPUTime.system;
-  
-  // Adjust throttle if CPU usage is too high
-  if (totalCPUTime > 500000) { // 50ms of CPU time per 100ms interval
-    process.emit('warning', new Error('High CPU usage detected'));
+  const memoryUsage = process.memoryUsage().heapUsed;
+  if (memoryUsage > 450 * 1024 * 1024) {
+    if (global.gc) {
+      global.gc();
+    }
+    process.emit('warning', new Error('High memory usage in worker'));
   }
-  
-  lastCPUTime = process.cpuUsage();
-}, 100);
+}, 1000);
 
 // Cleanup on exit
 process.on('exit', () => {
-  // Perform any necessary cleanup
+  if (global.gc) {
+    global.gc();
+  }
 }); 

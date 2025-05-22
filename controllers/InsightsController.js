@@ -15,143 +15,159 @@ const redisCloud = require('../config/redis');
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 class InsightsController {
-  // Update worker pool configuration to limit CPU usage to 50%
+  // Constrained configuration for limited resources
   static workerPool = new Map();
-  static maxWorkers = Math.max(1, Math.floor(require('os').cpus().length * 0.5));
+  static maxWorkers = 1; // Single worker for 1 CPU
   static workerTasks = new Map();
-  static cpuThrottleInterval = 100; // ms between CPU-intensive operations
+  static cpuThrottleInterval = 200; // Increased interval for CPU constraint
+  static taskQueue = [];
+  static isProcessingQueue = false;
+  static MAX_HEAP_SIZE = 450 * 1024 * 1024; // 450MB max heap (buffer for system)
+  static CHUNK_SIZE = 1000; // Smaller default chunk size
 
-  // Enhanced worker management with CPU throttling
+  // Memory-aware worker management
   static async getWorker(taskId) {
-    // Add CPU throttling
-    await new Promise(resolve => setTimeout(resolve, this.cpuThrottleInterval));
-
-    // Reuse existing worker if available and not busy
-    for (const [workerId, worker] of this.workerPool.entries()) {
-      if (!this.workerTasks.has(workerId)) {
-        this.workerTasks.set(workerId, taskId);
-        return worker;
-      }
+    // Check memory usage before creating/getting worker
+    const memoryUsage = process.memoryUsage().heapUsed;
+    if (memoryUsage > this.MAX_HEAP_SIZE) {
+      await this.waitForMemory();
     }
 
-    // Create new worker if pool not full
-    if (this.workerPool.size < this.maxWorkers) {
-      const workerId = this.workerPool.size;
+    if (!this.workerPool.has(0)) {
       const worker = new Worker(path.join(__dirname, '../workers/insightsWorker.js'));
-      
-      // Handle worker errors and cleanup
-      worker.on('error', (error) => {
-        console.error(`Worker ${workerId} error:`, error);
-        this.cleanupWorker(workerId);
-      });
-
-      worker.on('exit', (code) => {
-        if (code !== 0) {
-          console.error(`Worker ${workerId} exited with code ${code}`);
-        }
-        this.cleanupWorker(workerId);
-      });
-
-      this.workerPool.set(workerId, worker);
-      this.workerTasks.set(workerId, taskId);
-      return worker;
+      this.setupWorkerEventHandlers(worker, 0);
+      this.workerPool.set(0, worker);
     }
 
-    // Wait for next available worker
-    return new Promise((resolve) => {
-      const checkWorker = setInterval(() => {
-        for (const [workerId, worker] of this.workerPool.entries()) {
-          if (!this.workerTasks.has(workerId)) {
-            clearInterval(checkWorker);
-            this.workerTasks.set(workerId, taskId);
-            resolve(worker);
-            break;
-          }
+    const worker = this.workerPool.get(0);
+    
+    if (this.workerTasks.has(0)) {
+      // Queue task if worker is busy
+      return new Promise((resolve) => {
+        this.taskQueue.push({ taskId, resolve });
+      });
+    }
+
+    this.workerTasks.set(0, taskId);
+    return worker;
+  }
+
+  // Memory management helper
+  static async waitForMemory() {
+    return new Promise(resolve => {
+      const checkMemory = setInterval(() => {
+        const memoryUsage = process.memoryUsage().heapUsed;
+        if (memoryUsage <= this.MAX_HEAP_SIZE) {
+          clearInterval(checkMemory);
+          resolve();
         }
       }, 100);
     });
   }
 
-  // Cleanup worker
-  static cleanupWorker(workerId) {
-    this.workerPool.delete(workerId);
-    this.workerTasks.delete(workerId);
-  }
-
-  // Enhanced chunk processing with CPU throttling
+  // Optimized chunk processing for limited resources
   static async processInChunks(data, processFn, useWorker = false) {
     const results = [];
     const chunks = [];
     const taskId = Date.now().toString();
 
-    // Adjust chunk size to account for CPU throttling
-    const chunkSize = Math.max(
-      CHUNK_SIZE, 
-      Math.ceil(data.length / (this.maxWorkers * 4)) // Smaller chunks for better throttling
+    // Calculate safe chunk size based on available memory
+    const memoryUsage = process.memoryUsage().heapUsed;
+    const availableMemory = this.MAX_HEAP_SIZE - memoryUsage;
+    const estimatedItemSize = Math.ceil(JSON.stringify(data[0]).length * 1.5);
+    const safeChunkSize = Math.min(
+      this.CHUNK_SIZE,
+      Math.floor(availableMemory / (estimatedItemSize * 2))
     );
-    
-    for (let i = 0; i < data.length; i += chunkSize) {
-      chunks.push(data.slice(i, i + chunkSize));
+
+    // Create smaller chunks
+    for (let i = 0; i < data.length; i += safeChunkSize) {
+      chunks.push(data.slice(i, i + safeChunkSize));
     }
 
-    if (useWorker && chunks.length > 1) {
-      // Process chunks in parallel with throttling
-      const workerPromises = chunks.map(async (chunk, index) => {
-        // Add delay between spawning workers
-        await new Promise(resolve => 
-          setTimeout(resolve, index * this.cpuThrottleInterval)
-        );
-        
-        const worker = await this.getWorker(`${taskId}-${index}`);
-        
-        return new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Worker timeout'));
-          }, 30000);
+    if (useWorker && data.length > safeChunkSize) {
+      // Process chunks sequentially with single worker
+      for (const chunk of chunks) {
+        try {
+          const worker = await this.getWorker(taskId);
+          
+          const result = await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              reject(new Error('Worker timeout'));
+            }, 30000);
 
-          worker.once('message', (result) => {
-            clearTimeout(timeoutId);
-            this.workerTasks.delete([...this.workerPool.entries()]
-              .find(([, w]) => w === worker)?.[0]);
-            resolve(result);
+            worker.once('message', (result) => {
+              clearTimeout(timeoutId);
+              this.workerTasks.delete(0);
+              this.processTaskQueue();
+              resolve(result);
+            });
+
+            worker.once('error', (error) => {
+              clearTimeout(timeoutId);
+              reject(error);
+            });
+
+            worker.postMessage({
+              chunk,
+              operation: processFn.name,
+              params: processFn.toString(),
+              cpuThrottle: this.cpuThrottleInterval
+            });
           });
 
-          worker.once('error', (error) => {
-            clearTimeout(timeoutId);
-            reject(error);
-          });
-
-          worker.postMessage({
-            chunk,
-            operation: processFn.name,
-            params: processFn.toString(),
-            cpuThrottle: this.cpuThrottleInterval
-          });
-        });
-      });
-
-      try {
-        const chunkResults = await Promise.all(workerPromises);
-        results.push(...chunkResults.flat());
-      } catch (error) {
-        console.error('Worker processing error:', error);
-        // Fallback to sequential processing
-        for (const chunk of chunks) {
+          results.push(...(Array.isArray(result) ? result : [result]));
+          
+          // Allow time for garbage collection
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+        } catch (error) {
+          console.error('Worker processing error:', error);
+          // Fallback to direct processing
           results.push(...await processFn(chunk));
         }
       }
     } else {
-      // Process chunks sequentially
+      // Direct processing with memory checks
       for (const chunk of chunks) {
         results.push(...await processFn(chunk));
-        // Yield to event loop periodically
-        if (chunks.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise(resolve => 
+          setTimeout(resolve, this.cpuThrottleInterval)
+        );
+        
+        // Check memory usage and wait if needed
+        if (process.memoryUsage().heapUsed > this.MAX_HEAP_SIZE) {
+          await this.waitForMemory();
         }
       }
     }
 
     return results;
+  }
+
+  // Process task queue sequentially
+  static async processTaskQueue() {
+    if (this.isProcessingQueue || this.taskQueue.length === 0) return;
+    
+    this.isProcessingQueue = true;
+    const nextTask = this.taskQueue.shift();
+    
+    if (!this.workerTasks.has(0)) {
+      const worker = this.workerPool.get(0);
+      nextTask.resolve(worker);
+    }
+    
+    this.isProcessingQueue = false;
+  }
+
+  // Cleanup method
+  static cleanup() {
+    for (const worker of this.workerPool.values()) {
+      worker.terminate();
+    }
+    this.workerPool.clear();
+    this.workerTasks.clear();
+    this.taskQueue = [];
   }
 
   // Enhanced caching with Redis
@@ -950,18 +966,6 @@ class InsightsController {
     } catch (error) {
       res.status(500).json({ message: 'Error clearing cache', error: error.message });
     }
-  }
-
-  // Cleanup method
-  static async cleanup() {
-    // Cleanup worker threads
-    for (const worker of this.workerPool.values()) {
-      worker.terminate();
-    }
-    this.workerPool.clear();
-
-    // Close Redis connection
-    await redis.quit();
   }
 }
 
