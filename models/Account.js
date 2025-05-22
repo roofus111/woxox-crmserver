@@ -67,6 +67,7 @@ const bankAccountSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Company",
     required: true,
+    index: true
   },
   accountName: {
     type: String,
@@ -91,7 +92,8 @@ const bankAccountSchema = new mongoose.Schema({
   balance: {
     type: Number,
     required: true,
-    default: 0
+    default: 0,
+    index: true
   },
   currency: {
     type: String,
@@ -122,7 +124,11 @@ const bankAccountSchema = new mongoose.Schema({
     trim: true
   },
   transactions: [transactionSchema],
-  transactionHistory: [transactionHistorySchema]
+  transactionHistory: [transactionHistorySchema],
+  'transactions.date': { type: Date, index: true },
+  'transactions.type': { type: String, index: true },
+  'transactions.category': { type: String, index: true },
+  'transactions.paymentMethod': { type: String, index: true }
 }, {
   timestamps: true
 });
