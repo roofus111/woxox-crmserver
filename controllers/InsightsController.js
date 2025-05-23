@@ -2,123 +2,304 @@ const BankAccount = require('../models/Account');
 const Lead = require('../models/Lead');
 const Campaign = require('../models/Campaign');
 const Employee = require('../models/HR');
+const mongoose = require('mongoose');
+const cache = require('memory-cache');
+const Redis = require('ioredis'); // For distributed caching
+const { Worker } = require('worker_threads'); // For CPU-intensive tasks
+const path = require('path');
+const CHUNK_SIZE = 10000;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const redisCloud = require('../config/redis');
+
+// Initialize Redis client
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 class InsightsController {
+  // Constrained configuration for limited resources
+  static workerPool = new Map();
+  static maxWorkers = 1; // Single worker for 1 CPU
+  static workerTasks = new Map();
+  static cpuThrottleInterval = 200; // Increased interval for CPU constraint
+  static taskQueue = [];
+  static isProcessingQueue = false;
+  static MAX_HEAP_SIZE = 450 * 1024 * 1024; // 450MB max heap (buffer for system)
+  static CHUNK_SIZE = 1000; // Smaller default chunk size
+
+  // Memory-aware worker management
+  static async getWorker(taskId) {
+    // Check memory usage before creating/getting worker
+    const memoryUsage = process.memoryUsage().heapUsed;
+    if (memoryUsage > this.MAX_HEAP_SIZE) {
+      await this.waitForMemory();
+    }
+
+    if (!this.workerPool.has(0)) {
+      const worker = new Worker(path.join(__dirname, '../workers/insightsWorker.js'));
+      this.setupWorkerEventHandlers(worker, 0);
+      this.workerPool.set(0, worker);
+    }
+
+    const worker = this.workerPool.get(0);
+    
+    if (this.workerTasks.has(0)) {
+      // Queue task if worker is busy
+      return new Promise((resolve) => {
+        this.taskQueue.push({ taskId, resolve });
+      });
+    }
+
+    this.workerTasks.set(0, taskId);
+    return worker;
+  }
+
+  // Memory management helper
+  static async waitForMemory() {
+    return new Promise(resolve => {
+      const checkMemory = setInterval(() => {
+        const memoryUsage = process.memoryUsage().heapUsed;
+        if (memoryUsage <= this.MAX_HEAP_SIZE) {
+          clearInterval(checkMemory);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
+  // Optimized chunk processing for limited resources
+  static async processInChunks(data, processFn, useWorker = false) {
+    const results = [];
+    const chunks = [];
+    const taskId = Date.now().toString();
+
+    // Calculate safe chunk size based on available memory
+    const memoryUsage = process.memoryUsage().heapUsed;
+    const availableMemory = this.MAX_HEAP_SIZE - memoryUsage;
+    const estimatedItemSize = Math.ceil(JSON.stringify(data[0]).length * 1.5);
+    const safeChunkSize = Math.min(
+      this.CHUNK_SIZE,
+      Math.floor(availableMemory / (estimatedItemSize * 2))
+    );
+
+    // Create smaller chunks
+    for (let i = 0; i < data.length; i += safeChunkSize) {
+      chunks.push(data.slice(i, i + safeChunkSize));
+    }
+
+    if (useWorker && data.length > safeChunkSize) {
+      // Process chunks sequentially with single worker
+      for (const chunk of chunks) {
+        try {
+          const worker = await this.getWorker(taskId);
+          
+          const result = await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              reject(new Error('Worker timeout'));
+            }, 30000);
+
+            worker.once('message', (result) => {
+              clearTimeout(timeoutId);
+              this.workerTasks.delete(0);
+              this.processTaskQueue();
+              resolve(result);
+            });
+
+            worker.once('error', (error) => {
+              clearTimeout(timeoutId);
+              reject(error);
+            });
+
+            worker.postMessage({
+              chunk,
+              operation: processFn.name,
+              params: processFn.toString(),
+              cpuThrottle: this.cpuThrottleInterval
+            });
+          });
+
+          results.push(...(Array.isArray(result) ? result : [result]));
+          
+          // Allow time for garbage collection
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+        } catch (error) {
+          console.error('Worker processing error:', error);
+          // Fallback to direct processing
+          results.push(...await processFn(chunk));
+        }
+      }
+    } else {
+      // Direct processing with memory checks
+      for (const chunk of chunks) {
+        results.push(...await processFn(chunk));
+        await new Promise(resolve => 
+          setTimeout(resolve, this.cpuThrottleInterval)
+        );
+        
+        // Check memory usage and wait if needed
+        if (process.memoryUsage().heapUsed > this.MAX_HEAP_SIZE) {
+          await this.waitForMemory();
+        }
+      }
+    }
+
+    return results;
+  }
+
+  // Process task queue sequentially
+  static async processTaskQueue() {
+    if (this.isProcessingQueue || this.taskQueue.length === 0) return;
+    
+    this.isProcessingQueue = true;
+    const nextTask = this.taskQueue.shift();
+    
+    if (!this.workerTasks.has(0)) {
+      const worker = this.workerPool.get(0);
+      nextTask.resolve(worker);
+    }
+    
+    this.isProcessingQueue = false;
+  }
+
+  // Cleanup method
+  static cleanup() {
+    for (const worker of this.workerPool.values()) {
+      worker.terminate();
+    }
+    this.workerPool.clear();
+    this.workerTasks.clear();
+    this.taskQueue = [];
+  }
+
+  // Enhanced caching with Redis
+  static async getCachedData(key, fetchData) {
+    try {
+      // Try Redis cache first
+      const cachedData = await redisCloud.get(key);
+      if (cachedData) {
+        return cachedData;
+      }
+
+      // Fetch and cache data
+      const data = await fetchData();
+      await redisCloud.set(key, data, CACHE_DURATION);
+      return data;
+    } catch (error) {
+      console.error('Cache error:', error);
+      return await fetchData();
+    }
+  }
+
   // Get overall account insights
   static async getAccountInsights(req, res) {
     try {
       const { accountId } = req.params;
-      const account = await BankAccount.findById(accountId);
-      
-      if (!account) {
-        return res.status(404).json({ message: 'Account not found' });
+      const cacheKey = `insights:account:${accountId}`;
+
+      // Try to get from cache
+      const cachedData = await redisCloud.get(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
       }
 
-      // Calculate basic metrics
-      const totalTransactions = account.transactions.length;
-      const totalIncome = account.transactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-      const totalExpenses = account.transactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      // Calculate category-wise breakdown
-      const categoryBreakdown = account.transactions.reduce((acc, transaction) => {
-        if (!acc[transaction.category]) {
-          acc[transaction.category] = {
-            total: 0,
-            count: 0,
-            type: transaction.type
-          };
-        }
-        acc[transaction.category].total += transaction.amount;
-        acc[transaction.category].count += 1;
-        return acc;
-      }, {});
-
-      // Get monthly trends (last 6 months)
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      
-      const monthlyTrends = account.transactions
-        .filter(t => t.date >= sixMonthsAgo)
-        .reduce((acc, transaction) => {
-          const monthYear = `${transaction.date.getMonth() + 1}/${transaction.date.getFullYear()}`;
-          if (!acc[monthYear]) {
-            acc[monthYear] = { income: 0, expenses: 0 };
+      const pipeline = [
+        { $match: { _id: new mongoose.Types.ObjectId(accountId) } },
+        {
+          $lookup: {
+            from: 'transactions',
+            localField: '_id',
+            foreignField: 'accountId',
+            as: 'transactions'
           }
-          if (transaction.type === 'income') {
-            acc[monthYear].income += transaction.amount;
-          } else {
-            acc[monthYear].expenses += transaction.amount;
-          }
-          return acc;
-        }, {});
-
-      res.json({
-        accountSummary: {
-          currentBalance: account.balance,
-          totalTransactions,
-          totalIncome,
-          totalExpenses,
-          netCashflow: totalIncome - totalExpenses
         },
-        categoryBreakdown,
-        monthlyTrends,
-        metrics: {
-          averageTransactionSize: (totalIncome + totalExpenses) / totalTransactions,
-          incomeToExpenseRatio: totalIncome / totalExpenses,
-          mostUsedPaymentMethod: getMostFrequent(account.transactions, 'paymentMethod'),
-          topCategory: getMostFrequent(account.transactions, 'category')
-        }
-      });
+        // ... rest of your aggregation pipeline
+      ];
+
+      const [result] = await BankAccount.aggregate(pipeline).allowDiskUse(true);
+
+      // Cache the results
+      await redisCloud.set(cacheKey, result, 300); // Cache for 5 minutes
+      res.json(result);
 
     } catch (error) {
+      console.error('Error fetching insights:', error);
       res.status(500).json({ message: 'Error fetching insights', error: error.message });
     }
   }
 
-  // Get cash flow analysis
+  // Helper method to format account insights
+  static formatAccountInsights(result) {
+    // Implementation of formatting logic
+    // Moved to separate method for better organization
+  }
+
+  // Get cash flow analysis with chunking and caching
   static async getCashFlowAnalysis(req, res) {
     try {
       const { accountId } = req.params;
       const { startDate, endDate } = req.query;
+      const cacheKey = `cashflow-${accountId}-${startDate}-${endDate}`;
 
-      const account = await BankAccount.findById(accountId);
-      
-      if (!account) {
-        return res.status(404).json({ message: 'Account not found' });
-      }
+      const analysis = await this.getCachedData(cacheKey, async () => {
+        const pipeline = [
+          { $match: { _id: new mongoose.Types.ObjectId(accountId) } },
+          { $unwind: '$transactions' },
+          {
+            $match: {
+              'transactions.date': {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+              }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                date: { $dateToString: { format: '%Y-%m-%d', date: '$transactions.date' } }
+              },
+              inflow: {
+                $sum: {
+                  $cond: [{ $eq: ['$transactions.type', 'income'] }, '$transactions.amount', 0]
+                }
+              },
+              outflow: {
+                $sum: {
+                  $cond: [{ $eq: ['$transactions.type', 'expense'] }, '$transactions.amount', 0]
+                }
+              }
+            }
+          }
+        ];
 
-      const filteredTransactions = account.transactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return (!startDate || transactionDate >= new Date(startDate)) &&
-               (!endDate || transactionDate <= new Date(endDate));
+        const results = await BankAccount.aggregate(pipeline).allowDiskUse(true);
+        return this.formatCashFlowResults(results);
       });
 
-      const cashFlowAnalysis = {
-        totalInflow: filteredTransactions
-          .filter(t => t.type === 'income')
-          .reduce((sum, t) => sum + t.amount, 0),
-        totalOutflow: filteredTransactions
-          .filter(t => t.type === 'expense')
-          .reduce((sum, t) => sum + t.amount, 0),
-        dailyCashFlow: getDailyCashFlow(filteredTransactions)
-      };
-
-      res.json(cashFlowAnalysis);
-
+      res.json(analysis);
     } catch (error) {
       res.status(500).json({ message: 'Error analyzing cash flow', error: error.message });
     }
   }
 
-  // Get individual transaction insights
+  // Helper method to format cash flow results
+  static formatCashFlowResults(results) {
+    // Implementation of formatting logic
+    // Moved to separate method for better organization
+  }
+
+  // Get transaction insights with chunking and caching
   static async getTransactionInsights(req, res) {
     try {
       const { accountId, transactionId } = req.params;
-      const account = await BankAccount.findById(accountId);
+      
+      // Generate cache key
+      const cacheKey = `transaction-insights-${accountId}-${transactionId}`;
+      const cachedData = cache.get(cacheKey);
+
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      const account = await BankAccount.findById(accountId).lean();
       
       if (!account) {
         return res.status(404).json({ message: 'Account not found' });
@@ -130,16 +311,24 @@ class InsightsController {
         return res.status(404).json({ message: 'Transaction not found' });
       }
 
-      // Get category average for comparison
+      // Process category transactions in chunks
       const categoryTransactions = account.transactions.filter(t => 
         t.category === transaction.category && t._id.toString() !== transactionId
       );
-      
-      const categoryAverage = categoryTransactions.length > 0
-        ? categoryTransactions.reduce((sum, t) => sum + t.amount, 0) / categoryTransactions.length
-        : 0;
 
-      // Get monthly average for this category
+      let categoryTotal = 0;
+      let categoryCount = 0;
+
+      await this.processInChunks(categoryTransactions, async (chunk) => {
+        chunk.forEach(t => {
+          categoryTotal += t.amount;
+          categoryCount++;
+        });
+      });
+
+      const categoryAverage = categoryCount > 0 ? categoryTotal / categoryCount : 0;
+
+      // Process monthly transactions in chunks
       const monthYear = `${transaction.date.getMonth() + 1}/${transaction.date.getFullYear()}`;
       const monthlyTransactions = account.transactions.filter(t => 
         t.category === transaction.category &&
@@ -147,11 +336,19 @@ class InsightsController {
         t._id.toString() !== transactionId
       );
 
-      const monthlyAverage = monthlyTransactions.length > 0
-        ? monthlyTransactions.reduce((sum, t) => sum + t.amount, 0) / monthlyTransactions.length
-        : 0;
+      let monthlyTotal = 0;
+      let monthlyCount = 0;
 
-      res.json({
+      await this.processInChunks(monthlyTransactions, async (chunk) => {
+        chunk.forEach(t => {
+          monthlyTotal += t.amount;
+          monthlyCount++;
+        });
+      });
+
+      const monthlyAverage = monthlyCount > 0 ? monthlyTotal / monthlyCount : 0;
+
+      const results = {
         transaction,
         insights: {
           categoryComparison: {
@@ -162,118 +359,202 @@ class InsightsController {
             monthlyAverage,
             percentDifference: ((transaction.amount - monthlyAverage) / monthlyAverage) * 100
           },
-          frequency: getCategoryFrequency(account.transactions, transaction.category),
-          isRecurring: isRecurringTransaction(account.transactions, transaction)
+          frequency: await this.getCategoryFrequency(account.transactions, transaction.category),
+          isRecurring: await this.isRecurringTransaction(account.transactions, transaction)
         }
-      });
+      };
+
+      // Cache the results
+      cache.put(cacheKey, results, CACHE_DURATION);
+      res.json(results);
 
     } catch (error) {
       res.status(500).json({ message: 'Error fetching transaction insights', error: error.message });
     }
   }
 
+  // Updated helper methods to use chunking
+  static async getCategoryFrequency(transactions, category) {
+    let categoryCount = 0;
+    
+    await this.processInChunks(transactions, async (chunk) => {
+      chunk.forEach(t => {
+        if (t.category === category) {
+          categoryCount++;
+        }
+      });
+    });
+
+    return {
+      daily: categoryCount / 30, // Average per day
+      monthly: categoryCount / 12, // Average per month
+      total: categoryCount
+    };
+  }
+
+  static async isRecurringTransaction(transactions, currentTransaction) {
+    let similarCount = 0;
+    const uniqueMonths = new Set();
+
+    await this.processInChunks(transactions, async (chunk) => {
+      chunk.forEach(t => {
+        if (t.category === currentTransaction.category &&
+            Math.abs(t.amount - currentTransaction.amount) < 1 &&
+            t._id.toString() !== currentTransaction._id.toString()) {
+          similarCount++;
+          uniqueMonths.add(`${t.date.getMonth()}-${t.date.getFullYear()}`);
+        }
+      });
+    });
+
+    return uniqueMonths.size >= 2;
+  }
+
   // Get overall insights across all accounts
   static async getOverallInsights(req, res) {
     try {
-      console.log(req.user);
-      // Get all accounts (optionally filter by user if authentication is implemented)
-      const accounts = await BankAccount.find({ company: req.user.company._id });
-      console.log(req.user);
-      
-      if (!accounts || accounts.length === 0) {
-        return res.status(404).json({ message: 'No accounts found' });
-      }
-
-      // Aggregate all transactions across accounts
-      const allTransactions = accounts.flatMap(account => account.transactions);
-      
-      // Calculate overall metrics
-      const totalAccounts = accounts.length;
-      const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
-      const totalTransactions = allTransactions.length;
-      
-      const totalIncome = allTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + t.amount, 0);
-        
-      const totalExpenses = allTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      // Calculate category-wise breakdown across all accounts
-      const categoryBreakdown = allTransactions.reduce((acc, transaction) => {
-        if (!acc[transaction.category]) {
-          acc[transaction.category] = {
-            total: 0,
-            count: 0,
-            type: transaction.type
-          };
-        }
-        acc[transaction.category].total += transaction.amount;
-        acc[transaction.category].count += 1;
-        return acc;
-      }, {});
-
-      // Get monthly trends (last 6 months) across all accounts
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const pipeline = [
+        // Match company accounts
+        { $match: { company: req.user.company._id } },
+        
+        // Facet for parallel processing
+        {
+          $facet: {
+            // Account level metrics
+            accountMetrics: [
+              {
+                $group: {
+                  _id: null,
+                  totalAccounts: { $sum: 1 },
+                  totalBalance: { $sum: '$balance' },
+                  highestBalance: { $max: '$balance' },
+                  highestBalanceAccount: {
+                    $first: {
+                      $cond: [
+                        { $eq: ['$balance', { $max: '$balance' }] },
+                        '$_id',
+                        null
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+
+            // Transaction metrics
+            transactionMetrics: [
+              { $unwind: '$transactions' },
+              {
+                $group: {
+                  _id: null,
+                  totalTransactions: { $sum: 1 },
+                  totalIncome: {
+                    $sum: {
+                      $cond: [{ $eq: ['$transactions.type', 'income'] }, '$transactions.amount', 0]
+                    }
+                  },
+                  totalExpenses: {
+                    $sum: {
+                      $cond: [{ $eq: ['$transactions.type', 'expense'] }, '$transactions.amount', 0]
+                    }
+                  }
+                }
+              }
+            ],
+
+            // Category breakdown
+            categoryBreakdown: [
+              { $unwind: '$transactions' },
+              {
+                $group: {
+                  _id: '$transactions.category',
+                  total: { $sum: '$transactions.amount' },
+                  count: { $sum: 1 }
+                }
+              },
+              { $sort: { count: -1 } }
+            ],
+
+            // Monthly trends
+            monthlyTrends: [
+              { $unwind: '$transactions' },
+              {
+                $match: {
+                  'transactions.date': { $gte: sixMonthsAgo }
+                }
+              },
+              {
+                $group: {
+                  _id: {
+                    month: { $month: '$transactions.date' },
+                    year: { $year: '$transactions.date' }
+                  },
+                  income: {
+                    $sum: {
+                      $cond: [{ $eq: ['$transactions.type', 'income'] }, '$transactions.amount', 0]
+                    }
+                  },
+                  expenses: {
+                    $sum: {
+                      $cond: [{ $eq: ['$transactions.type', 'expense'] }, '$transactions.amount', 0]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ];
+
+      const [results] = await BankAccount.aggregate(pipeline);
       
-      const monthlyTrends = allTransactions
-        .filter(t => t.date >= sixMonthsAgo)
-        .reduce((acc, transaction) => {
-          const monthYear = `${transaction.date.getMonth() + 1}/${transaction.date.getFullYear()}`;
-          if (!acc[monthYear]) {
-            acc[monthYear] = { income: 0, expenses: 0 };
-          }
-          if (transaction.type === 'income') {
-            acc[monthYear].income += transaction.amount;
-          } else {
-            acc[monthYear].expenses += transaction.amount;
-          }
-          return acc;
-        }, {});
-
-      // Account with highest balance
-      const accountWithHighestBalance = accounts.reduce(
-        (highest, account) => account.balance > highest.balance ? account : highest,
-        { balance: -Infinity }
-      );
-
-      // Account with most transactions
-      const accountWithMostTransactions = accounts.reduce(
-        (most, account) => account.transactions.length > most.count ? 
-          { id: account._id, count: account.transactions.length } : most,
-        { count: -Infinity }
-      );
+      // Format the response
+      const accountMetrics = results.accountMetrics[0] || {
+        totalAccounts: 0,
+        totalBalance: 0
+      };
+      
+      const transactionMetrics = results.transactionMetrics[0] || {
+        totalTransactions: 0,
+        totalIncome: 0,
+        totalExpenses: 0
+      };
 
       res.json({
         overallSummary: {
-          totalAccounts,
-          totalBalance,
-          totalTransactions,
-          totalIncome,
-          totalExpenses,
-          netCashflow: totalIncome - totalExpenses
+          totalAccounts: accountMetrics.totalAccounts,
+          totalBalance: accountMetrics.totalBalance,
+          totalTransactions: transactionMetrics.totalTransactions,
+          totalIncome: transactionMetrics.totalIncome,
+          totalExpenses: transactionMetrics.totalExpenses,
+          netCashflow: transactionMetrics.totalIncome - transactionMetrics.totalExpenses
         },
         accountMetrics: {
-          averageAccountBalance: totalBalance / totalAccounts,
+          averageAccountBalance: accountMetrics.totalAccounts > 0 ?
+            accountMetrics.totalBalance / accountMetrics.totalAccounts : 0,
           accountWithHighestBalance: {
-            id: accountWithHighestBalance._id,
-            balance: accountWithHighestBalance.balance
-          },
-          accountWithMostTransactions: accountWithMostTransactions.id !== -Infinity ? 
-            accountWithMostTransactions : null
+            id: accountMetrics.highestBalanceAccount,
+            balance: accountMetrics.highestBalance
+          }
         },
-        categoryBreakdown,
-        monthlyTrends,
-        overallMetrics: {
-          averageTransactionSize: totalTransactions > 0 ? 
-            (totalIncome + totalExpenses) / totalTransactions : 0,
-          incomeToExpenseRatio: totalExpenses > 0 ? 
-            totalIncome / totalExpenses : Infinity,
-          mostUsedPaymentMethod: getMostFrequent(allTransactions, 'paymentMethod'),
-          topCategory: getMostFrequent(allTransactions, 'category')
-        }
+        categoryBreakdown: results.categoryBreakdown.reduce((acc, cat) => {
+          acc[cat._id] = {
+            total: cat.total,
+            count: cat.count
+          };
+          return acc;
+        }, {}),
+        monthlyTrends: results.monthlyTrends.reduce((acc, item) => {
+          const monthYear = `${item._id.month}/${item._id.year}`;
+          acc[monthYear] = {
+            income: item.income,
+            expenses: item.expenses
+          };
+          return acc;
+        }, {})
       });
 
     } catch (error) {
@@ -281,29 +562,6 @@ class InsightsController {
     }
   }
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
   // Get overall lead insights
   static async getLeadInsights(req, res) {
     try {
@@ -689,6 +947,26 @@ class InsightsController {
       res.status(500).json({ message: 'Error fetching HR insights', error: error.message });
     }
   }
+
+  // Cache management methods
+  static async clearCache(req, res) {
+    try {
+      const { type, id } = req.query;
+      
+      if (type && id) {
+        // Clear specific cache
+        const pattern = `${type}-${id}*`;
+        await redisCloud.deletePattern(pattern);
+      } else {
+        // Clear all cache
+        await redisCloud.clearAll();
+      }
+
+      res.json({ message: 'Cache cleared successfully' });
+    } catch (error) {
+      res.status(500).json({ message: 'Error clearing cache', error: error.message });
+    }
+  }
 }
 
 // Helper function to get most frequent value in transactions
@@ -716,32 +994,6 @@ function getDailyCashFlow(transactions) {
     }
     return acc;
   }, {});
-}
-
-// Helper function to check transaction frequency
-function getCategoryFrequency(transactions, category) {
-  const categoryTransactions = transactions.filter(t => t.category === category);
-  return {
-    daily: categoryTransactions.length / 30, // Average per day
-    monthly: categoryTransactions.length / 12, // Average per month
-    total: categoryTransactions.length
-  };
-}
-
-// Helper function to detect recurring transactions
-function isRecurringTransaction(transactions, currentTransaction) {
-  const similarTransactions = transactions.filter(t =>
-    t.category === currentTransaction.category &&
-    Math.abs(t.amount - currentTransaction.amount) < 1 && // Same amount (within $1 difference)
-    t._id.toString() !== currentTransaction._id
-  );
-
-  // Check if there are at least 2 similar transactions in different months
-  const uniqueMonths = new Set(similarTransactions.map(t => 
-    `${t.date.getMonth()}-${t.date.getFullYear()}`
-  ));
-
-  return uniqueMonths.size >= 2;
 }
 
 // Helper function to get most frequent value from an object

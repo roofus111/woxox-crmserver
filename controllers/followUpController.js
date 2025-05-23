@@ -421,7 +421,7 @@ exports.getRecentAndUpcomingFollowUps = async (req, res) => {
 
 exports.getFilteredFollowUps = async (req, res) => {
   try {
-    const { dateRange, filterType, startDate, endDate } = req.query;
+    const { dateRange, filterType, startDate, endDate, page = 1, limit = 20 } = req.query;
     const userId = req.user._id;
     const companyId = req.user.company._id;
 
@@ -495,7 +495,7 @@ exports.getFilteredFollowUps = async (req, res) => {
           $gte: new Date(now.getFullYear(), 0, 1),
           $lt: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
         };
-        break;
+        break; 
       case 'lastYear': {
         const lastYear = now.getFullYear() - 1;
         dateRangeCriteria.followUpDate = {
@@ -558,9 +558,14 @@ exports.getFilteredFollowUps = async (req, res) => {
       ...dateRangeCriteria
     };
 
-    // Get filtered follow-ups
+    // Calculate skip value for pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get filtered follow-ups with pagination
     const followUps = await LeadFollowUp.find(searchCriteria)
       .sort({ followUpDate: dateRange === 'overdue' ? -1 : 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
       .populate("leadId")
       .populate("assignedTo", 'name')
       .populate("createdBy", 'name')
@@ -568,6 +573,9 @@ exports.getFilteredFollowUps = async (req, res) => {
         path: 'leadId',
         populate: { path: 'tags', select: 'name color' }
       });
+
+    // Get total count for pagination
+    const totalCount = await LeadFollowUp.countDocuments(searchCriteria);
 
     // Get stats for pending follow-ups
     const pendingStats = {
@@ -594,6 +602,12 @@ exports.getFilteredFollowUps = async (req, res) => {
     res.status(200).json({
       followUps,
       stats: pendingStats,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        totalItems: totalCount,
+        hasMore: skip + followUps.length < totalCount
+      },
       dateRange: {
         filter: dateRange,
         startDate: dateRangeCriteria.followUpDate?.$gte,
