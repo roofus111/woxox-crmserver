@@ -4,7 +4,7 @@ const FormSchema = new mongoose.Schema({
     type: Number,
   },
   address: {
-    type: String,
+    type: String,   
   },
   pinCode: {
     type: String,
