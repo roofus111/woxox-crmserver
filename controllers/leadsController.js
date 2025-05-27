@@ -603,7 +603,7 @@ exports.deleteLeadsByCompany = async (req, res) => {
   try {
     // Deleting all leads where the 'company' field matches the companyId provided
     const result = await Lead.deleteMany({
-      campaignid: "67b6d0aec6512b0cce2164d5",
+      campaignid: "68317d6bb55a3b95f88f1b51",
     });
     if (result.deletedCount === 0) {
       return res
@@ -611,7 +611,7 @@ exports.deleteLeadsByCompany = async (req, res) => {
         .json({ message: "No leads found for the specified company." });
     }
     res
-      .status(200)
+      .status(200)    
       .json({ message: `Successfully deleted ${result.deletedCount} leads.` });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -625,7 +625,7 @@ exports.updateLead = async (req, res) => {
 
     // Fetch the current lead from the database
     const existingLead = await Lead.findById(id);
-    if (!existingLead) {
+    if (!existingLead) { 
       return res.status(404).json({ message: "Lead not found" });
     }
 
