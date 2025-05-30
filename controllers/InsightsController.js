@@ -12,7 +12,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const redisCloud = require('../config/redis');
 
 // Initialize Redis client
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 class InsightsController {
   // Constrained configuration for limited resources
@@ -565,12 +565,19 @@ class InsightsController {
   // Get overall lead insights
   static async getLeadInsights(req, res) {
     try {
-      // Filter leads by company
       const filter = { company: req.user.company._id };
       
-      // Get all leads for the company
-      const leads = await Lead.find(filter)
-        .populate('assignedTo', 'name email')
+      // Get active campaigns first
+      const activeCampaigns = await Campaign.find({ 
+        company: req.user.company._id,
+        isActive: true 
+      });
+      
+      // Get leads for active campaigns only
+      const leads = await Lead.find({
+        company: req.user.company._id,
+        campaignid: { $in: activeCampaigns.map(c => c._id) }
+      }).populate('assignedTo', 'name email')
         .populate('campaignid', 'name');
       
       if (!leads || leads.length === 0) {

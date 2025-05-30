@@ -19,7 +19,7 @@ const LeadActivitySchema = new Schema({
   action: {
     type: String,
     required: true,
-    enum: ['created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted','followUp','notPicked','Rescheduled','Answered','NotAnswered','Busy','Wrong Number','Not Reachable','Callback Requested'], // Various lead-related actions
+    enum: ['created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted','followUp','notPicked','Rescheduled','Answered','NotAnswered','Busy','Wrong Number','Not Reachable','Callback Requested','whatsapp_temp_sent'], // Various lead-related actions
   },
   timestamp: {
     type: Date,
