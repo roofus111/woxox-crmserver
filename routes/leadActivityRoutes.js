@@ -55,7 +55,7 @@ const router = express.Router();
 const leadActivityController = require('../controllers/leadActivityController');
 
 const authenticateUser = require('../middleware/authenticateUser');
-
+router.post('/add',leadActivityController.addLeadActivity);
 router.use(authenticateUser); // Apply authentication to all routes
 /**
  * @swagger

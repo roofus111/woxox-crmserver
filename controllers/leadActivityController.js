@@ -813,6 +813,27 @@ exports.getLeaderboard = async (req, res) => {
 };
 
 
+// Controller to create a new lead activity log without authentication
+exports.addLeadActivity = async (req, res) => {
+  const { leadId, action, details, userId, companyId } = req.body;
+  try {
+    // Create the activity log
+    const newActivity = new LeadActivity({
+      leadId,
+      userId, // Manually provided user ID
+      company: companyId, // Manually provided company ID
+      action,
+      details,
+      ipAddress: req.ip, // Getting IP address from request
+      userAgent: req.headers['user-agent'], // Getting user-agent from request headers
+    });
+
+    const savedActivity = await newActivity.save();
+    res.status(201).json(savedActivity);
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating lead activity', error });
+  }
+};
 
 
 
