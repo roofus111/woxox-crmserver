@@ -619,3 +619,84 @@ exports.getFilteredFollowUps = async (req, res) => {
   }
 };
 
+
+
+exports.createWoxiFollowUp = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const {
+      leadId,
+      followUpDate,
+      status,
+      notes,
+      nextFollowUpDate,
+      assignedTo,
+      company
+    } = req.body;
+
+    // Enhanced validation
+    if (!leadId || !followUpDate || !status) {
+      return res.status(400).json({ 
+        message: "Required fields missing", 
+        required: ['leadId', 'followUpDate', 'status'] 
+      });
+    }
+
+    // Validate date formats
+    if (!Date.parse(followUpDate) || (nextFollowUpDate && !Date.parse(nextFollowUpDate))) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    // Check if lead exists
+    const lead = await Lead.findById(leadId).session(session);
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // Create follow-up object
+    const newFollowUp = new LeadFollowUp({
+      company,
+      leadId,
+      followUpDate: new Date(followUpDate),
+      status,
+      notes,
+      nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
+      assignedTo: assignedTo?.trim() ? assignedTo : req.user._id,
+      createdBy: req.user._id,
+      bot:true
+    });
+
+    const savedFollowUp = await newFollowUp.save({ session });
+
+    // Create activity log
+    const newActivity = new LeadActivity({
+      leadId,
+      company: req.user.company._id,
+      userId: req.user._id,
+      action: "followUp",
+      details: `Woxi created a new follow-up scheduled for ${new Date(followUpDate).toLocaleDateString("en-IN")}`,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    const savedActivity = await newActivity.save({ session });
+
+    await session.commitTransaction();
+    res.status(201).json({
+      message: "Follow-up created successfully",
+      followUp: savedFollowUp,
+      activity: savedActivity,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Error creating follow-up:", error);
+    res.status(500).json({ 
+      message: "Failed to create follow-up", 
+      error: error.message 
+    });
+  } finally {
+    session.endSession();
+  }
+};

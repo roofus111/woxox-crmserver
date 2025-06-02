@@ -57,7 +57,10 @@ const leadFollowUpSchema = new mongoose.Schema({
   lastAlertType: {
     type: String,
     enum: ['1hr', '24hr', '48hr']
-  }
+  },
+  bot: {
+    type: Boolean
+  },
 });
 
 leadFollowUpSchema.pre("save", function (next) {

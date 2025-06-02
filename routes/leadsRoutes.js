@@ -315,7 +315,7 @@ router.get("/docs/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
+router.get('/getleadbyphone/:phone',leadsController.getOrCreateLeadByPhone);
 router.post('/webhook/202504/cd202504/leads',leadsController.webhookReceiver);
 router.get('/webhook/leads',leadsController.getWebhookLeads);
 router.get('/countstatusbycampaign/:campaignid/:status',leadsController.getLeadsByCampaignIdAndStatus);

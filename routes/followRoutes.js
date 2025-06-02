@@ -516,4 +516,6 @@ router.get('/stats/get/recentandupcoming', leadFollowUpController.getRecentAndUp
 //Version 2
 router.get('/v2/gettasks',leadFollowUpController.getFilteredFollowUps);
 
+router.post('/v2/createfollowup',leadFollowUpController.createWoxiFollowUp);
+
 module.exports = router;

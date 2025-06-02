@@ -1761,3 +1761,76 @@ exports.getLeadsByCampaignIdAndStatus = async (req, res) => {
     });
   }
 };
+
+exports.getOrCreateLeadByPhone = async (req, res) => {
+  try {
+    const { phone } = req.params;
+
+    // Validate phone number
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone number is required"
+      });
+    }
+
+    // Try to find existing lead with the phone number
+    const existingLead = await Lead.findOne({ phone })
+      .populate("assignedTo", "_id firstName lastName")
+      .populate("campaignid", "_id name description")
+      .populate("tags", "name color")
+      .sort({ createdAt: -1 }); // Get the latest lead if multiple exist
+
+    // If lead exists, return it
+    if (existingLead) {
+      return res.status(200).json({
+        success: true,
+        isNewLead: false,
+        data: existingLead
+      });
+    }
+
+    // If lead doesn't exist, create a new one
+    // Generate name with format Newlead-WA[YYMMDD]
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const name = `Newlead-WA${year}${month}${day}`;
+
+    // Create new lead
+    const newLead = new Lead({
+      name,
+      phone,
+      status: 'New',
+      campaignid: '68301c19e3a34193c8fe34c5',
+      source: 'WhatsApp',
+      company: '67ac52d37ec9e535ff0a12c7',
+      untouched: true
+    });
+
+    await newLead.save();
+
+    // Populate the new lead with related data
+    const populatedLead = await Lead.findById(newLead._id)
+      .populate("assignedTo", "_id firstName lastName")
+      .populate("campaignid", "_id name description")
+      .populate("tags", "name color");
+
+    return res.status(201).json({
+      success: true,
+      isNewLead: true,
+      data: populatedLead
+    });
+
+  } catch (error) {
+    console.error("Error in getOrCreateLeadByPhone:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      message: error.message
+    });
+  }
+};
+
+
