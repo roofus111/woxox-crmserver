@@ -7,7 +7,7 @@ const activityLogSchema = new Schema({
     action: { type: String, required: true },
     referenceData: { type: mongoose.Schema.Types.Mixed }, // Optional: additional context or payload
     performedAt: { type: Date, default: Date.now }
-  }, { _id: false });
+  }, );
 
 // Sub-schema for file attachments
 const fileSchema = new Schema({
@@ -18,7 +18,7 @@ const fileSchema = new Schema({
     path: { type: String, required: true },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     uploadedAt: { type: Date, default: Date.now }
-}, { _id: false });
+}, );
   
 // Main Task Schema
 const taskSchema = new Schema({

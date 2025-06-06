@@ -1,4 +1,7 @@
 const Task = require('../models/Task');
+const { v4: uuidv4 } = require('uuid');
+const { S3, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const s3Client = require("../config/s3");
 
 // Create a new task
 exports.createTask = async (req, res) => {
@@ -183,6 +186,143 @@ exports.searchAndFilterTasks = async (req, res) => {
         res.status(200).json(tasks);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+// Upload file to task
+exports.uploadTaskFile = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const file = req.file; // Assuming multer middleware is used
+
+        if (!file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        // Find the task
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        // Generate unique file name
+        const fileName = `${uuidv4()}-${file.originalname}`;
+        
+        // Upload to S3 using AWS SDK v3
+        const params = {
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: `taskfiles/${fileName}`,
+            Body: file.buffer,
+            ContentType: file.mimetype
+        };
+
+        // Create S3 client instance
+        const s3 = new S3({ client: s3Client });
+        
+        // Upload file using PutObjectCommand
+        const command = new PutObjectCommand(params);
+        await s3Client.send(command);
+
+        // Construct the S3 URL
+        const fileUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/task-files/${fileName}`;
+
+        // Create file object
+        const fileData = {
+            filename: fileName,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            path: fileUrl,
+            uploadedBy: req.user._id,
+            uploadedAt: new Date()
+        };
+
+        // Add file to task's files array
+        task.files.push(fileData);
+        await task.save();
+
+        // Add to activity log
+        task.activityLog.push({
+            performedBy: req.user._id,
+            action: 'file_uploaded',
+            referenceData: {
+                fileName: file.originalname,
+                fileUrl: fileUrl
+            }
+        });
+
+        await task.save();
+
+        res.status(200).json({
+            message: 'File uploaded successfully',
+            file: fileData
+        });
+    } catch (error) {
+        console.error('Error uploading file:', error);
+        res.status(500).json({ message: 'Error uploading file', error: error.message });
+    }
+};
+
+// Delete file from task
+exports.deleteTaskFile = async (req, res) => {
+    try {
+        const { taskId, fileId } = req.params;
+
+        // Find the task
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        // Find the file in the task's files array
+        const fileIndex = task.files.findIndex(file => file._id.toString() === fileId);
+        if (fileIndex === -1) {
+            return res.status(404).json({ message: 'File not found in task' });
+        }
+
+        const fileToDelete = task.files[fileIndex];
+
+        // Delete from S3
+        const fileKey = fileToDelete.filename; // This is the filename we stored
+        const params = {
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: `taskfiles/${fileKey}` // Using taskfiles/ to match upload path
+        };
+
+        try {
+            // Delete file using DeleteObjectCommand
+            const command = new DeleteObjectCommand(params);
+            await s3Client.send(command);
+        } catch (s3Error) {
+            console.error('Error deleting file from S3:', s3Error);
+            return res.status(500).json({ 
+                message: 'Error deleting file from S3', 
+                error: s3Error.message 
+            });
+        }
+
+        // Remove file from task's files array
+        task.files.splice(fileIndex, 1);
+
+        // Add to activity log
+        task.activityLog.push({
+            performedBy: req.user._id,
+            action: 'file_deleted',
+            referenceData: {
+                fileName: fileToDelete.originalName,
+                fileUrl: fileToDelete.path
+            }
+        });
+
+        await task.save();
+
+        res.status(200).json({
+            message: 'File deleted successfully',
+            deletedFile: fileToDelete
+        });
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        res.status(500).json({ message: 'Error deleting file', error: error.message });
     }
 };
 

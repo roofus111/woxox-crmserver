@@ -304,10 +304,79 @@
  *         description: Server error
  */
 
+/**
+ * @swagger
+ * /api/tasks/uploadfile/{taskId}:
+ *   post:
+ *     summary: Upload a file to a task
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: The file to upload
+ *     responses:
+ *       200:
+ *         description: File uploaded successfully
+ *       404:
+ *         description: Task not found
+ *       401:
+ *         description: Unauthorized
+ */
+
+/**
+ * @swagger
+ * /api/tasks/deletefile/{taskId}/{fileId}:
+ *   delete:
+ *     summary: Delete a file from a task
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *       - in: path
+ *         name: fileId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File ID
+ *     responses:
+ *       200:
+ *         description: File deleted successfully
+ *       404:
+ *         description: Task or file not found
+ *       401:
+ *         description: Unauthorized
+ */
+
 const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const authenticateUser = require('../middleware/authenticateUser');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(authenticateUser);
 
@@ -318,5 +387,8 @@ router.put('/updatetask/:id', taskController.updateTask);
 router.delete('/deletetask/:id', taskController.deleteTask);
 router.put('/reassign/:taskId', taskController.reassignTask);
 router.get('/search', taskController.searchAndFilterTasks);
+router.post('/uploadfile/:taskId', upload.single('file'), taskController.uploadTaskFile);
+router.delete('/deletefile/:taskId/:fileId', taskController.deleteTaskFile);
+
 
 module.exports = router;
