@@ -1,14 +1,89 @@
 const Task = require('../models/Task');
+const TaskCount = require('../models/taskcount');
 const { v4: uuidv4 } = require('uuid');
 const { S3, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
+const mongoose = require('mongoose');
 
 // Create a new task
 exports.createTask = async (req, res) => {
     try {
-        const newTask = new Task(req.body);
+        const newTask = new Task({
+            ...req.body,
+            company: req.user.company._id
+        });
+        
+        // Add initial activity log entry
+        newTask.activityLog.push({
+            performedBy: req.user._id,
+            action: 'created',
+            referenceData: {
+                initialStatus: newTask.status,
+                initialPriority: newTask.priority,
+                initialAssignee: newTask.assignee
+            }
+        });
+
         const savedTask = await newTask.save();
-        res.status(201).json(savedTask);
+
+        // Update task count
+        let taskCount = await TaskCount.findOne();
+        if (!taskCount) {
+            taskCount = new TaskCount();
+        }
+
+        // Increment total tasks
+        taskCount.totalTasks++;
+
+        // Update status count
+        if (savedTask.status) {
+            taskCount.statusCounts[savedTask.status]++;
+        }
+
+        // Update priority count
+        if (savedTask.priority) {
+            taskCount.priorityCounts[savedTask.priority.toLowerCase()]++;
+        }
+
+        // Update assignee count
+        if (savedTask.assignee) {
+            const assigneeIndex = taskCount.assigneeCounts.findIndex(
+                ac => ac.assignee.toString() === savedTask.assignee.toString()
+            );
+            if (assigneeIndex > -1) {
+                taskCount.assigneeCounts[assigneeIndex].count++;
+            } else {
+                taskCount.assigneeCounts.push({
+                    assignee: savedTask.assignee,
+                    count: 1
+                });
+            }
+        }
+
+        // Update lead count if task is associated with a lead
+        if (savedTask.leadId) {
+            const leadIndex = taskCount.leadCounts.findIndex(
+                lc => lc.lead.toString() === savedTask.leadId.toString()
+            );
+            if (leadIndex > -1) {
+                taskCount.leadCounts[leadIndex].count++;
+            } else {
+                taskCount.leadCounts.push({
+                    lead: savedTask.leadId,
+                    count: 1
+                });
+            }
+        }
+
+        // Update last updated timestamp
+        taskCount.lastUpdated = new Date();
+
+        await taskCount.save();
+
+        res.status(201).json({
+            ...savedTask.toObject(),
+            company: req.user.company._id
+        });
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
@@ -17,7 +92,9 @@ exports.createTask = async (req, res) => {
 // Get all tasks
 exports.getAllTasks = async (req, res) => {
     try {
-        const tasks = await Task.find().populate('assignee').populate('leadId');
+        const tasks = await Task.find({ company: req.user.company._id })
+            .populate('assignee', 'name')
+            .populate('leadId', 'name');
         res.status(200).json(tasks);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -28,8 +105,8 @@ exports.getAllTasks = async (req, res) => {
 exports.getTaskById = async (req, res) => {
     try {
         const task = await Task.findById(req.params.id)
-            .populate('assignee')
-            .populate('leadId')
+            .populate('assignee', 'name')
+            .populate('leadId', 'name')
             .populate('tagIds', null, 'TagManager');
             
         if (!task) {
@@ -44,15 +121,70 @@ exports.getTaskById = async (req, res) => {
 // Update a task
 exports.updateTask = async (req, res) => {
     try {
+        // Get the old task to check status change
+        const oldTask = await Task.findById(req.params.id);
+        if (!oldTask) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        // Track changes for activity log
+        const changes = {};
+        Object.keys(req.body).forEach(key => {
+            if (oldTask[key]?.toString() !== req.body[key]?.toString()) {
+                changes[key] = {
+                    from: oldTask[key],
+                    to: req.body[key]
+                };
+            }
+        });
+
+        // Update the task
         const updatedTask = await Task.findByIdAndUpdate(
             req.params.id, 
             req.body, 
             { new: true }
-        ).populate('assignee').populate('leadId');
+        ).populate('assignee', 'name').populate('leadId', 'name');
         
         if (!updatedTask) {
             return res.status(404).json({ message: 'Task not found' });
         }
+
+        // Add activity log entry for the changes
+        if (Object.keys(changes).length > 0) {
+            updatedTask.activityLog.push({
+                performedBy: req.user._id,
+                action: 'updated',
+                referenceData: {
+                    changes: changes
+                }
+            });
+            await updatedTask.save();
+        }
+
+        // If status has changed, update the counts
+        if (oldTask.status !== updatedTask.status) {
+            // Get or create the task count document
+            let taskCount = await TaskCount.findOne();
+            if (!taskCount) {
+                taskCount = new TaskCount();
+            }
+
+            // Decrement the count for the old status
+            if (oldTask.status) {
+                taskCount.statusCounts[oldTask.status]--;
+            }
+
+            // Increment the count for the new status
+            if (updatedTask.status) {
+                taskCount.statusCounts[updatedTask.status]++;
+            }
+
+            // Update last updated timestamp
+            taskCount.lastUpdated = new Date();
+
+            await taskCount.save();
+        }
+
         res.status(200).json(updatedTask);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -83,7 +215,7 @@ exports.reassignTask = async (req, res) => {
             taskId,
             { assignee: newAssigneeId },
             { new: true }
-        ).populate('assignee').populate('leadId');
+        ).populate('assignee', 'name').populate('leadId', 'name');
 
         if (!updatedTask) {
             return res.status(404).json({ message: 'Task not found' });
@@ -126,7 +258,7 @@ exports.searchAndFilterTasks = async (req, res) => {
         } = req.query;
 
         // Build the filter object
-        const filter = {};
+        const filter = {company: req.user.company._id};
 
         // Filter by tags
         if (tagIds) {
@@ -178,8 +310,8 @@ exports.searchAndFilterTasks = async (req, res) => {
 
         // Execute the query with populated fields
         const tasks = await Task.find(filter)
-            .populate('assignee')
-            .populate('leadId')
+            .populate('assignee', 'name')
+            .populate('leadId', 'name')
             .populate('tagIds', null, 'TagManager')
             .sort({ createdAt: -1 }); // Sort by creation date, newest first
 
@@ -325,4 +457,88 @@ exports.deleteTaskFile = async (req, res) => {
         res.status(500).json({ message: 'Error deleting file', error: error.message });
     }
 };
+
+// Get task counts with status
+exports.getTaskCounts = async (req, res) => {
+    try {
+        const taskCount = await TaskCount.findOne();
+        
+        if (!taskCount) {
+            return res.status(404).json({ message: 'Task count information not found' });
+        }
+
+        // Get all tasks to properly calculate status counts
+        const tasks = await Task.find({ company: req.user.company._id })
+            .populate('assignee', 'name')
+            .populate('leadId', 'name');
+
+        // Create a map to store assignee status counts
+        const assigneeStatusMap = new Map();
+
+        // Group tasks by assignee and status
+        tasks.forEach(task => {
+            if (task.assignee) {
+                const assigneeId = task.assignee._id.toString();
+                const status = task.status;
+                
+                // Create a unique key combining assignee and status
+                const key = `${assigneeId}-${status}`;
+                
+                if (!assigneeStatusMap.has(key)) {
+                    assigneeStatusMap.set(key, {
+                        assignee: task.assignee._id,
+                        assigneeName: task.assignee.name,
+                        count: 0,
+                        status: status
+                    });
+                }
+                const assigneeData = assigneeStatusMap.get(key);
+                assigneeData.count++;
+            }
+        });
+
+        // Convert map to array
+        const assigneeStatusCounts = Array.from(assigneeStatusMap.values());
+
+        // Similar process for leads
+        const leadStatusMap = new Map();
+        tasks.forEach(task => {
+            if (task.leadId) {
+                const leadId = task.leadId._id.toString();
+                const status = task.status;
+                
+                // Create a unique key combining lead and status
+                const key = `${leadId}-${status}`;
+                
+                if (!leadStatusMap.has(key)) {
+                    leadStatusMap.set(key, {
+                        lead: task.leadId._id,
+                        leadName: task.leadId.name,
+                        count: 0,
+                        status: status
+                    });
+                }
+                const leadData = leadStatusMap.get(key);
+                leadData.count++;
+            }
+        });
+
+        // Convert map to array
+        const leadStatusCounts = Array.from(leadStatusMap.values());
+
+        const response = {
+            totalTasks: taskCount.totalTasks,
+            statusCounts: taskCount.statusCounts,
+            priorityCounts: taskCount.priorityCounts,
+            assigneeStatusCounts,
+            leadStatusCounts,
+            lastUpdated: taskCount.lastUpdated
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 

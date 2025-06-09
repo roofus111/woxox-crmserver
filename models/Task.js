@@ -22,6 +22,7 @@ const fileSchema = new Schema({
   
 // Main Task Schema
 const taskSchema = new Schema({
+  company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   title: { type: String, required: true },
   description: { type: String },
   dueDate: { type: Date },

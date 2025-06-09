@@ -371,6 +371,38 @@
  *         description: Unauthorized
  */
 
+/**
+ * @swagger
+ * /api/tasks/getcounts:
+ *   get:
+ *     summary: Get task counts by status
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Returns counts of tasks by their status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 todo:
+ *                   type: number
+ *                   description: Count of tasks in todo status
+ *                 inProgress:
+ *                   type: number
+ *                   description: Count of tasks in progress
+ *                 completed:
+ *                   type: number
+ *                   description: Count of completed tasks
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
@@ -389,6 +421,6 @@ router.put('/reassign/:taskId', taskController.reassignTask);
 router.get('/search', taskController.searchAndFilterTasks);
 router.post('/uploadfile/:taskId', upload.single('file'), taskController.uploadTaskFile);
 router.delete('/deletefile/:taskId/:fileId', taskController.deleteTaskFile);
-
+router.get('/getcounts', taskController.getTaskCounts);
 
 module.exports = router;
