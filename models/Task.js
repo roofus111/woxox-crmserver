@@ -19,6 +19,15 @@ const fileSchema = new Schema({
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     uploadedAt: { type: Date, default: Date.now }
 }, );
+
+// Sub-schema for notes
+const noteSchema = new Schema({
+    content: { type: String, required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    updatedAt: { type: Date, default: Date.now }
+});
   
 // Main Task Schema
 const taskSchema = new Schema({
@@ -37,7 +46,8 @@ const taskSchema = new Schema({
   files: [fileSchema],
   leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
   tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag' }],
-  completedAt: { type: Date }
+  completedAt: { type: Date },
+  notes: [noteSchema]
 }, { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } });
 
 module.exports = mongoose.model('Task', taskSchema);

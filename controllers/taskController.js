@@ -540,5 +540,156 @@ exports.getTaskCounts = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+// Add a note to a task
+exports.addTaskNote = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { content } = req.body;
 
+        if (!content) {
+            return res.status(400).json({ message: 'Note content is required' });
+        }
 
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        const newNote = {
+            content,
+            createdBy: req.user._id,
+            updatedBy: req.user._id
+        };
+
+        task.notes.push(newNote);
+        await task.save();
+
+        // Add to activity log
+        task.activityLog.push({
+            performedBy: req.user._id,
+            action: 'note_added',
+            referenceData: {
+                noteContent: content
+            }
+        });
+
+        await task.save();
+
+        res.status(201).json({
+            message: 'Note added successfully',
+            note: newNote
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Get all notes for a task
+exports.getTaskNotes = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+
+        const task = await Task.findById(taskId)
+            .populate('notes.createdBy', 'name')
+            .populate('notes.updatedBy', 'name');
+
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        res.status(200).json(task.notes);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Update a note
+exports.updateTaskNote = async (req, res) => {
+    try {
+        const { taskId, noteId } = req.params;
+        const { content } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ message: 'Note content is required' });
+        }
+
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        const noteIndex = task.notes.findIndex(note => note._id.toString() === noteId);
+        if (noteIndex === -1) {
+            return res.status(404).json({ message: 'Note not found' });
+        }
+
+        // Store old content before updating
+        const oldContent = task.notes[noteIndex].content;
+
+        // Update note
+        task.notes[noteIndex].content = content;
+        task.notes[noteIndex].updatedBy = req.user._id;
+        task.notes[noteIndex].updatedAt = new Date();
+
+        // Add to activity log
+        task.activityLog.push({
+            performedBy: req.user._id,
+            action: 'note_updated',
+            referenceData: {
+                noteId: noteId,
+                oldContent: oldContent,
+                newContent: content
+            }
+        });
+
+        await task.save();
+
+        res.status(200).json({
+            message: 'Note updated successfully',
+            note: task.notes[noteIndex]
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Delete a note
+exports.deleteTaskNote = async (req, res) => {
+    try {
+        const { taskId, noteId } = req.params;
+
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        const noteIndex = task.notes.findIndex(note => note._id.toString() === noteId);
+        if (noteIndex === -1) {
+            return res.status(404).json({ message: 'Note not found' });
+        }
+
+        const deletedNote = task.notes[noteIndex];
+
+        // Remove note from array
+        task.notes.splice(noteIndex, 1);
+
+        // Add to activity log
+        task.activityLog.push({
+            performedBy: req.user._id,
+            action: 'note_deleted',
+            referenceData: {
+                noteId: noteId,
+                noteContent: deletedNote.content
+            }
+        });
+
+        await task.save();
+
+        res.status(200).json({
+            message: 'Note deleted successfully',
+            deletedNote
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};

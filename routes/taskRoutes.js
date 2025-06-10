@@ -403,6 +403,156 @@
  *         description: Server error
  */
 
+/**
+ * @swagger
+ * /api/tasks/notes/{taskId}:
+ *   post:
+ *     summary: Add a note to a task
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 description: The note content
+ *     responses:
+ *       201:
+ *         description: Note added successfully
+ *       404:
+ *         description: Task not found
+ *       401:
+ *         description: Unauthorized
+ */
+
+/**
+ * @swagger
+ * /api/tasks/notes/{taskId}:
+ *   get:
+ *     summary: Get all notes for a task
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *     responses:
+ *       200:
+ *         description: List of task notes
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   content:
+ *                     type: string
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *       404:
+ *         description: Task not found
+ *       401:
+ *         description: Unauthorized
+ */
+
+/**
+ * @swagger
+ * /api/tasks/notes/{taskId}/{noteId}:
+ *   put:
+ *     summary: Update a task note
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *       - in: path
+ *         name: noteId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Note ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - content
+ *             properties:
+ *               content:
+ *                 type: string
+ *                 description: The updated note content
+ *     responses:
+ *       200:
+ *         description: Note updated successfully
+ *       404:
+ *         description: Task or note not found
+ *       401:
+ *         description: Unauthorized
+ */
+
+/**
+ * @swagger
+ * /api/tasks/notes/{taskId}/{noteId}:
+ *   delete:
+ *     summary: Delete a task note
+ *     tags:
+ *       - Tasks
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: taskId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Task ID
+ *       - in: path
+ *         name: noteId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Note ID
+ *     responses:
+ *       200:
+ *         description: Note deleted successfully
+ *       404:
+ *         description: Task or note not found
+ *       401:
+ *         description: Unauthorized
+ */
+
 const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
@@ -422,5 +572,9 @@ router.get('/search', taskController.searchAndFilterTasks);
 router.post('/uploadfile/:taskId', upload.single('file'), taskController.uploadTaskFile);
 router.delete('/deletefile/:taskId/:fileId', taskController.deleteTaskFile);
 router.get('/getcounts', taskController.getTaskCounts);
+router.post('/notes/:taskId', taskController.addTaskNote);
+router.get('/notes/:taskId', taskController.getTaskNotes);
+router.put('/notes/:taskId/:noteId', taskController.updateTaskNote);
+router.delete('/notes/:taskId/:noteId', taskController.deleteTaskNote);
 
 module.exports = router;
