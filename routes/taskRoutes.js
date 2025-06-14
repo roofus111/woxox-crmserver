@@ -576,5 +576,7 @@ router.post('/notes/:taskId', taskController.addTaskNote);
 router.get('/notes/:taskId', taskController.getTaskNotes);
 router.put('/notes/:taskId/:noteId', taskController.updateTaskNote);
 router.delete('/notes/:taskId/:noteId', taskController.deleteTaskNote);
+router.get('/performance/calculate', taskController.calculateMonthlyPerformance);
+
 
 module.exports = router;

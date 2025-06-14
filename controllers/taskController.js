@@ -3,7 +3,9 @@ const TaskCount = require('../models/taskcount');
 const { v4: uuidv4 } = require('uuid');
 const { S3, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
-const mongoose = require('mongoose');
+const MonthlyTaskMetrics = require('../models/MonthlyTaskMetrics');
+const cron = require('node-cron');
+const Company = require('../models/Company');
 
 // Create a new task
 exports.createTask = async (req, res) => {
@@ -12,7 +14,7 @@ exports.createTask = async (req, res) => {
             ...req.body,
             company: req.user.company._id
         });
-        
+
         // Add initial activity log entry
         newTask.activityLog.push({
             performedBy: req.user._id,
@@ -108,7 +110,7 @@ exports.getTaskById = async (req, res) => {
             .populate('assignee', 'name')
             .populate('leadId', 'name')
             .populate('tagIds', null, 'TagManager');
-            
+
         if (!task) {
             return res.status(404).json({ message: 'Task not found' });
         }
@@ -140,11 +142,11 @@ exports.updateTask = async (req, res) => {
 
         // Update the task
         const updatedTask = await Task.findByIdAndUpdate(
-            req.params.id, 
-            req.body, 
+            req.params.id,
+            req.body,
             { new: true }
         ).populate('assignee', 'name').populate('leadId', 'name');
-        
+
         if (!updatedTask) {
             return res.status(404).json({ message: 'Task not found' });
         }
@@ -258,7 +260,7 @@ exports.searchAndFilterTasks = async (req, res) => {
         } = req.query;
 
         // Build the filter object
-        const filter = {company: req.user.company._id};
+        const filter = { company: req.user.company._id };
 
         // Filter by tags
         if (tagIds) {
@@ -339,7 +341,7 @@ exports.uploadTaskFile = async (req, res) => {
 
         // Generate unique file name
         const fileName = `${uuidv4()}-${file.originalname}`;
-        
+
         // Upload to S3 using AWS SDK v3
         const params = {
             Bucket: process.env.AWS_BUCKET_NAME,
@@ -350,7 +352,7 @@ exports.uploadTaskFile = async (req, res) => {
 
         // Create S3 client instance
         const s3 = new S3({ client: s3Client });
-        
+
         // Upload file using PutObjectCommand
         const command = new PutObjectCommand(params);
         await s3Client.send(command);
@@ -427,9 +429,9 @@ exports.deleteTaskFile = async (req, res) => {
             await s3Client.send(command);
         } catch (s3Error) {
             console.error('Error deleting file from S3:', s3Error);
-            return res.status(500).json({ 
-                message: 'Error deleting file from S3', 
-                error: s3Error.message 
+            return res.status(500).json({
+                message: 'Error deleting file from S3',
+                error: s3Error.message
             });
         }
 
@@ -462,7 +464,7 @@ exports.deleteTaskFile = async (req, res) => {
 exports.getTaskCounts = async (req, res) => {
     try {
         const taskCount = await TaskCount.findOne();
-        
+
         if (!taskCount) {
             return res.status(404).json({ message: 'Task count information not found' });
         }
@@ -480,10 +482,10 @@ exports.getTaskCounts = async (req, res) => {
             if (task.assignee) {
                 const assigneeId = task.assignee._id.toString();
                 const status = task.status;
-                
+
                 // Create a unique key combining assignee and status
                 const key = `${assigneeId}-${status}`;
-                
+
                 if (!assigneeStatusMap.has(key)) {
                     assigneeStatusMap.set(key, {
                         assignee: task.assignee._id,
@@ -506,10 +508,10 @@ exports.getTaskCounts = async (req, res) => {
             if (task.leadId) {
                 const leadId = task.leadId._id.toString();
                 const status = task.status;
-                
+
                 // Create a unique key combining lead and status
                 const key = `${leadId}-${status}`;
-                
+
                 if (!leadStatusMap.has(key)) {
                     leadStatusMap.set(key, {
                         lead: task.leadId._id,
@@ -693,3 +695,263 @@ exports.deleteTaskNote = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Calculate and store monthly performance metrics
+exports.calculateMonthlyPerformance = async (req, res) => {
+    try {
+        const companyId = req.user.company._id;
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        const startDate = new Date(currentYear, currentMonth, 1);
+        const endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+
+        // Get all tasks for the current month
+        const tasks = await Task.find({
+            company: companyId,
+            createdAt: { $gte: startDate, $lte: endDate }
+        }).populate('assignee', 'name');
+
+        // Preload all pending tasks by assignee in one go
+        const pendingTasks = await Task.aggregate([
+            {
+                $match: {
+                    company: companyId,
+                    status: 'Pending'
+                }
+            },
+            {
+                $group: {
+                    _id: '$assignee',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        const pendingTaskMap = new Map();
+        pendingTasks.forEach(item => {
+            if (item._id) {
+                pendingTaskMap.set(item._id.toString(), item.count);
+            }
+        });
+
+        // Calculate metrics
+        const userMetricsMap = new Map();
+
+        for (const task of tasks) {
+            const assignee = task.assignee;
+            if (!assignee) continue;
+
+            const userId = assignee._id.toString();
+            if (!userMetricsMap.has(userId)) {
+                userMetricsMap.set(userId, {
+                    userId: assignee._id,
+                    userName: assignee.name,
+                    completedTasks: 0,
+                    createdTasks: 0,
+                    pendingTasks: pendingTaskMap.get(userId) || 0,
+                    totalCompletionTime: 0,
+                    completedOnTime: 0,
+                    totalCompleted: 0
+                });
+            }
+
+            const metrics = userMetricsMap.get(userId);
+
+            // Created tasks
+            metrics.createdTasks++;
+
+            if (task.status === 'Completed') {
+                metrics.completedTasks++;
+                metrics.totalCompleted++;
+
+                const completionTime = task.updatedAt - task.createdAt;
+                metrics.totalCompletionTime += completionTime;
+
+                if (task.dueDate && task.updatedAt <= task.dueDate) {
+                    metrics.completedOnTime++;
+                }
+            }
+        }
+
+        // Prepare final user metrics
+        const userMetrics = Array.from(userMetricsMap.values()).map(metrics => ({
+            userId: metrics.userId,
+            userName: metrics.userName,
+            completedTasks: metrics.completedTasks,
+            createdTasks: metrics.createdTasks,
+            pendingTasks: metrics.pendingTasks,
+            averageCompletionTime: metrics.totalCompleted > 0
+                ? metrics.totalCompletionTime / metrics.totalCompleted
+                : 0,
+            onTimeCompletionRate: metrics.totalCompleted > 0
+                ? (metrics.completedOnTime / metrics.totalCompleted) * 100
+                : 0
+        }));
+
+        // Find or create MonthlyTaskMetrics
+        let monthlyMetrics = await MonthlyTaskMetrics.findOne({ company: companyId });
+        if (!monthlyMetrics) {
+            monthlyMetrics = new MonthlyTaskMetrics({
+                company: companyId,
+                metrics: []
+            });
+        }
+
+        // Add the new month’s data
+        monthlyMetrics.metrics.push({
+            month: currentMonth + 1,
+            year: currentYear,
+            completedTasks: tasks.filter(task => task.status === 'Completed').length,
+            createdTasks: tasks.length,
+            totalPendingTasks: pendingTasks.reduce((sum, item) => sum + item.count, 0),
+            userMetrics
+        });
+
+
+
+        return res.status(200).json({
+            success: true,
+            metrics: monthlyMetrics
+        });
+
+    } catch (error) {
+        console.error('Error calculating monthly performance:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error calculating monthly performance',
+            error: error.message
+        });
+    }
+};
+
+
+// Add this near your other cron jobs
+cron.schedule('38 11 28-31 * *', async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (tomorrow.getDate() !== 1) return;
+
+    console.log('Running end-of-month task metrics calculation...');
+
+    try {
+        const companies = await Company.find();
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        const startDate = new Date(currentYear, currentMonth, 1);
+        const endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+
+        for (const company of companies) {
+            const companyId = company._id;
+
+            const tasks = await Task.find({
+                company: companyId,
+                updatedAt: { $gte: startDate, $lte: endDate }
+            }).populate('assignee', 'name');
+
+            const pendingTaskCounts = await Task.aggregate([
+                {
+                    $match: {
+                        company: companyId,
+                        status: 'Pending'
+                    }
+                },
+                {
+                    $group: {
+                        _id: '$assignee',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+
+            const pendingMap = new Map();
+            for (const p of pendingTaskCounts) {
+                if (p._id) pendingMap.set(p._id.toString(), p.count);
+            }
+
+            const userMetricsMap = new Map();
+
+            for (const task of tasks) {
+                if (!task.assignee) continue;
+                const userId = task.assignee._id.toString();
+
+                if (!userMetricsMap.has(userId)) {
+                    userMetricsMap.set(userId, {
+                        userId: task.assignee._id,
+                        userName: task.assignee.name,
+                        completedTasks: 0,
+                        createdTasks: 0,
+                        pendingTasks: pendingMap.get(userId) || 0,
+                        totalCompletionTime: 0,
+                        completedOnTime: 0,
+                        totalCompleted: 0
+                    });
+                }
+
+                const metrics = userMetricsMap.get(userId);
+
+                if (task.createdAt >= startDate && task.createdAt <= endDate) {
+                    metrics.createdTasks++;
+                }
+
+                if (task.status === 'Completed') {
+                    metrics.completedTasks++;
+                    metrics.totalCompleted++;
+                    metrics.totalCompletionTime += task.updatedAt - task.createdAt;
+
+                    if (task.dueDate && task.updatedAt <= task.dueDate) {
+                        metrics.completedOnTime++;
+                    }
+                }
+            }
+
+            const userMetrics = Array.from(userMetricsMap.values()).map(m => ({
+                userId: m.userId,
+                userName: m.userName,
+                completedTasks: m.completedTasks,
+                createdTasks: m.createdTasks,
+                pendingTasks: m.pendingTasks,
+                averageCompletionTime: m.totalCompleted > 0
+                    ? m.totalCompletionTime / m.totalCompleted
+                    : 0,
+                onTimeCompletionRate: m.totalCompleted > 0
+                    ? (m.completedOnTime / m.totalCompleted) * 100
+                    : 0
+            }));
+
+            const completedTasks = tasks.filter(task => task.status === 'Completed').length;
+            const createdTasks = tasks.filter(task =>
+                task.createdAt.getMonth() === currentMonth &&
+                task.createdAt.getFullYear() === currentYear
+            ).length;
+
+            const totalPendingTasks = pendingTaskCounts.reduce((acc, curr) => acc + curr.count, 0);
+
+            await MonthlyTaskMetrics.findOneAndUpdate(
+                { company: companyId },
+                {
+                    $push: {
+                        metrics: {
+                            month: currentMonth + 1,
+                            year: currentYear,
+                            completedTasks,
+                            createdTasks,
+                            totalPendingTasks,
+                            userMetrics
+                        }
+                    },
+                    $set: { updatedAt: new Date() }
+                },
+                { upsert: true, new: true }
+            );
+
+            console.log(`Completed metrics for company: ${company.name}`);
+        }
+
+        console.log('All company metrics calculated successfully.');
+
+    } catch (error) {
+        console.error('Error in monthly metrics cron job:', error);
+    }
+});
