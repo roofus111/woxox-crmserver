@@ -826,7 +826,7 @@ exports.calculateMonthlyPerformance = async (req, res) => {
 
 
 // Add this near your other cron jobs
-cron.schedule('38 11 28-31 * *', async () => {
+cron.schedule('00 02 28-31 * *', async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
 
