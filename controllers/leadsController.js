@@ -666,58 +666,58 @@ exports.updateLead = async (req, res) => {
 
 // Unassign leads untouched for more than 30 days.
 
-exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
-  try {
-    // Calculate the time 30 days ago
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+// exports.unassignUntouchedLeadsAfter30Days = async (req, res) => {
+//   try {
+//     // Calculate the time 30 days ago
+//     const thirtyDaysAgo = new Date();
+//     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    console.log(`Unassigning leads untouched since: ${thirtyDaysAgo}`);
+//     console.log(`Unassigning leads untouched since: ${thirtyDaysAgo}`);
 
-    // Find leads that are untouched, assigned, and created more than 30 days ago
-    const leadsToUnassign = await Lead.find({
-      untouched: true, // Must be marked as untouched
-      assignedTo: { $ne: null }, // Must have an assigned user
-      updatedAt: { $lte: thirtyDaysAgo }, // Created more than 30 days ago
-    });
+//     // Find leads that are untouched, assigned, and created more than 30 days ago
+//     const leadsToUnassign = await Lead.find({
+//       untouched: true, // Must be marked as untouched
+//       assignedTo: { $ne: null }, // Must have an assigned user
+//       updatedAt: { $lte: thirtyDaysAgo }, // Created more than 30 days ago
+//     });
 
-    console.log(`Found ${leadsToUnassign.length} leads to unassign.`);
+//     console.log(`Found ${leadsToUnassign.length} leads to unassign.`);
 
-    if (leadsToUnassign.length === 0) {
-      return res
-        ? res.status(200).json({ message: "No leads to unassign." })
-        : console.log("No leads to unassign.");
-    }
+//     if (leadsToUnassign.length === 0) {
+//       return res
+//         ? res.status(200).json({ message: "No leads to unassign." })
+//         : console.log("No leads to unassign.");
+//     }
 
-    // Perform the update to unassign these leads
-    const result = await Lead.updateMany(
-      {
-        untouched: true,
-        assignedTo: { $ne: null },
-        updatedAt: { $lte: thirtyDaysAgo },
-      },
-      { $set: { assignedTo: null } } // Set assignedTo to null
-    );
+//     // Perform the update to unassign these leads
+//     const result = await Lead.updateMany(
+//       {
+//         untouched: true,
+//         assignedTo: { $ne: null },
+//         updatedAt: { $lte: thirtyDaysAgo },
+//       },
+//       { $set: { assignedTo: null } } // Set assignedTo to null
+//     );
 
-    console.log(`Successfully unassigned ${result.modifiedCount} leads.`);
+//     console.log(`Successfully unassigned ${result.modifiedCount} leads.`);
 
-    // Optional response for manual triggers
-    if (res) {
-      return res.status(200).json({
-        message: `${result.modifiedCount} leads were unassigned.`,
-        leadsUpdated: result.modifiedCount,
-      });
-    }
-  } catch (error) {
-    console.error("Error while unassigning leads:", error.message);
+//     // Optional response for manual triggers
+//     if (res) {
+//       return res.status(200).json({
+//         message: `${result.modifiedCount} leads were unassigned.`,
+//         leadsUpdated: result.modifiedCount,
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error while unassigning leads:", error.message);
 
-    if (res) {
-      return res
-        .status(500)
-        .json({ message: "Server error", error: error.message });
-    }
-  }
-};
+//     if (res) {
+//       return res
+//         .status(500)
+//         .json({ message: "Server error", error: error.message });
+//     }
+//   }
+// };
 
 exports.AssignMultipleLeadsToUser = async (req, res) => {
   const { userId } = req.params;

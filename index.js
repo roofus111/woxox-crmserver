@@ -43,7 +43,7 @@ const roleRoutes=require('./routes/roleRoutes')
 const productServiceRoutes=require('./routes/productServiceRoutes')
 const templateRoutes=require('./routes/templateRoutes')
 const notificationRoutes=require('./routes/notificationRoutes')
-const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
+// const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
 const { Server } = require("socket.io"); // Import Socket.IO Server class
@@ -480,11 +480,11 @@ cron.schedule("0,30 * * * *", async () => {
   }
 });
 
-// Schedule the task to run daily at midnight
-cron.schedule('0 0 * * *', async () => {
-  console.log('Running scheduled task: unassign untouched leads after 30 days...');
-  await unassignUntouchedLeadsAfter30Days();
-});
+// // Schedule the task to run daily at midnight
+// cron.schedule('0 0 * * *', async () => {
+//   console.log('Running scheduled task: unassign untouched leads after 30 days...');
+//   await unassignUntouchedLeadsAfter30Days();
+// });
 const options={
   definition:{
     openapi:"3.0.0",
