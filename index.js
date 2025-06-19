@@ -67,6 +67,9 @@ const ChatGroup = require("./models/ChatGroup");
 const multer = require('multer');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
+// Import mail routes
+const mailRoutes = require('./routes/mailRoutes');
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI);
 mongoose.connection.on(
@@ -120,6 +123,8 @@ app.use("/api/role",roleRoutes)
 app.use("/api/productservice",productServiceRoutes)
 app.use("/api/template",templateRoutes)
 app.use("/api/notification",notificationRoutes)
+app.use('/api/mail', mailRoutes);
+
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,

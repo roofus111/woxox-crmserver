@@ -27,6 +27,8 @@ const userSchema = new mongoose.Schema({
     fileUrl: { type: String }
   },
   isActive: { type: Boolean, default: true },
+  isEmailVerified: { type: Boolean, default: false },
+  emailVerifiedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
 });
 
