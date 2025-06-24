@@ -7,7 +7,6 @@ const {
   sendPasswordResetOTP,
   verifyPasswordResetOTP,
   validateOTP,
-  testSMTP
 } = require('../controllers/mailController');
 
 /**
