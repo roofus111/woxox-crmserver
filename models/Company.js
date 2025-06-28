@@ -26,7 +26,8 @@ const CompanySchema = new mongoose.Schema({
     pipeline :{ type:Boolean,default: false },
     finance :{ type:Boolean,default: false },
     documentation :{ type:Boolean,default: false },
-  }
+  },
+  purchaseModuleId: { type: mongoose.Schema.Types.ObjectId, ref: 'CompanyPurchase' }
 });
 
 module.exports = mongoose.model('Company', CompanySchema);

@@ -56,7 +56,8 @@ exports.register = async (req, res) => {
                 name: `${user.firstName} ${user.lastName}`,
                 email: `${user.email}`,
                 role: user.role,
-                isEmailVerified: user.isEmailVerified
+                isEmailVerified: user.isEmailVerified,
+                company: req.user.company._id
             }
         });
     } catch (err) {
