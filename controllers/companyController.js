@@ -6,6 +6,7 @@ const s3Client = require("../config/s3");
 const Company = require('../models/Company');
 const User = require('../models/User');
 const multer = require('multer');
+const jwt = require('jsonwebtoken');
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -144,8 +145,14 @@ exports.createCompany = async (req, res) => {
     // Commit transaction
     await session.commitTransaction();
     session.endSession();
-
-    res.status(201).json({ newCompany, user });
+    
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '10h' }
+  );
+  
+    res.status(201).json({ newCompany, user, token });
   } catch (err) {
     await session.abortTransaction();
     session.endSession();

@@ -180,7 +180,7 @@ exports.updateFollowUp = async (req, res) => {
       leadId: updatedFollowUp.leadId,
       company: req.user.company._id,
       userId: req.user._id,
-      action: "assigned",
+      action: "followUp",
       details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],

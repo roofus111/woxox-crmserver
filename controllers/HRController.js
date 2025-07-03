@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const Employee=require('../models/HR')
 const User = require('../models/User');
+const Company = require('../models/Company');
 const { v4: uuidv4 } = require('uuid'); // For generating unique file names
 const {S3} = require("@aws-sdk/client-s3")
 const s3Client = require("../config/s3")
@@ -33,12 +34,10 @@ exports.createEmployee = async (req, res) => {
         supervisor,
         attendence,
         payroll,
-        // performance,
-        // training,
-        salary,//*
+        salary,
       } = req.body;
   
-      const files = req.files; // Assuming you're using a middleware like multer for file handling
+      const files = req.files;
   
       // Validate supervisor (if provided)
       if (supervisor) {
@@ -47,35 +46,58 @@ exports.createEmployee = async (req, res) => {
           return res.status(404).json({ message: 'Supervisor not found' });
         }
       }
-   // Generate the next employeeId in the format EMP1, EMP2, etc.
-   const lastEmployee = await Employee.findOne().sort({ createdAt: -1 }).select('employeeId');
-   let newEmployeeId = 'EMP1'; // Default to EMP1 if no previous record exists
 
-   if (lastEmployee?.employeeId) {
-       const lastIdNumber = parseInt(lastEmployee.employeeId.replace('EMP', '')) || 0;
-       newEmployeeId = `EMP${lastIdNumber + 1}`;
-   }
-    // Upload files to S3 and get URLs
-    const uploadedFiles = [];
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const fileContent = file.buffer; // File content from multer
-        const fileName = `${uuidv4()}-${file.originalname}`;
-        const params = {
-          Bucket: process.env.AWS_BUCKET_NAME,
-          Key: `employeedoc/${uuidv4()}-${file.originalname}`,
-          Body: fileContent,
-          ContentType: file.mimetype
-        };
+      // Check subscription status and employee limit
+      const company = await Company.findById(req.user.company._id).populate('purchaseModuleId');
+      
+      // Check if company has a valid subscription
+      const hasValidSubscription = company.purchaseModuleId && 
+        company.purchaseModuleId.validTill && 
+        new Date() < new Date(company.purchaseModuleId.validTill);
 
-        const uploadResult = await s3.upload(params).promise();
-        uploadedFiles.push({
-          fileName: fileName,
-          fileType: file.mimetype,
-          fileUrl: uploadResult.Location, // S3 file URL
-        });
+      // If no valid subscription, check if company already has an employee
+      if (!hasValidSubscription) {
+        const existingEmployeeCount = await Employee.countDocuments({ company: req.user.company._id });
+        if (existingEmployeeCount >= 1) {
+          return res.status(403).json({ 
+            message: 'Employee creation limit reached. Please upgrade your subscription to add more employees.',
+            limit: 1,
+            currentCount: existingEmployeeCount,
+            subscriptionStatus: 'inactive'
+          });
+        }
       }
-    }
+
+      // Generate the next employeeId in the format EMP1, EMP2, etc.
+      const lastEmployee = await Employee.findOne().sort({ createdAt: -1 }).select('employeeId');
+      let newEmployeeId = 'EMP1';
+
+      if (lastEmployee?.employeeId) {
+          const lastIdNumber = parseInt(lastEmployee.employeeId.replace('EMP', '')) || 0;
+          newEmployeeId = `EMP${lastIdNumber + 1}`;
+      }
+
+      // Upload files to S3 and get URLs
+      const uploadedFiles = [];
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const fileContent = file.buffer;
+          const fileName = `${uuidv4()}-${file.originalname}`;
+          const params = {
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: `employeedoc/${uuidv4()}-${file.originalname}`,
+            Body: fileContent,
+            ContentType: file.mimetype
+          };
+
+          const uploadResult = await s3.upload(params).promise();
+          uploadedFiles.push({
+            fileName: fileName,
+            fileType: file.mimetype,
+            fileUrl: uploadResult.Location,
+          });
+        }
+      }
   
       // Create a new employee
       const newEmployee = new Employee({
@@ -96,10 +118,8 @@ exports.createEmployee = async (req, res) => {
         role,
         attachments: uploadedFiles,
         supervisor: supervisor || null,
-        attendence: attendence, // Changed to store MongoDB ID reference
-        payroll: payroll, 
-        // performance, // Array of performance records (e.g., { reviewDate, rating, feedback })
-        // training, // Array of training records (e.g., { trainingName, startDate, endDate })
+        attendence: attendence,
+        payroll: payroll,
         salary,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -107,24 +127,30 @@ exports.createEmployee = async (req, res) => {
   
       // Save the employee to the database
       const savedEmployee = await newEmployee.save();
-          // Add a history entry for employee creation
-    const historyEntry = {
-      activityType: 'Status Update', // Or a more specific type like "Employee Created"
-      description: `Employee ${firstName} ${lastName} was created by ${req.user.name}`,
-      changedBy: req.user._id, // The user who created the employee
-      changedAt: new Date()
-    };
+      
+      // Add a history entry for employee creation
+      const historyEntry = {
+        activityType: 'Status Update',
+        description: `Employee ${firstName} ${lastName} was created by ${req.user.name}`,
+        changedBy: req.user._id,
+        changedAt: new Date()
+      };
 
-    // Add the history entry to the employee's history array
-    savedEmployee.history.push(historyEntry);
-    await savedEmployee.save();
-      return res.status(201).json({ message: 'Employee created successfully', employee: savedEmployee });
+      // Add the history entry to the employee's history array
+      savedEmployee.history.push(historyEntry);
+      await savedEmployee.save();
+      
+      return res.status(201).json({ 
+        message: 'Employee created successfully', 
+        employee: savedEmployee,
+        subscriptionStatus: hasValidSubscription ? 'active' : 'inactive'
+      });
     } catch (error) {
       console.error('Error creating employee:', error);
       return res.status(500).json({ 
         message: 'Internal server error', 
         error: error.message,
-        details: error.errors // Add validation error details if available
+        details: error.errors
       });
     }
   };
