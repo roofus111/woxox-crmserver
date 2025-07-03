@@ -52,6 +52,7 @@ const User = require("./models/User");
 const server = http.createServer(app);
 const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
+const messageRoutes=require('./routes/messageRoutes')
 const alertBeforeMinutes = 30;
 // const io = new Server(server, {
 //   cors: {
@@ -120,6 +121,7 @@ app.use("/api/role",roleRoutes)
 app.use("/api/productservice",productServiceRoutes)
 app.use("/api/template",templateRoutes)
 app.use("/api/notification",notificationRoutes)
+app.use("/api/message",messageRoutes)
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
