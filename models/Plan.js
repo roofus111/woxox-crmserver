@@ -41,5 +41,5 @@ const CompanyPurchaseSchema = new mongoose.Schema({
 });
 
 module.exports = {
-  CompanyPurchase: mongoose.model('CompanyPurchase', CompanyPurchaseSchema)
+  CompanyPurchase: mongoose.model('Plan', CompanyPurchaseSchema)
 };

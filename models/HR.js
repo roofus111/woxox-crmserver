@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
   // Sub-schema for Attachments
 const AttachmentSchema = new mongoose.Schema({
@@ -40,7 +41,7 @@ const AttachmentSchema = new mongoose.Schema({
 const HistorySchema = new mongoose.Schema({
   activityType: { 
     type: String, 
-    enum: ['Employee Updated', 'Job Title Change', 'Department Change', 'Status Update', 'Attendance Added','Attendance Update', 'Salary Update', 'Leave Change', 'Performance Update', 'Training Added','Grant Access Online'], 
+    enum: ['Employee Updated', 'Job Title Change', 'Department Change', 'Status Update', 'Attendance Added','Attendance Update', 'Salary Update', 'Leave Change', 'Performance Update', 'Training Added','Grant Access Online', 'Invitation Sent', 'Invitation Accepted'], 
     required: true 
   },
   description: { type: String, required: true },
@@ -89,6 +90,12 @@ const HistorySchema = new mongoose.Schema({
     attendence: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance' }, 
     payroll :{ type: mongoose.Schema.Types.ObjectId, ref: 'Payroll' },
     
+    // Invitation fields
+    invitationAccepted: { type: Boolean, default: false },
+    invitationToken: { type: String },
+    invitationSentAt: { type: Date },
+    invitationExpiresAt: { type: Date },
+    
     // performance:[PerformanceSchema],
     // training:[TrainingSchema],
     salary: { type: Number },
@@ -96,5 +103,66 @@ const HistorySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   });
+
+// Index for invitation token
+EmployeeSchema.index({ invitationToken: 1 });
+EmployeeSchema.index({ invitationExpiresAt: 1 });
+
+// Method to generate invitation token
+EmployeeSchema.methods.generateInvitationToken = function() {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Method to create invitation
+EmployeeSchema.methods.createInvitation = function() {
+  this.invitationToken = this.generateInvitationToken();
+  this.invitationSentAt = new Date();
+  this.invitationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  this.invitationAccepted = false;
+  return this.save();
+};
+
+// Method to check if invitation is valid
+EmployeeSchema.methods.isInvitationValid = function() {
+  // Check if invitation exists, is not accepted, and hasn't expired
+  if (!this.invitationToken || this.invitationAccepted || !this.invitationExpiresAt) {
+    return false;
+  }
+  return new Date() < this.invitationExpiresAt;
+};
+
+// Method to accept invitation
+EmployeeSchema.methods.acceptInvitation = function() {
+  this.invitationAccepted = true;
+  // Clear the token and set expiry to past to ensure link expires immediately
+  this.invitationToken = undefined;
+  this.invitationExpiresAt = new Date(Date.now() - 1000); // Set to 1 second ago
+  return this.save();
+};
+
+// Method to clear invitation
+EmployeeSchema.methods.clearInvitation = function() {
+  this.invitationToken = undefined;
+  this.invitationSentAt = undefined;
+  this.invitationExpiresAt = undefined;
+  this.invitationAccepted = false;
+  return this.save();
+};
+
+// Method to check if invitation has been accepted
+EmployeeSchema.methods.isInvitationAccepted = function() {
+  return this.invitationAccepted === true;
+};
+
+// Static method to find employee by invitation token
+EmployeeSchema.statics.findByInvitationToken = function(token) {
+  return this.findOne({ invitationToken: token });
+};
+
+// Pre-save middleware to update updatedAt
+EmployeeSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
 
   module.exports = mongoose.model('Employee', EmployeeSchema);
