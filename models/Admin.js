@@ -13,6 +13,10 @@ const PaymentHistorySchema = new Schema({
     type: String, 
     enum: ['paid', 'pending', 'failed'], 
     default: 'paid' 
+  },
+  bill: { 
+    type: Schema.Types.ObjectId, 
+    required: true 
   }
 });
 
@@ -24,9 +28,15 @@ const BillingSchema = new Schema({
 });
 
 const AdminSchema = new Schema({
-  adminName: { type: String, required: true },
-  numberOfClients: { type: Number, default: 0 },
-  plans: [{ type: Schema.Types.ObjectId, ref: 'Plan' }],  // just plan IDs
+  company: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'Company', 
+    required: true 
+  },
+  plans: [{ 
+    type: Schema.Types.ObjectId, 
+    ref: 'Plan' 
+  }],
   dateOfRegister: { type: Date, default: Date.now },
   dateOfExpiry: { type: Date, required: true },
   billings: [BillingSchema],
