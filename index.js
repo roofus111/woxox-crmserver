@@ -44,6 +44,7 @@ const productServiceRoutes=require('./routes/productServiceRoutes')
 const templateRoutes=require('./routes/templateRoutes')
 const notificationRoutes=require('./routes/notificationRoutes')
 const adminRoutes=require('./routes/adminRouter')
+const marketRoutes=require('./routes/marketRoutes')
 // const {unassignUntouchedLeadsAfter30Days}=require("./controllers/leadsController")
 const app = express();
 const http = require("http"); // Import Node's HTTP module
@@ -126,6 +127,7 @@ app.use("/api/template",templateRoutes)
 app.use("/api/notification",notificationRoutes)
 app.use('/api/mail', mailRoutes);
 app.use('/api/admin',adminRoutes)
+app.use('/api/market',marketRoutes)
 
 // Initialize S3 client
 const s3Client = new S3Client({
