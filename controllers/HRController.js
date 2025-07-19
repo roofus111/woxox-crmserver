@@ -7,6 +7,8 @@ const {S3} = require("@aws-sdk/client-s3")
 const s3Client = require("../config/s3")
 const { isValid, parseISO, format } = require('date-fns');
 const mongoose =require("mongoose")
+const crypto = require('crypto'); // Add this import for generating temp password
+const { sendInvitationEmail } = require('./mailController');
 // Configure AWS S3
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID, 
@@ -62,7 +64,7 @@ exports.createEmployee = async (req, res) => {
           return res.status(403).json({ 
             message: 'Employee creation limit reached. Please upgrade your subscription to add more employees.',
             limit: 1,
-            currentCount: existingEmployeeCount,
+            currentCount: existingEmployeeCount, 
             subscriptionStatus: 'inactive'
           });
         }
@@ -565,7 +567,7 @@ exports.getEmployeeByUserId = async (req, res) => {
 exports.linkEmployeeUser = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { email, password, role } = req.body;
+    const { email, role } = req.body;
 
     // Find the employee
     const employee = await Employee.findById(employeeId);
@@ -573,9 +575,8 @@ exports.linkEmployeeUser = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    let user;
     // Check if user with email already exists
-    user = await User.findOne({ email });
+    let user = await User.findOne({ email });
 
     if (user) {
       // Update existing user with employee reference
@@ -587,11 +588,14 @@ exports.linkEmployeeUser = async (req, res) => {
       if (role) user.role = role;
       await user.save();
     } else {
-      // Create new user
+      // Generate a temporary password for new user
+      const tempPassword = crypto.randomBytes(16).toString('hex');
+      
+      // Create new user with temporary password
       user = new User({
         employee: employeeId,
         email,
-        password,
+        password: tempPassword, // Temporary password that will be changed
         firstName: employee.firstName,
         lastName: employee.lastName,
         name: `${employee.firstName} ${employee.lastName}`,
@@ -606,6 +610,9 @@ exports.linkEmployeeUser = async (req, res) => {
     employee.User = user._id;
     await employee.save();
 
+    // Create invitation token for the employee
+    await employee.createInvitation();
+
     // Create history entry for the employee
     const historyEntry = {
       activityType: 'Grant Access Online',
@@ -616,19 +623,312 @@ exports.linkEmployeeUser = async (req, res) => {
     employee.history.push(historyEntry);
     await employee.save();
 
+    // Send invitation email
+    try {
+      const invitationData = {
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        token: employee.invitationToken,
+        role: role || 'user',
+        department: employee.department,
+        jobTitle: employee.jobTitle
+      };
+
+      await sendInvitationEmail(email, invitationData);
+
+      // Add invitation sent history entry
+      const invitationHistoryEntry = {
+        activityType: 'Invitation Sent',
+        description: `Invitation email sent to ${email} with token ${employee.invitationToken}`,
+        changedBy: req.user._id,
+        changedAt: new Date()
+      };
+      employee.history.push(invitationHistoryEntry);
+      await employee.save();
+
+    } catch (emailError) {
+      console.error('Error sending invitation email:', emailError);
+      // Don't fail the entire operation if email fails
+      // Just log the error and continue
+    }
+
     return res.status(200).json({
-      message: user._id ? 'User updated and linked to employee' : 'New user created and linked to employee',
+      message: user._id ? 'User updated and linked to employee. Invitation email sent.' : 'New user created and linked to employee. Invitation email sent.',
       user: {
         _id: user._id,
         email: user.email,
         role: user.role,
         name: user.name
-      }
+      },
+      invitationToken: employee.invitationToken,
+      invitationExpiresAt: employee.invitationExpiresAt,
+      emailSent: true
     });
 
   } catch (error) {
     console.error('Error linking employee to user:', error);
     return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Get employee details by invitation token
+exports.getEmployeeByToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invitation token is required' 
+      });
+    }
+
+    // Find employee by invitation token
+    const employee = await Employee.findByInvitationToken(token);
+    
+    if (!employee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invalid or expired invitation token' 
+      });
+    }
+
+    // Check if invitation is valid
+    if (!employee.isInvitationValid()) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invitation has expired or has already been accepted' 
+      });
+    }
+
+    // Return employee details (excluding sensitive information)
+    const employeeDetails = {
+      _id: employee._id,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      email: employee.email,
+      phoneNumber: employee.phoneNumber,
+      jobTitle: employee.jobTitle,
+      department: employee.department,
+      role: employee.role,
+      company: employee.company,
+      invitationExpiresAt: employee.invitationExpiresAt,
+      invitationSentAt: employee.invitationSentAt
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Employee details retrieved successfully',
+      data: employeeDetails
+    });
+
+  } catch (error) {
+    console.error('Error getting employee by token:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Internal server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Accept invitation and set up user account
+exports.acceptInvitation = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password, confirmPassword } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invitation token is required' 
+      });
+    }
+
+    if (!password || !confirmPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password and confirm password are required' 
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Passwords do not match' 
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    // Find employee by invitation token
+    const employee = await Employee.findByInvitationToken(token);
+    
+    if (!employee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invalid or expired invitation token' 
+      });
+    }
+
+    // Check if invitation is valid
+    if (!employee.isInvitationValid()) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invitation has expired or has already been accepted' 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: employee.email });
+    if (!existingUser) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User account not found. Please contact your administrator.' 
+      });
+    }
+
+    // Update user password and mark as active
+    existingUser.password = password;
+    existingUser.isActive = true;
+    existingUser.isEmailVerified = true; // Since they're accepting invitation
+    existingUser.emailVerifiedAt = new Date();
+    await existingUser.save();
+
+    // Accept the invitation
+    await employee.acceptInvitation();
+
+    // Create history entry for invitation acceptance
+    const historyEntry = {
+      activityType: 'Invitation Accepted',
+      description: `Invitation accepted by ${employee.firstName} ${employee.lastName}`,
+      changedBy: existingUser._id,
+      changedAt: new Date()
+    };
+    employee.history.push(historyEntry);
+    await employee.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Invitation accepted successfully. You can now log in to your account.',
+      data: {
+        employeeId: employee._id,
+        userId: existingUser._id,
+        email: employee.email,
+        name: `${employee.firstName} ${employee.lastName}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error accepting invitation:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Internal server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Resend invitation email
+exports.resendInvitation = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    if (!employeeId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Employee ID is required' 
+      });
+    }
+
+    // Find the employee
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Employee not found' 
+      });
+    }
+
+    // Check if employee has a linked user
+    if (!employee.User) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Employee is not linked to a user account' 
+      });
+    }
+
+    // Get the linked user
+    const user = await User.findById(employee.User);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Linked user account not found' 
+      });
+    }
+
+    // Clear any existing invitation
+    await employee.clearInvitation();
+
+    // Create new invitation
+    await employee.createInvitation();
+
+    // Send new invitation email
+    try {
+      const invitationData = {
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        token: employee.invitationToken,
+        role: user.role,
+        department: employee.department,
+        jobTitle: employee.jobTitle
+      };
+
+      await sendInvitationEmail(user.email, invitationData);
+
+      // Add invitation resent history entry
+      const historyEntry = {
+        activityType: 'Invitation Sent',
+        description: `Invitation email resent to ${user.email} with new token ${employee.invitationToken}`,
+        changedBy: req.user._id,
+        changedAt: new Date()
+      };
+      employee.history.push(historyEntry);
+      await employee.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Invitation email resent successfully',
+        data: {
+          email: user.email,
+          invitationToken: employee.invitationToken,
+          invitationExpiresAt: employee.invitationExpiresAt
+        }
+      });
+
+    } catch (emailError) {
+      console.error('Error sending invitation email:', emailError);
+      
+      // Revert the invitation creation if email fails
+      await employee.clearInvitation();
+      
+      return res.status(500).json({ 
+        success: false,
+        message: 'Failed to send invitation email. Please try again.', 
+        error: emailError.message 
+      });
+    }
+
+  } catch (error) {
+    console.error('Error resending invitation:', error);
+    return res.status(500).json({ 
+      success: false,
       message: 'Internal server error', 
       error: error.message 
     });

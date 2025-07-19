@@ -580,7 +580,99 @@ const validateOTP = async (req, res) => {
   }
 };
 
+// Send invitation email with token
+const sendInvitationEmail = async (email, invitationData) => {
+  try {
+    console.log(`Attempting to send invitation email to: ${email}`);
+    
+    const transporter = createTransporter();
+    
+    // Verify SMTP connection
+    await transporter.verify();
+    console.log('SMTP connection verified successfully'); 
+    
+    const subject = 'Welcome to CRM System - Account Invitation';
+    const invitationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitationData.token}`;
+    
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="margin: 0; font-size: 28px;">Welcome to CRM System</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">You've been invited to join our team</p>
+        </div>
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="color: #333; font-size: 16px; margin-bottom: 20px;">
+            Hello <strong>${invitationData.employeeName}</strong>,
+          </p>
+          <p style="color: #333; font-size: 16px; margin-bottom: 20px;">
+            You have been invited to join our CRM system. Please click the button below to accept the invitation and set up your account:
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${invitationUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+              Accept Invitation
+            </a>
+          </div>
+          <div style="background: #fff; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #667eea; margin-top: 0;">Your Account Details:</h3>
+            <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 10px 0;"><strong>Role:</strong> ${invitationData.role}</p>
+            <p style="margin: 10px 0;"><strong>Department:</strong> ${invitationData.department || 'Not specified'}</p>
+            <p style="margin: 10px 0;"><strong>Job Title:</strong> ${invitationData.jobTitle || 'Not specified'}</p>
+          </div>
+          <p style="color: #666; font-size: 14px; margin-top: 20px;">
+            <strong>Important:</strong> This invitation link will expire in 24 hours. If you don't accept it within this time, you'll need to request a new invitation.
+          </p>
+          <p style="color: #666; font-size: 14px;">
+            If the button doesn't work, you can copy and paste this link into your browser:<br>
+            <a href="${invitationUrl}" style="color: #667eea; word-break: break-all;">${invitationUrl}</a>
+          </p>
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+            <p style="color: #999; font-size: 12px;">
+              Best regards,<br>
+              CRM System Team
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
 
+    const mailOptions = {
+      from: `"CRM System" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: subject,
+      html: htmlContent
+    };
+
+    console.log('Sending invitation email with options:', {
+      from: mailOptions.from,
+      to: mailOptions.to,
+      subject: mailOptions.subject
+    });
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Invitation email sent successfully:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Detailed error sending invitation email:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
+    
+    // Provide more specific error messages
+    if (error.code === 'EAUTH') {
+      throw new Error('SMTP authentication failed. Please check your email and password.');
+    } else if (error.code === 'ECONNECTION') {
+      throw new Error('SMTP connection failed. Please check your host and port settings.');
+    } else if (error.code === 'ETIMEDOUT') {
+      throw new Error('SMTP connection timed out. Please check your network connection.');
+    } else {
+      throw new Error(`Failed to send invitation email: ${error.message}`);
+    }
+  }
+};
 
 module.exports = {
   sendEmailVerificationOTP,
@@ -590,5 +682,6 @@ module.exports = {
   verifyPasswordResetOTP,
   validateOTP,
   sendOTPEmail,
-  createOTPRecord
+  createOTPRecord,
+  sendInvitationEmail
 };

@@ -41,12 +41,13 @@ const taskSchema = new Schema({
     enum: ['Open', 'Cancelled', 'On Hold', 'Pending', 'Completed'],
     default: 'Open'
   },
-  assignee: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  assignee: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   activityLog: [activityLogSchema],
   files: [fileSchema],
   leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
   tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag' }],
   completedAt: { type: Date },
+  teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
   notes: [noteSchema]
 }, { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } });
 

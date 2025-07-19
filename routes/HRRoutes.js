@@ -489,6 +489,147 @@ router.delete('/employee/:employeeId/attachment/:attachmentId', HRController.del
  */
 router.put('/renameAttachment/:employeeId/:attachmentId', HRController.renameAttachment);
 router.get('/employee/:userId', HRController.getEmployeeByUserId);
+
+/**
+ * @swagger
+ * /api/hr/invitation/{token}:
+ *   get:
+ *     summary: Get employee details by invitation token
+ *     tags: [HR]
+ *     parameters:
+ *       - in: path
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Invitation token from email
+ *     responses:
+ *       200:
+ *         description: Employee details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Employee'
+ *       400:
+ *         description: Invalid token or expired invitation
+ *       404:
+ *         description: Employee not found
+ */
+router.get('/invitation/:token', HRController.getEmployeeByToken);
+
+/**
+ * @swagger
+ * /api/hr/invitationaccept/{token}:
+ *   post:
+ *     summary: Accept invitation and set up user account
+ *     tags: [HR]
+ *     parameters:
+ *       - in: path
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Invitation token from email
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *               - confirmPassword
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 minLength: 6
+ *                 description: New password for the account
+ *               confirmPassword:
+ *                 type: string
+ *                 description: Password confirmation
+ *     responses:
+ *       200:
+ *         description: Invitation accepted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     employeeId:
+ *                       type: string
+ *                     userId:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *       400:
+ *         description: Invalid request or expired invitation
+ *       404:
+ *         description: Employee or user not found
+ */
+router.post('/invitationaccept/:token', HRController.acceptInvitation);
+
+/**
+ * @swagger
+ * /api/hr/resendinvitation/{employeeId}:
+ *   post:
+ *     summary: Resend invitation email to employee
+ *     tags: [HR]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: employeeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Employee ID
+ *     responses:
+ *       200:
+ *         description: Invitation email resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     email:
+ *                       type: string
+ *                     invitationToken:
+ *                       type: string
+ *                     invitationExpiresAt:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: Employee not linked to user account
+ *       404:
+ *         description: Employee not found
+ *       500:
+ *         description: Failed to send email
+ */
+router.post('/resendinvitation/:employeeId', HRController.resendInvitation);
+
 /**
  * @swagger
  * components:
