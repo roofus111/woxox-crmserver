@@ -229,7 +229,13 @@ const sendEmailVerificationOTP = async (req, res) => {
         message: 'Email is already verified'
       });
     }
-
+   const otpExists = await OTP.findOne({ email: email.toLowerCase(), type: 'email_verification' });
+   if (otpExists) {
+    return res.status(200).json({
+      success: true,
+      message: 'OTP already Dispatched'
+    });
+   }else{
     // Generate and send OTP
     const otp = await createOTPRecord(email, 'email_verification');
     await sendOTPEmail(email, otp, 'email_verification');
@@ -242,6 +248,7 @@ const sendEmailVerificationOTP = async (req, res) => {
         expiresIn: '10 minutes'
       }
     });
+   }
 
   } catch (error) {
     console.error('Error in sendEmailVerificationOTP:', error);
