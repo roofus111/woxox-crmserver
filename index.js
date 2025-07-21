@@ -54,6 +54,7 @@ const User = require("./models/User");
 const server = http.createServer(app);
 const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
+const messageRoutes=require('./routes/messageRoutes')
 const alertBeforeMinutes = 30;
 // const io = new Server(server, {
 //   cors: {
@@ -125,6 +126,7 @@ app.use("/api/role",roleRoutes)
 app.use("/api/productservice",productServiceRoutes)
 app.use("/api/template",templateRoutes)
 app.use("/api/notification",notificationRoutes)
+app.use("/api/message",messageRoutes)
 app.use('/api/mail', mailRoutes);
 app.use('/api/admin',adminRoutes)
 app.use('/api/market',marketRoutes)
