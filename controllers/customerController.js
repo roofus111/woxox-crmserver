@@ -18,12 +18,10 @@ exports.createCustomer = async (req, res) => {
       status,
       notes,
       tags,
-      createdBy,
-      updatedBy
     } = req.body;
 
     // Validate required fields as per schema
-    if ( !firstName || !lastName || !phone || !createdBy || !updatedBy) {
+    if ( !firstName || !lastName || !phone ) {
       return res.status(400).json({ error: 'Company, first name, last name, phone, createdBy, and updatedBy are required.' });
     }
 
@@ -42,7 +40,7 @@ exports.createCustomer = async (req, res) => {
       status,
       notes,
       tags,
-      createdBy:req.user._id,
+      createdBy: req.user._id,
       updatedBy:req.user._id
     });
 
