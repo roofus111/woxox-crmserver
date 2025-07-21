@@ -1,10 +1,13 @@
 const mongoose = require('mongoose');
 
 const customerSchema = new mongoose.Schema({
+  company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   firstName: { type: String, trim: true, maxlength: 50 },
-  // lastName: { type: String, required: true, trim: true, maxlength: 50 },
+  lastName: { type: String, required: true, trim: true, maxlength: 50 },
   email: { type: String,trim: true, lowercase: true },
   phone: { type: String, required: true,trim: true },
+  qualification: { type: String, trim: true },
+  occupation: { type: String },
   address: {
     street: { type: String, trim: true },
     city: { type: String, trim: true },
@@ -14,11 +17,14 @@ const customerSchema = new mongoose.Schema({
   },
   dateOfBirth: { type: Date },
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
-  joinDate: { type: Date, default: Date.now },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
-  notes: { type: String, trim: true }
-}, { timestamps: true });
-
+  notes: { type: String, trim: true },
+  tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }] ,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
 const Customer = mongoose.model('Customer', customerSchema);
 
 module.exports = Customer; // Make sure you're exporting the model
