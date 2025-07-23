@@ -12,6 +12,7 @@ router.get('/getproducts', marketController.getAllProducts);
 router.get('/getproduct/:id', marketController.getProductById);
 router.put('/updateproduct/:id', marketController.updateProduct);
 router.delete('/deleteproduct/:id', marketController.deleteProduct);
+router.post('/uploadproductimage/:id', marketController.uploadProductImage);
 
 
 module.exports = router;

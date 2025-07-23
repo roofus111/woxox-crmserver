@@ -10,29 +10,38 @@ exports.createCustomer = async (req, res) => {
       lastName,
       email,
       phone,
-      address, 
-      dateOfBirth,
-      gender,
-      status,
-      notes
-    } = req.body;
-
-    // Validate required fields
-    if (!firstName || !lastName || !email) {
-      return res.status(400).json({ error: 'First name, last name, and email are required.' });
-    }
-
-    // Create a new customer instance
-    const newCustomer = new Customer({
-      firstName,
-      lastName,
-      email,
-      phone,
+      qualification,
+      occupation,
       address,
       dateOfBirth,
       gender,
       status,
-      notes
+      notes,
+      tags,
+    } = req.body;
+
+    // Validate required fields as per schema
+    if ( !firstName || !lastName || !phone ) {
+      return res.status(400).json({ error: 'Company, first name, last name, phone, createdBy, and updatedBy are required.' });
+    }
+
+    // Create a new customer instance
+    const newCustomer = new Customer({
+      company:req.user.company._id,
+      firstName,
+      lastName,
+      email,
+      phone,
+      qualification,
+      occupation,
+      address,
+      dateOfBirth,
+      gender,
+      status,
+      notes,
+      tags,
+      createdBy: req.user._id,
+      updatedBy:req.user._id
     });
 
     // Save the customer to the database
@@ -47,7 +56,7 @@ exports.createCustomer = async (req, res) => {
     console.error('Error creating customer:', error);
 
     // Check for duplicate email
-    if (error.code === 11000 && error.keyPattern.email) {
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
       return res.status(400).json({ error: 'Email already exists.' });
     }
 
