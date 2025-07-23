@@ -305,6 +305,6 @@
  
  router.post('/change-password', authenticateUser, changePassword);
  router.post('/admin-change-password', authenticateUser, adminChangePassword);
- router.post('/verify-refresh', verifyAndRefreshToken);
+ router.get('/verify-refresh',authenticateUser, verifyAndRefreshToken);
  
  module.exports = router;

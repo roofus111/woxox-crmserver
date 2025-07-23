@@ -135,16 +135,9 @@ exports.adminChangePassword = async (req, res) => {
 // Verify user details and provide refresh token
 exports.verifyAndRefreshToken = async (req, res) => {
     try {
-        const accessToken = req.header('Authorization')?.replace('Bearer ', '');
-
-        if (!accessToken) {
-            return res.status(401).json({ message: 'No token provided' });
-        }
-
-        // Verify the access token and get user details
         try {
-            const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-            const user = await User.findById(decoded.id);
+          console.log(req.user);
+            const user = await User.findById(req.user.id);
             
             if (!user) {
                 return res.status(401).json({ message: 'User not found' });
@@ -155,18 +148,18 @@ exports.verifyAndRefreshToken = async (req, res) => {
             }
 
             // Generate new refresh token
-            const newRefreshToken = crypto.randomBytes(64).toString('hex');
-            
-            // Add new refresh token to user
-            user.addRefreshToken(newRefreshToken, 7);
-            await user.save();
+            const newRefreshToken = jwt.sign(
+                { id: user._id, role: user.role },
+                process.env.JWT_SECRET,
+                { expiresIn: '10h' }
+            );
 
             // Return same user details with new refresh token
             return res.status(200).json({
                 refreshToken: newRefreshToken,
                 user: {
                     id: user._id,
-                    name: `${user.firstName} ${user.lastName}`,
+                    name: `${user.firstName} ${user.lastName}`,  
                     email: user.email,
                     role: user.role,
                     isEmailVerified: user.isEmailVerified,
