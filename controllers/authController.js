@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const Employee = require('../models/HR');
-const crypto = require('crypto');
 
 exports.register = async (req, res) => {
     const userProfile = new User({
@@ -130,124 +129,38 @@ exports.adminChangePassword = async (req, res) => {
   }
 };
 
+exports.refreshToken = async (req, res) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1] || req.body.token;
 
-
-// Verify user details and provide refresh token
-exports.verifyAndRefreshToken = async (req, res) => {
-    try {
-        const accessToken = req.header('Authorization')?.replace('Bearer ', '');
-
-        if (!accessToken) {
-            return res.status(401).json({ message: 'No token provided' });
-        }
-
-        // Verify the access token and get user details
-        try {
-            const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-            const user = await User.findById(decoded.id);
-            
-            if (!user) {
-                return res.status(401).json({ message: 'User not found' });
-            }
-
-            if (!user.isActive) {
-                return res.status(403).json({ message: 'User account is inactive' });
-            }
-
-            // Generate new refresh token
-            const newRefreshToken = crypto.randomBytes(64).toString('hex');
-            
-            // Add new refresh token to user
-            user.addRefreshToken(newRefreshToken, 7);
-            await user.save();
-
-            // Return same user details with new refresh token
-            return res.status(200).json({
-                refreshToken: newRefreshToken,
-                user: {
-                    id: user._id,
-                    name: `${user.firstName} ${user.lastName}`,
-                    email: user.email,
-                    role: user.role,
-                    isEmailVerified: user.isEmailVerified,
-                    companyId: user.company,
-                }
-            });
-
-        } catch (tokenError) {
-            return res.status(401).json({ message: 'Invalid or expired token' });
-        }
-
-    } catch (err) {
-        console.error('Token verification error:', err);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// Helper function to handle token refresh
-async function handleTokenRefresh(req, res) {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-        return res.status(400).json({ 
-            message: 'Refresh token is required',
-            action: 'login_required'
-        });
+    if (!token) {
+        return res.status(400).json({ message: "Token is required" });
     }
 
     try {
-        // Find user with this refresh token
-        const user = await User.findOne({
-            'refreshTokens.token': refreshToken
-        });
+        // This uses your existing JWT_SECRET
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+        // Find user
+        const user = await User.findById(decoded.id);
         if (!user) {
-            return res.status(401).json({ 
-                message: 'Invalid refresh token',
-                action: 'login_required'
-            });
+            return res.status(404).json({ message: "User not found" });
         }
 
         // Check if user is active
         if (user.isActive === false) {
-            return res.status(403).json({ 
-                message: 'User account is inactive',
-                action: 'account_inactive'
-            });
+            return res.status(403).json({ message: "User account is inactive" });
         }
 
-        // Validate refresh token
-        if (!user.hasValidRefreshToken(refreshToken)) {
-            // Remove invalid token
-            user.removeRefreshToken(refreshToken);
-            await user.save();
-            return res.status(401).json({ 
-                message: 'Refresh token has expired',
-                action: 'login_required'
-            });
-        }
-
-        // Generate new access token
-        const newToken = jwt.sign(
+        // Generate refresh token using the same JWT_SECRET but with longer expiry
+        const refreshToken = jwt.sign(
             { id: user._id, role: user.role },
             process.env.JWT_SECRET,
-            { expiresIn: '10h' }
+            { expiresIn: '7d' }
         );
 
-        // Generate new refresh token
-        const newRefreshToken = crypto.randomBytes(64).toString('hex');
-        
-        // Remove old refresh token and add new one
-        user.removeRefreshToken(refreshToken);
-        user.addRefreshToken(newRefreshToken, 7);
-        await user.save();
-
-        // Respond with new tokens
-        return res.status(200).json({
-            isValid: true,
-            token: newToken,
-            refreshToken: newRefreshToken,
-            refreshed: true,
+        res.status(200).json({
+            refreshToken,
             user: {
                 id: user._id,
                 name: `${user.firstName} ${user.lastName}`,
@@ -257,12 +170,10 @@ async function handleTokenRefresh(req, res) {
                 companyId: user.company,
             }
         });
-
     } catch (err) {
-        console.error('Token refresh error:', err);
-        return res.status(500).json({ 
-            error: 'An error occurred while refreshing token',
-            action: 'retry'
-        });
+        console.error("JWT error:", err);
+        return res.status(401).json({ message: "Invalid or expired token" });
     }
-}
+};
+
+
