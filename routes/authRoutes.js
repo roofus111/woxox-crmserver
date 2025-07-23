@@ -71,239 +71,240 @@
  *           description: The date and time when the user was created.
  *           example: "2023-01-01T12:00:00Z"
  */const express = require('express');
-const { register, login, changePassword, adminChangePassword } = require('../controllers/authController');
-const authenticateUser = require('../middleware/authenticateUser');
-const router = express.Router();
-
-/**
- * @swagger
- * /api/register:
- *   post:
- *     summary: Register a new user
- *     description: This endpoint is used to register a new user by creating a profile.
+ const { register, login, changePassword, adminChangePassword, verifyAndRefreshToken } = require('../controllers/authController');
+ const authenticateUser = require('../middleware/authenticateUser');
+ const router = express.Router();
+ 
+ /**
+  * @swagger
+  * /api/register:
+  *   post:
+  *     summary: Register a new user
+  *     description: This endpoint is used to register a new user by creating a profile.
+  *     tags:
+  *       - Register
+  *     requestBody:
+  *       required: true
+  *       content:
+  *         application/json:
+  *           schema:
+  *             $ref: '#/components/schemas/User'
+  *     responses:
+  *       201:
+  *         description: Successfully created user profile.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               $ref: '#/components/schemas/User'
+  *       400:
+  *         description: Bad Request. Invalid input or missing required fields.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Error message"
+  *       500:
+  *         description: Internal Server Error.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Internal server error"
+  *     security:
+  *       - bearerAuth: []
+  * components: 
+  *   securitySchemes:
+  *     bearerAuth:
+  *       type: http
+  *       scheme: bearer
+  *       bearerFormat: JWT
+  */
+ router.post('/register', register);
+ /**
+  * @swagger
+  * /api/login:
+  *   post:
+  *     summary: Login a user
+  *     description: This endpoint is used for logging in a user with email and password, returning a JWT token if successful.
  *     tags:
- *       - Register
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/User'
- *     responses:
- *       201:
- *         description: Successfully created user profile.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       400:
- *         description: Bad Request. Invalid input or missing required fields.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Error message"
- *       500:
- *         description: Internal Server Error.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Internal server error"
- *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- */
-router.post('/register', register);
-/**
- * @swagger
- * /api/login:
- *   post:
- *     summary: Login a user
- *     description: This endpoint is used for logging in a user with email and password, returning a JWT token if successful.
-*     tags:
- *       - Register
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 description: The email of the user.
- *                 example: "user@example.com"
- *               password:
- *                 type: string
- *                 description: The password of the user.
- *                 example: "password123"
- *     responses:
- *       200:
- *         description: Successful login with a JWT token.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       400:
- *         description: Bad Request. Missing email or password.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Email and password are required"
- *       401:
- *         description: Unauthorized. Invalid credentials.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Invalid credentials"
- *       403:
- *         description: Forbidden. User account is inactive.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User account is inactive"
- *       500:
- *         description: Internal Server Error.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "An error occurred while processing your request"
- *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- */
-router.post('/login', login);
-
-/**
- * @swagger
- * /api/change-password:
- *   post:
- *     summary: Change the user's password
- *     description: Allows an authenticated user to change their password. Requires the current password, a new password, and confirmation of the new password.
- *     tags:
- *       - Register
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *                 description: The user's current password.
- *                 example: "currentPassword123"
- *               newPassword:
- *                 type: string
- *                 description: The new password to set.
- *                 example: "newPassword123"
- *               confirmPassword:
- *                 type: string
- *                 description: Confirmation of the new password.
- *                 example: "newPassword123"
- *     responses:
- *       200:
- *         description: Password successfully updated.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Password updated successfully"
- *       400:
- *         description: Bad request due to validation errors (e.g., missing fields or mismatched passwords).
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "New passwords do not match"
- *       401:
- *         description: Unauthorized access due to invalid current password.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Current password is incorrect"
- *       404:
- *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User not found"
- *       500:
- *         description: Internal server error.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Error changing password"
- *     security:
- *       - bearerAuth: []
- * components: 
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- */
-
-
-router.post('/change-password', authenticateUser, changePassword);
-router.post('/admin-change-password', authenticateUser, adminChangePassword);
-
-module.exports = router;
+  *       - Register
+  *     requestBody:
+  *       required: true
+  *       content:
+  *         application/json:
+  *           schema:
+  *             type: object
+  *             required:
+  *               - email
+  *               - password
+  *             properties:
+  *               email:
+  *                 type: string
+  *                 description: The email of the user.
+  *                 example: "user@example.com"
+  *               password:
+  *                 type: string
+  *                 description: The password of the user.
+  *                 example: "password123"
+  *     responses:
+  *       200:
+  *         description: Successful login with a JWT token.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               $ref: '#/components/schemas/User'
+  *       400:
+  *         description: Bad Request. Missing email or password.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Email and password are required"
+  *       401:
+  *         description: Unauthorized. Invalid credentials.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Invalid credentials"
+  *       403:
+  *         description: Forbidden. User account is inactive.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "User account is inactive"
+  *       500:
+  *         description: Internal Server Error.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "An error occurred while processing your request"
+  *     security:
+  *       - bearerAuth: []
+  * components: 
+  *   securitySchemes:
+  *     bearerAuth:
+  *       type: http
+  *       scheme: bearer
+  *       bearerFormat: JWT
+  */
+ router.post('/login', login);
+ 
+ /**
+  * @swagger
+  * /api/change-password:
+  *   post:
+  *     summary: Change the user's password
+  *     description: Allows an authenticated user to change their password. Requires the current password, a new password, and confirmation of the new password.
+  *     tags:
+  *       - Register
+  *     requestBody:
+  *       required: true
+  *       content:
+  *         application/json:
+  *           schema:
+  *             type: object
+  *             required:
+  *               - currentPassword
+  *               - newPassword
+  *               - confirmPassword
+  *             properties:
+  *               currentPassword:
+  *                 type: string
+  *                 description: The user's current password.
+  *                 example: "currentPassword123"
+  *               newPassword:
+  *                 type: string
+  *                 description: The new password to set.
+  *                 example: "newPassword123"
+  *               confirmPassword:
+  *                 type: string
+  *                 description: Confirmation of the new password.
+  *                 example: "newPassword123"
+  *     responses:
+  *       200:
+  *         description: Password successfully updated.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Password updated successfully"
+  *       400:
+  *         description: Bad request due to validation errors (e.g., missing fields or mismatched passwords).
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "New passwords do not match"
+  *       401:
+  *         description: Unauthorized access due to invalid current password.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Current password is incorrect"
+  *       404:
+  *         description: User not found.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "User not found"
+  *       500:
+  *         description: Internal server error.
+  *         content:
+  *           application/json:
+  *             schema:
+  *               type: object
+  *               properties:
+  *                 message:
+  *                   type: string
+  *                   example: "Error changing password"
+  *     security:
+  *       - bearerAuth: []
+  * components: 
+  *   securitySchemes:
+  *     bearerAuth:
+  *       type: http
+  *       scheme: bearer
+  *       bearerFormat: JWT
+  */
+ 
+ 
+ router.post('/change-password', authenticateUser, changePassword);
+ router.post('/admin-change-password', authenticateUser, adminChangePassword);
+ router.post('/verify-refresh', verifyAndRefreshToken);
+ 
+ module.exports = router;
