@@ -2201,5 +2201,7 @@ router.put('/:id/tags/remove', leadsController.removeTagsFromLead);
 router.post("/headers", upload.single("file"), leadsController.getExcelHeaders);
 router.post("/match-headers", upload.single("file"), leadsController.matchHeadersWithSchema);
 
+router.get('/customer/:customerId', leadsController.getLeadsByCustomerId);
+
 
 module.exports = router;

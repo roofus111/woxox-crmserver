@@ -1833,4 +1833,77 @@ exports.getOrCreateLeadByPhone = async (req, res) => {
   }
 };
 
+exports.getLeadsByCustomerId = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const { page = 1, limit = 25, sort = "createdAt", order = -1 } = req.query;
+
+    // Validate customer ID
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid customer ID format"
+      });
+    }
+
+    // Calculate skip value for pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Create sort object
+    const sortObj = { [sort]: parseInt(order) };
+
+    // Build query filters
+    const filters = {
+      Customer: customerId,
+      company: req.user.company._id // Filter by user's company for security
+    };
+
+    // Execute queries in parallel for better performance
+    const [leads, totalCount] = await Promise.all([
+      Lead.find(filters)
+        .select("-__v") // Exclude unnecessary fields
+        .populate("assignedTo", "_id firstName lastName")
+        .populate("campaignid", "_id name description")
+        .populate("tags", "name color")
+        .populate("Customer", "_id firstName lastName email phone")
+        .sort(sortObj)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean() // Convert to plain JavaScript objects for better performance
+        .exec(),
+      Lead.countDocuments(filters)
+    ]);
+
+    // Check if leads exist
+    if (!leads || leads.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No leads found for the given customer ID."
+      });
+    }
+
+    // Return the paginated results with metadata
+    res.status(200).json({
+      success: true,
+      data: {
+        leads,
+        pagination: {
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          currentPage: parseInt(page),
+          perPage: parseInt(limit),
+          hasMore: skip + leads.length < totalCount
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching leads by customer ID:", error.message);
+    res.status(500).json({
+      success: false,
+      error: "An error occurred while fetching leads."
+    });
+  }
+};
+
 
