@@ -8,7 +8,7 @@ exports.createSale = async (req, res) => {
   try {
     const {
       leadId,
-      Customer,
+      customerId,
       productIds,
       totalAmount,
       currency,
@@ -34,8 +34,8 @@ exports.createSale = async (req, res) => {
     }
 
     // Validate customer exists (if provided)
-    if (Customer) {
-      const customer = await Customer.findById(Customer);
+    if (customerId) {
+      const customer = await Customer.findById(customerId);
       if (!customer) {
         return res.status(404).json({
           success: false,
@@ -61,7 +61,7 @@ exports.createSale = async (req, res) => {
     // Create new sale
     const newSale = new Sales({
       leadId,
-      Customer: Customer || null,
+      Customer: customerId || null,
       productIds: productIds || [],
       totalAmount: totalAmount || 0,
       currency: currency || 'USD',
@@ -189,7 +189,7 @@ exports.updateSale = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      Customer,
+      customerId,
       productIds,
       totalAmount,
       currency,
@@ -211,8 +211,8 @@ exports.updateSale = async (req, res) => {
     }
 
     // Validate customer exists (if provided)
-    if (Customer) {
-      const customer = await Customer.findById(Customer);
+    if (customerId) {
+      const customer = await Customer.findById(customerId);
       if (!customer) {
         return res.status(404).json({
           success: false,
@@ -236,7 +236,7 @@ exports.updateSale = async (req, res) => {
     }
 
     // Update fields
-    if (Customer !== undefined) sale.Customer = Customer;
+    if (customerId !== undefined) sale.Customer = customerId;
     if (productIds !== undefined) sale.productIds = productIds;
     if (totalAmount !== undefined) sale.totalAmount = totalAmount;
     if (currency !== undefined) sale.currency = currency;
@@ -382,11 +382,11 @@ exports.getSalesStats = async (req, res) => {
 // Get sales by customer ID
 exports.getSalesByCustomerId = async (req, res) => {
   try {
-      const { Customer } = req.params;
+      const { customerId } = req.params;
     const { page = 1, limit = 10, status } = req.query;
 
     // Validate customer exists
-    const customer = await Customer.findById(Customer);
+    const customer = await Customer.findById(customerId);
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -395,7 +395,7 @@ exports.getSalesByCustomerId = async (req, res) => {
     }
 
     const query = { 
-      Customer,
+      Customer: customer,
       company: req.user.company._id 
     };
 
