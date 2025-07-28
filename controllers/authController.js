@@ -2,6 +2,8 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const Employee = require('../models/HR');
 const crypto = require('crypto');
+const RefreshToken = require('../models/RefreshToken');
+const bcrypt = require('bcryptjs');
 
 exports.register = async (req, res) => {
     const userProfile = new User({
@@ -18,6 +20,7 @@ exports.register = async (req, res) => {
 
   exports.login = async (req, res) => {
     const { email, password } = req.body;
+    
 
     try {
         // Validate input
@@ -26,7 +29,7 @@ exports.register = async (req, res) => {
         }
 
         // Find user by email
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -42,20 +45,45 @@ exports.register = async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        // Generate JWT token
-        const token = jwt.sign(
+        // Generate access token
+        const accessToken = jwt.sign(
             { id: user._id, role: user.role },
             process.env.JWT_SECRET,
-            { expiresIn: '10h' }
+            { expiresIn: '2m' }
         );
 
-        // Respond with user info and token
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id },
+            process.env.REFRESH_TOKEN_SECRET,
+            { expiresIn: '7d' }
+        );
+console.log(accessToken, refreshToken);
+        // Store refresh token in database
+        const refreshTokenDoc = new RefreshToken({
+            userId: user._id,
+            token: refreshToken,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+            userAgent: req.headers['user-agent'],
+            ipAddress: req.ip
+        });
+
+        await refreshTokenDoc.save();
+
+        // Calculate expiry times
+        const accessTokenExpiry = Date.now() + (60 * 60 * 1000); // 1 hour
+        const refreshTokenExpiry = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+        // Respond with user info and tokens
         res.status(200).json({
-            token,
+            token: accessToken,
+            refreshToken,
+            expiresIn: 3600, // 1 hour in seconds
+            refreshTokenExpiry: new Date(refreshTokenExpiry).toISOString(),
             user: {
                 id: user._id,
                 name: `${user.firstName} ${user.lastName}`,
-                email: `${user.email}`,
+                email: user.email,
                 role: user.role,
                 isEmailVerified: user.isEmailVerified,
                 companyId: user.company,
@@ -259,3 +287,139 @@ async function handleTokenRefresh(req, res) {
         });
     }
 }
+
+
+// Refresh token endpoint
+exports.refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ 
+        message: 'Refresh token is required' 
+      });
+    }
+
+    // Verify the refresh token
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    
+    // Find the refresh token in database
+    const storedToken = await RefreshToken.findOne({
+      token: refreshToken,
+      userId: decoded.userId
+    });
+
+    if (!storedToken) {
+      return res.status(401).json({ 
+        message: 'Invalid refresh token' 
+      });
+    }
+
+    // Check if refresh token is expired
+    if (new Date() > storedToken.expiresAt) {
+      // Remove expired token
+      await RefreshToken.findByIdAndDelete(storedToken._id);
+      return res.status(401).json({ 
+        message: 'Refresh token expired' 
+      });
+    }
+
+    // Get user data
+    const user = await User.findById(decoded.userId).select('-password');
+    
+    if (!user) {
+      return res.status(401).json({ 
+        message: 'User not found' 
+      });
+    }
+
+    // Generate new access token
+    const accessToken = jwt.sign(
+      { 
+        userId: user._id,
+        email: user.email,
+        role: user.role 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Generate new refresh token (optional - for token rotation)
+    const newRefreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Update refresh token in database (token rotation)
+    await RefreshToken.findByIdAndUpdate(storedToken._id, {
+      token: newRefreshToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    });
+
+    // Calculate expiry times
+    const accessTokenExpiry = Date.now() + (60 * 60 * 1000); // 1 hour
+    const refreshTokenExpiry = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+
+    res.json({
+      accessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: 3600, // 1 hour in seconds
+      refreshTokenExpiry: new Date(refreshTokenExpiry).toISOString(),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        companyId: user.companyId
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ 
+        message: 'Invalid refresh token' 
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        message: 'Refresh token expired' 
+      });
+    }
+
+    res.status(500).json({ 
+      message: 'Internal server error' 
+    });
+  }
+};
+
+// Revoke refresh token (for logout)
+    exports.revokeToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ 
+        message: 'Refresh token is required' 
+      });
+    }
+
+    // Remove the refresh token from database
+    await RefreshToken.findOneAndDelete({ token: refreshToken });
+
+    res.json({ 
+      message: 'Token revoked successfully' 
+    });
+
+  } catch (error) {
+    console.error('Revoke token error:', error);
+    res.status(500).json({ 
+      message: 'Internal server error' 
+    });
+  }
+};
+
