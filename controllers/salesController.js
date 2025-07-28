@@ -1,140 +1,449 @@
-const Sales = require("../models/sales");
-const Lead = require("../models/Lead");
+const Sales = require('../models/sales');
+const Lead = require('../models/Lead');
+const Customer = require('../models/Customer');
+const ProductService = require('../models/productService');
 
-
-// Create a new sales entry
-exports.createSales = async (req, res) => {
+// Create a new sale
+exports.createSale = async (req, res) => {
   try {
-    const { SalesId, LeadId, Customer } = req.body;
-    const newSales = new Sales({
-      SalesId,
-      LeadId,
-      Customer,
+    const {
+      leadId,
+      customerId,
+      productIds,
+      totalAmount,
+      currency,
+      notes,
+      status
+    } = req.body;
+
+    // Validate required fields
+    if (!leadId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Lead ID is required'
+      });
+    }
+
+    // Validate lead exists
+    const lead = await Lead.findById(leadId);
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found'
+      });
+    }
+
+    // Validate customer exists (if provided)
+    if (customerId) {
+      const customer = await Customer.findById(customerId);
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Customer not found'
+        });
+      }
+    }
+
+    // Validate products exist (if provided)
+    if (productIds && productIds.length > 0) {
+      const products = await ProductService.find({
+        _id: { $in: productIds }
+      });
+      
+      if (products.length !== productIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more products not found'
+        });
+      }
+    }
+
+    // Create new sale
+    const newSale = new Sales({
+      leadId,
+      Customer: customerId || null,
+      productIds: productIds || [],
+      totalAmount: totalAmount || 0,
+      currency: currency || 'USD',
+      notes: notes || '',
+      status: status || 'pending',
       company: req.user.company._id,
+      createdBy: req.user._id
     });
 
-    const savedSales = await newSales.save();
-    res.status(201).json(savedSales);
+    const savedSale = await newSale.save();
+
+    // Populate references for response
+    await savedSale.populate([
+      { path: 'leadId', select: 'name email phone' },
+      { path: 'Customer', select: 'name email phone' },
+      { path: 'productIds', select: 'name price' },
+      { path: 'createdBy', select: 'name email' }
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Sale created successfully',
+      sale: savedSale
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating sales entry" });
+    console.error('Error creating sale:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
-exports.getAllSalesByCompany = async (req,res) => {
+// Get all sales for the company
+exports.getAllSales = async (req, res) => {
   try {
-    const salesData = await Sales.find({ company: req.user.company._id })
-    .populate({
-      path: "LeadId",
-      populate: {
-        path: "campaignid",
-        select: "name", // Select only the `name` field from `campaignid`
-      },
-    }).sort({ createdAt: -1 }).populate("invoice") // Populates details of the lead(s)
-    //   .populate("company", "name"); // Populates only the name of the company
+    const { page = 1, limit = 10, status, search } = req.query;
+    
+    const query = { company: req.user.company._id };
+    
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    // Search functionality
+    if (search) {
+      query.$or = [
+        { salesId: { $regex: search, $options: 'i' } },
+        { notes: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const sales = await Sales.find(query)
+      .populate('leadId', 'name email phone')
+      .populate('Customer', 'name email phone')
+      .populate('productIds', 'name price')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Sales.countDocuments(query);
 
     res.status(200).json({
-      salesData,
+      success: true,
+      sales,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total
     });
+
   } catch (error) {
-    console.error("Error fetching sales data:", error);
+    console.error('Error fetching sales:', error);
     res.status(500).json({
-        error
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Get sale by ID
+exports.getSaleById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sale = await Sales.findOne({
+      _id: id,
+      company: req.user.company._id
+    })
+    .populate('leadId', 'name email phone')
+    .populate('Customer', 'name email phone')
+    .populate('productIds', 'name price description')
+    .populate('invoices', 'invoiceNumber amount status')
+    .populate('createdBy', 'name email')
+    .populate('updatedBy', 'name email');
+
+    if (!sale) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale not found'
       });
+    }
+
+    res.status(200).json({
+      success: true,
+      sale
+    });
+
+  } catch (error) {
+    console.error('Error fetching sale:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
-// Get a specific sales entry by ID
-exports.getSalesById = async (req, res) => {
+// Update sale
+exports.updateSale = async (req, res) => {
   try {
-    const sales = await Sales.findById(req.params.id).populate("LeadId").populate("LeadId","campaignid");
-    if (!sales) {
-      return res.status(404).json({ message: "Sales entry not found" });
+    const { id } = req.params;
+    const {
+      customerId,
+      productIds,
+      totalAmount,
+      currency,
+      notes,
+      status,
+      accepted
+    } = req.body;
+
+    const sale = await Sales.findOne({
+      _id: id,
+      company: req.user.company._id
+    });
+
+    if (!sale) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale not found'
+      });
     }
-    res.status(200).json(sales);
+
+    // Validate customer exists (if provided)
+    if (customerId) {
+      const customer = await Customer.findById(customerId);
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Customer not found'
+        });
+      }
+    }
+
+    // Validate products exist (if provided)
+    if (productIds && productIds.length > 0) {
+      const products = await ProductService.find({
+        _id: { $in: productIds }
+      });
+      
+      if (products.length !== productIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more products not found'
+        });
+      }
+    }
+
+    // Update fields
+    if (customerId !== undefined) sale.Customer = customerId;
+    if (productIds !== undefined) sale.productIds = productIds;
+    if (totalAmount !== undefined) sale.totalAmount = totalAmount;
+    if (currency !== undefined) sale.currency = currency;
+    if (notes !== undefined) sale.notes = notes;
+    if (status !== undefined) sale.status = status;
+    if (accepted !== undefined) sale.accepted = accepted;
+    
+    sale.updatedBy = req.user._id;
+
+    const updatedSale = await sale.save();
+
+    // Populate references for response
+    await updatedSale.populate([
+      { path: 'leadId', select: 'name email phone' },
+      { path: 'Customer', select: 'name email phone' },
+      { path: 'productIds', select: 'name price' },
+      { path: 'updatedBy', select: 'name email' }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Sale updated successfully',
+      sale: updatedSale
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching sales entry" });
+    console.error('Error updating sale:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
-// Update a specific sales entry by ID
-exports.updateSales = async (req, res) => {
+// Delete sale
+exports.deleteSale = async (req, res) => {
   try {
-    const { SalesId, LeadId } = req.body;
+    const { id } = req.params;
 
-    // Check if the Lead IDs exist
-    const leads = await Lead.find({ _id: { $in: LeadId } });
-    if (leads.length !== LeadId.length) {
-      return res
-        .status(400)
-        .json({ message: "One or more Lead IDs are invalid" });
+    const sale = await Sales.findOne({
+      _id: id,
+      company: req.user.company._id
+    });
+
+    if (!sale) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sale not found'
+      });
     }
 
-    const updatedSales = await Sales.findByIdAndUpdate(
-      req.params.id,
-      { SalesId, LeadId },
-      { new: true }
-    );
-    if (!updatedSales) {
-      return res.status(404).json({ message: "Sales entry not found" });
-    }
-    res.status(200).json(updatedSales);
+    await Sales.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Sale deleted successfully'
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error updating sales entry" });
+    console.error('Error deleting sale:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
-// Delete a sales entry by ID
-exports.deleteSales = async (req, res) => {
+// Get sales statistics
+exports.getSalesStats = async (req, res) => {
   try {
-    const deletedSales = await Sales.findByIdAndDelete(req.params.id);
-    if (!deletedSales) {
-      return res.status(404).json({ message: "Sales entry not found" });
+    const { period = 'month' } = req.query;
+    
+    let dateFilter = {};
+    const now = new Date();
+    
+    switch (period) {
+      case 'week':
+        dateFilter = { createdAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } };
+        break;
+      case 'month':
+        dateFilter = { createdAt: { $gte: new Date(now.getFullYear(), now.getMonth(), 1) } };
+        break;
+      case 'year':
+        dateFilter = { createdAt: { $gte: new Date(now.getFullYear(), 0, 1) } };
+        break;
+      default:
+        dateFilter = { createdAt: { $gte: new Date(now.getFullYear(), now.getMonth(), 1) } };
     }
-    res.status(200).json({ message: "Sales entry deleted successfully" });
+
+    const query = { 
+      company: req.user.company._id,
+      ...dateFilter
+    };
+
+    const [
+      totalSales,
+      totalAmount,
+      statusCounts,
+      recentSales
+    ] = await Promise.all([
+      Sales.countDocuments(query),
+      Sales.aggregate([
+        { $match: query },
+        { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+      ]),
+      Sales.aggregate([
+        { $match: query },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      Sales.find(query)
+        .populate('leadId', 'name')
+        .sort({ createdAt: -1 })
+        .limit(5)
+    ]);
+
+    const stats = {
+      totalSales,
+      totalAmount: totalAmount[0]?.total || 0,
+      statusBreakdown: statusCounts.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+      recentSales
+    };
+
+    res.status(200).json({
+      success: true,
+      stats
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error deleting sales entry" });
+    console.error('Error fetching sales stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
-exports.acceptSales = async (req, res) => {
+// Get sales by customer ID
+exports.getSalesByCustomerId = async (req, res) => {
   try {
-    const { SalesId } = req.body;
+      const { customerId } = req.params;
+    const { page = 1, limit = 10, status } = req.query;
 
-    const updatedSales = await Sales.findByIdAndUpdate(
-      SalesId,
-      { accepted: true },
-      { new: true }
-    );
-    if (!updatedSales) {
-      return res.status(404).json({ message: "Sales entry not found" });
+    // Validate customer exists
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
     }
-    res.status(200).json(updatedSales);
+
+    const query = { 
+      Customer: customer,
+      company: req.user.company._id 
+    };
+
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+
+    const sales = await Sales.find(query)
+      .populate('leadId', 'name email phone')
+      .populate('productIds', 'name price description')
+      .populate('invoices', 'invoiceNumber amount status')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Sales.countDocuments(query);
+
+    // Calculate total amount for this customer
+    const totalAmountResult = await Sales.aggregate([
+      { $match: query },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]);
+
+    const totalAmount = totalAmountResult[0]?.total || 0;
+
+    res.status(200).json({
+      success: true,
+      customer: {
+        _id: customer._id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone
+      },
+      sales,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      total,
+      totalAmount
+    });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error accepting sales entry" });
+    console.error('Error fetching sales by customer ID:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
-
-
-exports.closeSales = async (req, res) => {
-  try {
-    const { SalesId } = req.body;
-
-    const updatedSales = await Sales.findByIdAndUpdate(
-      SalesId,
-      { closed: true },
-      { new: true }
-    );
-    if (!updatedSales) {
-      return res.status(404).json({ message: "Sales entry not found" });
-    }
-    res.status(200).json(updatedSales);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error closing sales entry" });
-  }
-}
