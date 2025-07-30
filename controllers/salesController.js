@@ -12,6 +12,7 @@ exports.createSale = async (req, res) => {
       productIds,
       totalAmount,
       currency,
+      invoices,
       notes,
       status
     } = req.body;
@@ -68,7 +69,8 @@ exports.createSale = async (req, res) => {
       notes: notes || '',
       status: status || 'pending',
       company: req.user.company._id,
-      createdBy: req.user._id
+      createdBy: req.user._id,
+      invoices: invoices || []
     });
 
     const savedSale = await newSale.save();
@@ -78,6 +80,7 @@ exports.createSale = async (req, res) => {
       { path: 'leadId', select: 'name email phone' },
       { path: 'Customer', select: 'name email phone' },
       { path: 'productIds', select: 'name price' },
+      { path: 'invoices', select: 'invoiceNumber amount status' },
       { path: 'createdBy', select: 'name email' }
     ]);
 
