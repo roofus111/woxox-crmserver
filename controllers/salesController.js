@@ -6,6 +6,7 @@ const ProductService = require('../models/productService');
 // Create a new sale
 exports.createSale = async (req, res) => {
   try {
+
     const {
       leadId,
       customerId,
@@ -72,6 +73,9 @@ exports.createSale = async (req, res) => {
       createdBy: req.user._id,
       invoices: invoices || []
     });
+
+    console.log('New sale object:', newSale);
+    console.log('Customer field value:', newSale.Customer);
 
     const savedSale = await newSale.save();
 
