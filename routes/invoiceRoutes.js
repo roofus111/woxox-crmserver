@@ -19,5 +19,6 @@ router.put('/:id', invoiceController.updateInvoice);
 
 // Delete an invoice
 router.delete('/:id', invoiceController.deleteInvoice);
+router.get('/paymenthistory/:invoiceId', invoiceController.getPaymentHistoryByInvoice);
 
 module.exports = router;

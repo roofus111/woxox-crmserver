@@ -1,4 +1,4 @@
-const Payment = require("../models/payment");
+const Payment = require("../models/Payment");
 const Invoice = require("../models/invoice");
 const mongoose = require("mongoose");
 const BankAccount = require("../models/Account");

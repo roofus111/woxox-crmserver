@@ -1,6 +1,7 @@
 const Company = require("../models/Company");
 const Invoice = require("../models/invoice");
 const Sales = require("../models/sales");
+const Payment = require("../models/Payment");
 const mongoose = require('mongoose');
 
 const getTotalInvoiceCount = async (companyId) => {
@@ -20,7 +21,6 @@ const getTotalInvoiceCount = async (companyId) => {
     throw new Error("Unable to retrieve invoice count.");
   }
 };
-
 // Create a new invoice
 exports.createInvoice = async (req, res) => {
   const session = await mongoose.startSession();
@@ -29,33 +29,28 @@ exports.createInvoice = async (req, res) => {
   try {
     const invoiceData = req.body;
 
-    // Validate required fields
-    if (!invoiceData.sales) {
-      throw new Error('Sales ID is required');
-    }
-
-    // Get invoice count and validate sales existence concurrently
-    const [count, sales] = await Promise.all([
-      getTotalInvoiceCount(req.user.company),
-      Sales.findById(invoiceData.sales).session(session)
-    ]);
-
-    if (!sales) {
-      throw new Error('Sales record not found');
-    }
+    // Get invoice count
+    const count = await getTotalInvoiceCount(req.user.company);
 
     const invoice = new Invoice({
       ...invoiceData,
       invoiceNumber: (count + 1).toString().padStart(5, '0'),
       company: req.user.company,
-    });
-console.log(invoice);
-    // Save invoice first to get a valid _id
+    });       
+
+    console.log(invoice);
+    // Save invoice
     const savedInvoice = await invoice.save({ session });
     console.log(savedInvoice._id);
-    // Now update sales with the saved invoice's _id
-    sales.invoice.push(savedInvoice._id);
-    await sales.save({ session });
+
+    // If sales ID is provided, update the sales record
+    if (invoiceData.sales) {
+      const sales = await Sales.findById(invoiceData.sales).session(session);
+      if (sales) {
+        sales.invoice.push(savedInvoice._id);
+        await sales.save({ session });
+      }
+    }
 
     await session.commitTransaction();
     res.status(201).json(savedInvoice);
@@ -74,6 +69,59 @@ console.log(invoice);
     session.endSession();
   }
 };
+// // Create a new invoice
+// exports.createInvoice = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const invoiceData = req.body;
+
+//     // Validate required fields
+//     if (!invoiceData.sales) {
+//       throw new Error('Sales ID is required');
+//     }
+
+//     // Get invoice count and validate sales existence concurrently
+//     const [count, sales] = await Promise.all([
+//       getTotalInvoiceCount(req.user.company),
+//       Sales.findById(invoiceData.sales).session(session)
+//     ]);
+
+//     if (!sales) {
+//       throw new Error('Sales record not found');
+//     }
+
+//     const invoice = new Invoice({
+//       ...invoiceData,
+//       invoiceNumber: (count + 1).toString().padStart(5, '0'),
+//       company: req.user.company,
+//     });
+// console.log(invoice);
+//     // Save invoice first to get a valid _id
+//     const savedInvoice = await invoice.save({ session });
+//     console.log(savedInvoice._id);
+//     // Now update sales with the saved invoice's _id
+//     sales.invoice.push(savedInvoice._id);
+//     await sales.save({ session });
+
+//     await session.commitTransaction();
+//     res.status(201).json(savedInvoice);
+ 
+//   } catch (error) {
+//     await session.abortTransaction();
+    
+//     const statusCode = error.message.includes('required') ? 400 : 
+//                       error.message.includes('not found') ? 404 : 500;
+    
+//     res.status(statusCode).json({ 
+//       message: error.message,
+//       error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+//     });
+//   } finally {
+//     session.endSession();
+//   }
+// };
 
 // Get all invoices
 exports.getInvoices = async (req, res) => {
@@ -221,5 +269,82 @@ exports.getInvoicesByLeads = async (req, res) => {
     res.status(200).json(formattedInvoices);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Get payment history by invoice ID
+exports.getPaymentHistoryByInvoice = async (req, res) => {
+  try {
+    const { invoiceId } = req.params;
+    
+    // // Validate invoice ID
+    // if (!invoiceId || !mongoose.Types.ObjectId.isValid(invoiceId)) {
+    //   return res.status(400).json({ message: "Invalid invoice ID" });
+    // }
+
+    // Check if invoice exists and belongs to the user's company
+    const invoice = await Invoice.findOne({ 
+      _id: invoiceId, 
+      company: req.user.company 
+    });
+    
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+
+    // Find all payments for this invoice
+    const payments = await Payment.find({ 
+      invoice: invoiceId,
+      company: req.user.company 
+    }).populate([
+      {
+        path: 'bankAccountId',
+        select: 'accountNumber accountHolderName bankName'
+      },
+      {
+        path: 'userId',
+        select: 'firstName lastName email'
+      }
+    ]).sort({ transactionDate: -1 });
+
+    // Format the response
+    const paymentHistory = payments.map(payment => ({
+      paymentId: payment.paymentId,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+      paymentStatus: payment.paymentStatus,
+      transactionDate: payment.transactionDate,
+      paymentGateway: payment.paymentGateway,
+      description: payment.description,
+      refundId: payment.refundId,
+      bankAccount: payment.bankAccountId ? {
+        accountNumber: payment.bankAccountId.accountNumber,
+        accountHolderName: payment.bankAccountId.accountHolderName,
+        bankName: payment.bankAccountId.bankName
+      } : null,
+      processedBy: payment.userId ? {
+        name: `${payment.userId.firstName} ${payment.userId.lastName}`,
+        email: payment.userId.email
+      } : null,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt
+    }));
+
+    res.status(200).json({
+      invoiceId: invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      totalAmount: invoice.grandTotal,
+      paidAmount: invoice.paid || 0,
+      balanceAmount: (invoice.grandTotal || 0) - (invoice.paid || 0),
+      paymentCount: payments.length,
+      paymentHistory: paymentHistory
+    });
+
+  } catch (error) {
+    console.error("Error fetching payment history:", error);
+    res.status(500).json({ 
+      message: "Error fetching payment history",
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
