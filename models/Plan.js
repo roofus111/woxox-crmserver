@@ -22,6 +22,21 @@ const ModulePurchaseSchema = new mongoose.Schema({
   plans: [PurchasePlanSchema]
 }, { _id: false });
 
+const BillingSchema = new mongoose.Schema({
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  companyName: { type: String, required: true },
+  address: {
+    country: { type: String, required: true },
+    zipPostalCode: { type: String, required: true },
+    streetAddress: { type: String, required: true },
+    city: { type: String, required: true },
+    stateProvince: { type: String, required: true }
+  }
+}, { _id: false });
+
 const CompanyPurchaseSchema = new mongoose.Schema({
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   modules: [ModulePurchaseSchema],
@@ -37,7 +52,8 @@ const CompanyPurchaseSchema = new mongoose.Schema({
   autoRenew: { type: Boolean, default: false },
   paymentMethod: { type: String },
   lastPaymentDate: { type: Date },
-  nextPaymentDate: { type: Date }
+  nextPaymentDate: { type: Date },
+  billing: BillingSchema
 });
 
 module.exports = {
