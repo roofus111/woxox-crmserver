@@ -15,55 +15,256 @@ exports.createCustomer = async (req, res) => {
       address,
       dateOfBirth,
       gender,
+      customerType,
+      source,
+      priority,
       status,
+      handledby,
+      receivedDate,
+      payment,
       notes,
       tags,
+      assignedTo
     } = req.body;
 
-    // Validate required fields as per schema
-    if ( !firstName || !lastName || !phone ) {
-      return res.status(400).json({ error: 'Company, first name, last name, phone, createdBy, and updatedBy are required.' });
+    // Enhanced validation for required fields
+    if (!firstName || !lastName || !phone) {
+      return res.status(400).json({ 
+        error: 'First name, last name, and phone are required.',
+        missingFields: {
+          firstName: !firstName,
+          lastName: !lastName,
+          phone: !phone
+        }
+      });
     }
 
-    // Create a new customer instance
+    // Enhanced email validation
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ 
+          error: 'Please provide a valid email address.',
+          invalidField: 'email'
+        });
+      }
+    }
+
+    // Enhanced phone validation (basic format check)
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    if (!phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''))) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid phone number.',
+        invalidField: 'phone'
+      });
+    }
+
+    // Enhanced date validation
+    if (dateOfBirth) {
+      const dobDate = new Date(dateOfBirth);
+      if (isNaN(dobDate.getTime()) || dobDate > new Date()) {
+        return res.status(400).json({ 
+          error: 'Please provide a valid date of birth (cannot be in the future).',
+          invalidField: 'dateOfBirth'
+        });
+      }
+    }
+
+    if (receivedDate) {
+      const receivedDateObj = new Date(receivedDate);
+      if (isNaN(receivedDateObj.getTime())) {
+        return res.status(400).json({ 
+          error: 'Please provide a valid received date.',
+          invalidField: 'receivedDate'
+        });
+      }
+    }
+
+    // Validate enum values
+    const validGenders = ['Male', 'Female', 'Other'];
+    if (gender && !validGenders.includes(gender)) {
+      return res.status(400).json({ 
+        error: 'Invalid gender value. Must be one of: Male, Female, Other',
+        invalidField: 'gender'
+      });
+    }
+
+    const validCustomerTypes = ['Prospect', 'Regular', 'VIP', 'Wholesale', 'Retail'];
+    if (customerType && !validCustomerTypes.includes(customerType)) {
+      return res.status(400).json({ 
+        error: 'Invalid customer type. Must be one of: Prospect, Regular, VIP, Wholesale, Retail',
+        invalidField: 'customerType'
+      });
+    }
+
+    const validSources = ['Website', 'Referral', 'Social Media', 'Advertisement', 'Cold Call', 'Trade Show', 'Other'];
+    if (source && !validSources.includes(source)) {
+      return res.status(400).json({ 
+        error: 'Invalid source. Must be one of: Website, Referral, Social Media, Advertisement, Cold Call, Trade Show, Other',
+        invalidField: 'source'
+      });
+    }
+
+    const validPriorities = ['Low', 'Medium', 'High', 'Urgent'];
+    if (priority && !validPriorities.includes(priority)) {
+      return res.status(400).json({ 
+        error: 'Invalid priority. Must be one of: Low, Medium, High, Urgent',
+        invalidField: 'priority'
+      });
+    }
+
+    const validStatuses = ['Active', 'Inactive', 'Archived', 'Converted'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        error: 'Invalid status. Must be one of: Active, Inactive, Archived, Converted',
+        invalidField: 'status'
+      });
+    }
+
+    // Check for existing customer with same email or phone
+    const existingCustomer = await Customer.findOne({
+      company: req.user.company._id,
+      $or: [
+        { email: email?.toLowerCase() },
+        { phone: phone }
+      ]
+    });
+
+    if (existingCustomer) {
+      const conflicts = [];
+      if (existingCustomer.email === email?.toLowerCase()) conflicts.push('email');
+      if (existingCustomer.phone === phone) conflicts.push('phone');
+      
+      return res.status(409).json({ 
+        error: 'Customer with this email or phone already exists.',
+        conflicts,
+        existingCustomerId: existingCustomer._id
+      });
+    }
+
+    // Prepare address object if provided
+    let addressObj = null;
+    if (address) {
+      addressObj = {
+        street: address.street || '',
+        city: address.city || '',
+        state: address.state || '',
+        postalCode: address.postalCode || '',
+        country: address.country || ''
+      };
+    }
+
+    // Prepare payment object with enhanced structure
+    let paymentObj = {
+      amount: 0,
+      currency: 'USD',
+      status: 'Pending'
+    };
+
+    if (payment) {
+      paymentObj = {
+        amount: payment.amount || 0,
+        currency: payment.currency || 'USD',
+        status: payment.status || 'Pending',
+        dueDate: payment.dueDate ? new Date(payment.dueDate) : undefined,
+        paidDate: payment.paidDate ? new Date(payment.paidDate) : undefined
+      };
+    }
+
+    // Create a new customer instance with enhanced data
     const newCustomer = new Customer({
-      company:req.user.company._id,
-      firstName,
-      lastName,
-      email,
-      phone,
-      qualification,
-      occupation,
-      address,
-      dateOfBirth,
+      company: req.user.company._id,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email?.toLowerCase().trim(),
+      phone: phone.trim(),
+      qualification: qualification?.trim(),
+      occupation: occupation?.trim(),
+      address: addressObj,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       gender,
-      status,
-      notes,
-      tags,
+      customerType: customerType || 'Prospect',
+      source: source || 'Other',
+      priority: priority || 'Medium',
+      status: status || 'Active',
+      handledby: handledby || req.user._id,
+      receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
+      payment: paymentObj,
+      notes: notes?.trim(),
+      tags: tags || [],
+      assignedTo: assignedTo || req.user._id,
       createdBy: req.user._id,
-      updatedBy:req.user._id
+      updatedBy: req.user._id,
+      // Initialize financial summary
+      financialSummary: {
+        totalPurchases: 0,
+        totalAmount: 0,
+        totalPaid: 0,
+        totalBalance: 0,
+        currency: 'USD'
+      }
     });
 
     // Save the customer to the database
     const savedCustomer = await newCustomer.save();
 
+    // Add activity log entry for customer creation
+    savedCustomer.activityLog.push({
+      performedBy: req.user._id,
+      action: 'created',
+      details: `Customer ${firstName} ${lastName} created successfully`,
+      performedAt: new Date()
+    });
+
+    await savedCustomer.save();
+
+    // Populate the customer with referenced fields for better response
+    const populatedCustomer = await Customer.findById(savedCustomer._id)
+      .populate('createdBy', 'firstName lastName email')
+      .populate('updatedBy', 'firstName lastName email')
+      .populate('assignedTo', 'firstName lastName email')
+      .populate('handledby', 'firstName lastName email')
+      .populate('tags', 'name color')
+      .populate('company', 'name');
+
     // Respond with the saved customer
     res.status(201).json({
       message: 'Customer created successfully',
-      customer: savedCustomer
+      customer: populatedCustomer,
+      created: true,
+      timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     console.error('Error creating customer:', error);
 
-    // Check for duplicate email
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-      return res.status(400).json({ error: 'Email already exists.' });
+    // Check for duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(409).json({ 
+        error: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`,
+        duplicateField: field
+      });
+    }
+
+    // Check for validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message,
+        value: err.value
+      }));
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: validationErrors 
+      });
     }
 
     // Handle other errors
     res.status(500).json({
       error: 'An error occurred while creating the customer',
-      details: error.message
+      details: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 };

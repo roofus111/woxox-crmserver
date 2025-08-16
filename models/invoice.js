@@ -27,7 +27,7 @@ const InvoiceSchema = new mongoose.Schema({
     {
       item: {
         type: String,
-        required: true,
+        // required: true,
       },
       description: {
         type: String,
@@ -48,7 +48,10 @@ const InvoiceSchema = new mongoose.Schema({
       },
     },
   ],
-  
+  productIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ProductService", // Assuming you have a ProductService model
+  }],
 totalAmount: {
     type: Number,
     required: true,
