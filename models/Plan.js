@@ -32,7 +32,7 @@ const CompanyPurchaseSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'expired', 'cancelled'], 
     default: 'active' 
   },
-  planType: { type: String, enum: ['free', 'basic', 'premium', 'enterprise'], default: 'free' },
+  planType: { type: String, enum: ['free trial', 'basic', 'premium', 'enterprise'], default: 'free trial' },
   employeeLimit: { type: Number, default: 1 },
   autoRenew: { type: Boolean, default: false },
   paymentMethod: { type: String },
