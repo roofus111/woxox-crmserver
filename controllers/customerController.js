@@ -23,8 +23,7 @@ exports.createCustomer = async (req, res) => {
       receivedDate,
       payment,
       notes,
-      tags,
-      assignedTo
+      tags
     } = req.body;
 
     // Enhanced validation for required fields
@@ -154,24 +153,7 @@ exports.createCustomer = async (req, res) => {
       };
     }
 
-    // Prepare payment object with enhanced structure
-    let paymentObj = {
-      amount: 0,
-      currency: 'USD',
-      status: 'Pending'
-    };
-
-    if (payment) {
-      paymentObj = {
-        amount: payment.amount || 0,
-        currency: payment.currency || 'USD',
-        status: payment.status || 'Pending',
-        dueDate: payment.dueDate ? new Date(payment.dueDate) : undefined,
-        paidDate: payment.paidDate ? new Date(payment.paidDate) : undefined
-      };
-    }
-
-    // Create a new customer instance with enhanced data
+    // Update the customer creation to remove the payment object
     const newCustomer = new Customer({
       company: req.user.company._id,
       firstName: firstName.trim(),
@@ -189,20 +171,10 @@ exports.createCustomer = async (req, res) => {
       status: status || 'Active',
       handledby: handledby || req.user._id,
       receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
-      payment: paymentObj,
       notes: notes?.trim(),
       tags: tags || [],
-      assignedTo: assignedTo || req.user._id,
       createdBy: req.user._id,
-      updatedBy: req.user._id,
-      // Initialize financial summary
-      financialSummary: {
-        totalPurchases: 0,
-        totalAmount: 0,
-        totalPaid: 0,
-        totalBalance: 0,
-        currency: 'USD'
-      }
+      updatedBy: req.user._id
     });
 
     // Save the customer to the database
@@ -222,7 +194,6 @@ exports.createCustomer = async (req, res) => {
     const populatedCustomer = await Customer.findById(savedCustomer._id)
       .populate('createdBy', 'firstName lastName email')
       .populate('updatedBy', 'firstName lastName email')
-      .populate('assignedTo', 'firstName lastName email')
       .populate('handledby', 'firstName lastName email')
       .populate('tags', 'name color')
       .populate('company', 'name');
@@ -241,7 +212,7 @@ exports.createCustomer = async (req, res) => {
     // Check for duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      return res.status(409).json({ 
+      return res.status(409).json({  
         error: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`,
         duplicateField: field
       });
@@ -285,7 +256,7 @@ exports.getAllCustomers = async (req, res) => {
     res.status(500).json({
       error: 'An error occurred while retrieving customers',
       details: error.message
-    });
+    });s
   }
 };
 

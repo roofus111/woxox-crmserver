@@ -23,8 +23,8 @@ exports.createCompanyPurchase = async (req, res) => {
     }
 
     // Validate company exists
-    const company = await Company.findById(companyId);
-    if (!company) {
+    const company = await Company.findById(companyId); 
+    if (!company) { 
       return res.status(404).json({ 
         error: 'Company not found' 
       });
