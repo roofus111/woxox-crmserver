@@ -313,4 +313,5 @@ router.put('/updatecustomer/:customerId',CustomerController.updateCustomer);
  */
 
 router.delete('/deletecustomer/:customerId', CustomerController.deleteCustomer);
+router.get('/getdocumentsbycustomer/:customerId', CustomerController.getDocumentsByCustomer);
 module.exports = router;
