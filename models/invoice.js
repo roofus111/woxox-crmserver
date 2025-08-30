@@ -25,11 +25,11 @@ const InvoiceSchema = new mongoose.Schema({
   },
   items: [
     {
-      item: {
-        type: String,
-        // required: true,
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductService",
       },
-      description: {
+      itemName: {
         type: String,
       },
       quantity: {
@@ -37,9 +37,13 @@ const InvoiceSchema = new mongoose.Schema({
         required: true,
         min: 1,
       },
-      cost: {
+      unitPrice: {
         type: Number,
         required: true,
+        min: 0,
+      },
+      description: {
+        type: String,
       },
       total: {
         type: Number,
@@ -48,11 +52,7 @@ const InvoiceSchema = new mongoose.Schema({
       },
     },
   ],
-  productIds: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "ProductService", // Assuming you have a ProductService model
-  }],
-totalAmount: {
+  totalAmount: {
     type: Number,
     required: true,
     min: 0,
@@ -86,10 +86,6 @@ totalAmount: {
   paid:{
     type:Number,
     default:0
-  },
-  sales:{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Sales", // This references the Invoice model
   }
 });
 

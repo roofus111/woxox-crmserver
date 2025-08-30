@@ -6,16 +6,15 @@ const ProductService = require('../models/productService');
 // Create a new sale
 exports.createSale = async (req, res) => {
   try {
-
     const {
       leadId,
       customerId,
-      productIds,
-      totalAmount,
-      currency,
       invoices,
       notes,
-      status
+      status,
+      accepted,
+      totalAmountPaid,
+      currency
     } = req.body;
 
     // Validate required fields
@@ -46,36 +45,34 @@ exports.createSale = async (req, res) => {
       }
     }
 
-    // Validate products exist (if provided)
-    if (productIds && productIds.length > 0) {
-      const products = await ProductService.find({
-        _id: { $in: productIds }
+    // Validate invoices exist (if provided)
+    if (invoices && invoices.length > 0) {
+      const Invoice = require('../models/invoice');
+      const existingInvoices = await Invoice.find({
+        _id: { $in: invoices }
       });
       
-      if (products.length !== productIds.length) {
+      if (existingInvoices.length !== invoices.length) {
         return res.status(400).json({
           success: false,
-          message: 'One or more products not found'
+          message: 'One or more invoices not found'
         });
       }
     }
 
-    // Create new sale
+    // Create new sale according to schema
     const newSale = new Sales({
       leadId,
       Customer: customerId || null,
-      productIds: productIds || [],
-      totalAmount: totalAmount || 0,
-      currency: currency || 'USD',
+      invoices: invoices || [],
       notes: notes || '',
       status: status || 'pending',
+      accepted: accepted || false,
+      totalAmountPaid: totalAmountPaid || 0,
+      currency: currency || 'USD',
       company: req.user.company._id,
-      createdBy: req.user._id,
-      invoices: invoices || []
+      createdBy: req.user._id
     });
-
-    console.log('New sale object:', newSale);
-    console.log('Customer field value:', newSale.Customer);
 
     const savedSale = await newSale.save();
 
@@ -83,7 +80,6 @@ exports.createSale = async (req, res) => {
     await savedSale.populate([
       { path: 'leadId', select: 'name email phone' },
       { path: 'Customer', select: 'name email phone' },
-      { path: 'productIds', select: 'name price' },
       { path: 'invoices', select: 'invoiceNumber amount status' },
       { path: 'createdBy', select: 'name email' }
     ]);
@@ -127,7 +123,7 @@ exports.getAllSales = async (req, res) => {
     const sales = await Sales.find(query)
       .populate('leadId', 'name email phone')
       .populate('Customer', 'name email phone')
-      .populate('productIds', 'name price')
+      .populate('invoices', 'invoiceNumber amount status')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
@@ -164,7 +160,6 @@ exports.getSaleById = async (req, res) => {
     })
     .populate('leadId', 'name email phone')
     .populate('Customer', 'name email phone')
-    .populate('productIds', 'name price description')
     .populate('invoices', 'invoiceNumber amount status')
     .populate('createdBy', 'name email')
     .populate('updatedBy', 'name email');
@@ -197,12 +192,12 @@ exports.updateSale = async (req, res) => {
     const { id } = req.params;
     const {
       customerId,
-      productIds,
-      totalAmount,
-      currency,
+      invoices,
       notes,
       status,
-      accepted
+      accepted,
+      totalAmountPaid,
+      currency
     } = req.body;
 
     const sale = await Sales.findOne({
@@ -228,28 +223,29 @@ exports.updateSale = async (req, res) => {
       }
     }
 
-    // Validate products exist (if provided)
-    if (productIds && productIds.length > 0) {
-      const products = await ProductService.find({
-        _id: { $in: productIds }
+    // Validate invoices exist (if provided)
+    if (invoices && invoices.length > 0) {
+      const Invoice = require('../models/invoice');
+      const existingInvoices = await Invoice.find({
+        _id: { $in: invoices }
       });
       
-      if (products.length !== productIds.length) {
+      if (existingInvoices.length !== invoices.length) {
         return res.status(400).json({
           success: false,
-          message: 'One or more products not found'
+          message: 'One or more invoices not found'
         });
       }
     }
 
-    // Update fields
+    // Update fields according to schema
     if (customerId !== undefined) sale.Customer = customerId;
-    if (productIds !== undefined) sale.productIds = productIds;
-    if (totalAmount !== undefined) sale.totalAmount = totalAmount;
-    if (currency !== undefined) sale.currency = currency;
+    if (invoices !== undefined) sale.invoices = invoices;
     if (notes !== undefined) sale.notes = notes;
     if (status !== undefined) sale.status = status;
     if (accepted !== undefined) sale.accepted = accepted;
+    if (totalAmountPaid !== undefined) sale.totalAmountPaid = totalAmountPaid;
+    if (currency !== undefined) sale.currency = currency;
     
     sale.updatedBy = req.user._id;
 
@@ -259,7 +255,7 @@ exports.updateSale = async (req, res) => {
     await updatedSale.populate([
       { path: 'leadId', select: 'name email phone' },
       { path: 'Customer', select: 'name email phone' },
-      { path: 'productIds', select: 'name price' },
+      { path: 'invoices', select: 'invoiceNumber amount status' },
       { path: 'updatedBy', select: 'name email' }
     ]);
 
