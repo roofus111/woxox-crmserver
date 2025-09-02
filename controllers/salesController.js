@@ -121,7 +121,7 @@ exports.getAllSales = async (req, res) => {
     }
 
     const sales = await Sales.find(query)
-      .populate('leadId', 'name email phone')
+      .populate('leadId', 'name email phone')  
       .populate('Customer', 'name email phone')
       .populate('invoices', 'invoiceNumber amount status')
       .populate('createdBy', 'name email')
@@ -409,7 +409,6 @@ exports.getSalesByCustomerId = async (req, res) => {
 
     const sales = await Sales.find(query)
       .populate('leadId', 'name email phone')
-      .populate('productIds', 'name price description')
       .populate('invoices', 'invoiceNumber amount status')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
