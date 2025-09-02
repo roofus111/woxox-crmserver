@@ -82,7 +82,37 @@ const salesSchema = new mongoose.Schema({
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  // ✅ Added: Items array from invoice model
+  items: [
+    {
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductService",
+      },
+      itemName: {
+        type: String,
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+      unitPrice: {
+        type: Number,  
+        required: true,
+        min: 0,
+      },
+      description: {
+        type: String,
+      },
+      total: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+    },
+  ]
 }, {
   timestamps: true
 });

@@ -2,101 +2,189 @@ const Sales = require('../models/sales');
 const Lead = require('../models/Lead');
 const Customer = require('../models/Customer');
 const ProductService = require('../models/productService');
+const Invoice = require('../models/invoice');
+const mongoose = require('mongoose');
 
 // Create a new sale
 exports.createSale = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const {
-      leadId,
-      customerId,
-      invoices,
-      notes,
-      status,
-      accepted,
-      totalAmountPaid,
-      currency
-    } = req.body;
+    const salesData = req.body;
 
-    // Validate required fields
-    if (!leadId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Lead ID is required'
-      });
-    }
-
-    // Validate lead exists
-    const lead = await Lead.findById(leadId);
-    if (!lead) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lead not found'
-      });
-    }
-
-    // Validate customer exists (if provided)
-    if (customerId) {
-      const customer = await Customer.findById(customerId);
-      if (!customer) {
-        return res.status(404).json({
-          success: false,
-          message: 'Customer not found'
-        });
+    // If invoice ID is provided, create sales from that invoice
+    if (salesData.invoiceId) {
+      // Validate invoice exists
+      const invoice = await Invoice.findById(salesData.invoiceId).session(session);
+      if (!invoice) {
+        throw new Error('Invoice not found');
       }
-    }
 
-    // Validate invoices exist (if provided)
-    if (invoices && invoices.length > 0) {
-      const Invoice = require('../models/invoice');
-      const existingInvoices = await Invoice.find({
-        _id: { $in: invoices }
+      // Create sales record from invoice data
+      const newSale = new Sales({
+        leadId: salesData.leadId || invoice.Lead, // Use provided leadId or invoice's Lead field
+        Customer: salesData.customerId || invoice.customer, // Use provided customerId or invoice's customer
+        invoices: [invoice._id],
+        notes: salesData.notes || invoice.notes || '',
+        status: salesData.status || 'pending',
+        accepted: salesData.accepted || false,
+        totalAmountPaid: salesData.totalAmountPaid || invoice.paid || 0,
+        currency: salesData.currency || 'USD',
+        company: req.user.company._id,
+        createdBy: req.user._id,
+        // Copy items from invoice to sales
+        items: invoice.items || []
       });
-      
-      if (existingInvoices.length !== invoices.length) {
-        return res.status(400).json({
-          success: false,
-          message: 'One or more invoices not found'
-        });
+
+      const savedSale = await newSale.save({ session });
+
+      // Update invoice with sales reference
+      invoice.sales = savedSale._id;
+      await invoice.save({ session });
+
+      await session.commitTransaction();
+
+      // Populate references for response
+      await savedSale.populate([
+        { path: 'leadId', select: 'name email phone' },
+        { path: 'Customer', select: 'name email phone' },
+        { path: 'invoices', select: 'invoiceNumber amount status' },
+        { path: 'createdBy', select: 'name email' },
+        { path: 'items.product', select: 'name description price' }
+      ]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Sale created successfully from invoice',
+        sale: savedSale
+      });
+
+    } else {
+      // Create sales separately (original logic)
+      const {
+        leadId,
+        customerId,
+        invoices,
+        notes,
+        status,
+        accepted,
+        totalAmountPaid,
+        currency,
+        items
+      } = salesData;
+
+      // Validate required fields
+      if (!leadId) {
+        throw new Error('Lead ID is required');
       }
+
+      // Validate lead exists
+      const lead = await Lead.findById(leadId).session(session);
+      if (!lead) {
+        throw new Error('Lead not found');
+      }
+
+      // Validate customer exists (if provided)
+      if (customerId) {
+        const customer = await Customer.findById(customerId).session(session);
+        if (!customer) {
+          throw new Error('Customer not found');
+        }
+      }
+
+      // Validate invoices exist (if provided)
+      if (invoices && invoices.length > 0) {
+        const existingInvoices = await Invoice.find({
+          _id: { $in: invoices }
+        }).session(session);
+        
+        if (existingInvoices.length !== invoices.length) {
+          throw new Error('One or more invoices not found');
+        }
+      }
+
+      // Validate items if provided
+      if (items && items.length > 0) {
+        for (const item of items) {
+          // Validate required item fields
+          if (!item.quantity || item.quantity < 1) {
+            throw new Error('Item quantity is required and must be at least 1');
+          }
+          if (!item.unitPrice || item.unitPrice < 0) {
+            throw new Error('Item unit price is required and must be non-negative');
+          }
+          if (!item.total || item.total < 0) {
+            throw new Error('Item total is required and must be non-negative');
+          }
+
+          // Validate product exists if product ID is provided
+          if (item.product) {
+            const product = await ProductService.findById(item.product).session(session);
+            if (!product) {
+              throw new Error(`Product with ID ${item.product} not found`);
+            }
+          }
+        }
+      }
+
+      // Create new sale according to schema
+      const newSale = new Sales({
+        leadId,
+        Customer: customerId || null,
+        invoices: invoices || [],
+        notes: notes || '',
+        status: status || 'pending',
+        accepted: accepted || false,
+        totalAmountPaid: totalAmountPaid || 0,
+        currency: currency || 'USD',
+        company: req.user.company._id,
+        createdBy: req.user._id,
+        items: items || []
+      });
+
+      const savedSale = await newSale.save({ session });
+
+      // If invoices were provided, update them with sales reference
+      if (invoices && invoices.length > 0) {
+        await Invoice.updateMany(
+          { _id: { $in: invoices } },
+          { $set: { sales: savedSale._id } },
+          { session }
+        );
+      }
+
+      await session.commitTransaction();
+
+      // Populate references for response
+      await savedSale.populate([
+        { path: 'leadId', select: 'name email phone' },
+        { path: 'Customer', select: 'name email phone' },
+        { path: 'invoices', select: 'invoiceNumber amount status' },
+        { path: 'createdBy', select: 'name email' },
+        { path: 'items.product', select: 'name description price' }
+      ]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Sale created successfully',
+        sale: savedSale
+      });
     }
-
-    // Create new sale according to schema
-    const newSale = new Sales({
-      leadId,
-      Customer: customerId || null,
-      invoices: invoices || [],
-      notes: notes || '',
-      status: status || 'pending',
-      accepted: accepted || false,
-      totalAmountPaid: totalAmountPaid || 0,
-      currency: currency || 'USD',
-      company: req.user.company._id,
-      createdBy: req.user._id
-    });
-
-    const savedSale = await newSale.save();
-
-    // Populate references for response
-    await savedSale.populate([
-      { path: 'leadId', select: 'name email phone' },
-      { path: 'Customer', select: 'name email phone' },
-      { path: 'invoices', select: 'invoiceNumber amount status' },
-      { path: 'createdBy', select: 'name email' }
-    ]);
-
-    res.status(201).json({
-      success: true,
-      message: 'Sale created successfully',
-      sale: savedSale
-    });
 
   } catch (error) {
-    console.error('Error creating sale:', error);
-    res.status(500).json({
+    await session.abortTransaction();
+    
+    const statusCode = error.message.includes('required') ? 400 : 
+                      error.message.includes('not found') ? 404 : 500;
+    
+    res.status(statusCode).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: error.message,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  } finally {
+    session.endSession();
   }
 };
 

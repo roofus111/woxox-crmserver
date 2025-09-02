@@ -20,7 +20,12 @@ const InvoiceSchema = new mongoose.Schema({
   },
   customer: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Lead", // Assuming you have a Customer model
+    ref: "Customer", // Assuming you have a Customer model
+    required: true,
+  },
+  Lead: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Lead",
     required: true,
   },
   items: [
