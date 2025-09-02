@@ -74,16 +74,16 @@ exports.createSale = async (req, res) => {
         items
       } = salesData;
 
-      // Validate required fields
-      if (!leadId) {
-        throw new Error('Lead ID is required');
-      }
+      // // Validate required fields
+      // if (!leadId) {
+      //   throw new Error('Lead ID is required');
+      // }
 
-      // Validate lead exists
-      const lead = await Lead.findById(leadId).session(session);
-      if (!lead) {
-        throw new Error('Lead not found');
-      }
+      // // Validate lead exists
+      // const lead = await Lead.findById(leadId).session(session);
+      // if (!lead) {
+      //   throw new Error('Lead not found');
+      // }
 
       // Validate customer exists (if provided)
       if (customerId) {
