@@ -5,6 +5,7 @@ const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const multer = require('multer');
 const mongoose =require('mongoose')
+const {CompanyPurchase} = require('../models/Plan');
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -27,7 +28,16 @@ exports.getAllProfiles = async (req, res) => {
 // Create a new user profile
 exports.createProfile = async (req, res) => {
   console.log(req.body);
-  
+  const plan = await CompanyPurchase.findOne({companyId: req.user.company._id});
+  if(!plan){
+    return res.status(400).json({message: "Plan not found"});
+  }
+  let totalActiveUsers = await UserProfile.countDocuments({company: req.user.company._id,isActive: true});
+
+  if(totalActiveUsers >= plan.modules[0].plans[0].employeeLimit){
+    return res.status(400).json({message: "Maximum number of users reached"});
+  }
+
   const userProfile = new UserProfile({
     ...req.body,
     company: req.user.company._id

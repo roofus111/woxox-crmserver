@@ -1,5 +1,20 @@
 const mongoose = require('mongoose');
 
+const AddonSchema = new mongoose.Schema({
+  addonId: { type: String, required: true },
+  addonName: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, required: true },
+  unit: { type: String, required: true, default: 'user' },
+  free: { type: Boolean, default: false },
+  OnTimeInstall: { type: Boolean, required: false },
+  OnTimeInstallPrice: { type: Number, required: false },
+  isActive: { type: Boolean, default: true },
+  activatedDate: { type: Date, default: Date.now },
+  deactivatedDate: { type: Date },
+  total: { type: Number, required: true }
+});
+
 const PurchasePlanSchema = new mongoose.Schema({
   planName: { type: String, required: true },
   price: { type: Number, required: true },
@@ -7,14 +22,9 @@ const PurchasePlanSchema = new mongoose.Schema({
   features: [{ type: String }],
   isActive: { type: Boolean, default: true },
   employeeLimit: { type: Number, required: true, default: 1 },
-  moduleAccess: {
-    hr: { type: Boolean, default: false },
-    customer: { type: Boolean, default: false },
-    lead: { type: Boolean, default: false },
-    pipeline: { type: Boolean, default: false },
-    finance: { type: Boolean, default: false },
-    documentation: { type: Boolean, default: false }
-  }
+  leadLimit: { type: Number, required: true, default: 2000 },
+  campaignLimit: { type: Number, required: true, default: 5 },
+  moduleAccess: [AddonSchema]
 }, { _id: false });
 
 const ModulePurchaseSchema = new mongoose.Schema({
@@ -48,7 +58,6 @@ const CompanyPurchaseSchema = new mongoose.Schema({
     default: 'active' 
   },
   planType: { type: String, enum: ['free trial', 'basic', 'premium', 'enterprise'], default: 'free trial' },
-  employeeLimit: { type: Number, default: 1 },
   autoRenew: { type: Boolean, default: false },
   paymentMethod: { type: String },
   lastPaymentDate: { type: Date },

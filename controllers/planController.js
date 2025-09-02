@@ -10,7 +10,8 @@ exports.createCompanyPurchase = async (req, res) => {
       modules,
       validTill,
       planType,
-      employeeLimit,
+      leadLimit,
+      campaignLimit,
       autoRenew,
       paymentMethod
     } = req.body;
@@ -49,7 +50,8 @@ if(companyPurchase){
       modules,
       validTill,
       planType,
-      employeeLimit,
+      leadLimit,
+      campaignLimit,
       autoRenew,
       paymentMethod
     });

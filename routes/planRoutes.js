@@ -124,6 +124,8 @@ const express = require('express');
 const router = express.Router();
 const planController = require('../controllers/planController');
 const authenticateUser = require('../middleware/authenticateUser');
+const { CompanyPurchase } = require('../models/Plan');
+const mongoose = require('mongoose');
 
 router.use(authenticateUser);
 
@@ -498,5 +500,33 @@ router.patch('/:id/status', planController.updatePurchaseStatus);
  *       - bearerAuth: []
  */
 router.get('/type/:planType', planController.getPurchasePlansByType);
+
+router.post('/push-addons/:planId', async (req, res) => {
+    try {
+      const companyId = req.user.companyId; // Not used in this query yet
+      const { planId } = req.params;
+      const {addons} = req.body; // Assuming you pass moduleId & planIndex
+      console.log(addons);
+const planIndex = 0;
+      const result = await CompanyPurchase.updateOne(
+        { _id: planId},
+        {
+          $push: {
+            [`modules.${planIndex}.plans.${planIndex}.moduleAccess`]: { $each: addons }
+          }
+        }
+      );
+  
+      if (result.modifiedCount === 0) {
+        return res.status(404).json({ message: 'No matching document found' });
+      }
+  
+      res.status(200).json({ message: 'Addons pushed successfully', result });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server error', error });
+    }
+  });
+  
 
 module.exports = router;
