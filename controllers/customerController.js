@@ -23,8 +23,7 @@ exports.createCustomer = async (req, res) => {
       receivedDate,
       payment,
       notes,
-      tags,
-      assignedTo
+      tags
     } = req.body;
 
     // Enhanced validation for required fields
@@ -154,24 +153,7 @@ exports.createCustomer = async (req, res) => {
       };
     }
 
-    // Prepare payment object with enhanced structure
-    let paymentObj = {
-      amount: 0,
-      currency: 'USD',
-      status: 'Pending'
-    };
-
-    if (payment) {
-      paymentObj = {
-        amount: payment.amount || 0,
-        currency: payment.currency || 'USD',
-        status: payment.status || 'Pending',
-        dueDate: payment.dueDate ? new Date(payment.dueDate) : undefined,
-        paidDate: payment.paidDate ? new Date(payment.paidDate) : undefined
-      };
-    }
-
-    // Create a new customer instance with enhanced data
+    // Update the customer creation to remove the payment object
     const newCustomer = new Customer({
       company: req.user.company._id,
       firstName: firstName.trim(),
@@ -189,20 +171,10 @@ exports.createCustomer = async (req, res) => {
       status: status || 'Active',
       handledby: handledby || req.user._id,
       receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
-      payment: paymentObj,
       notes: notes?.trim(),
       tags: tags || [],
-      assignedTo: assignedTo || req.user._id,
       createdBy: req.user._id,
-      updatedBy: req.user._id,
-      // Initialize financial summary
-      financialSummary: {
-        totalPurchases: 0,
-        totalAmount: 0,
-        totalPaid: 0,
-        totalBalance: 0,
-        currency: 'USD'
-      }
+      updatedBy: req.user._id
     });
 
     // Save the customer to the database
@@ -222,7 +194,6 @@ exports.createCustomer = async (req, res) => {
     const populatedCustomer = await Customer.findById(savedCustomer._id)
       .populate('createdBy', 'firstName lastName email')
       .populate('updatedBy', 'firstName lastName email')
-      .populate('assignedTo', 'firstName lastName email')
       .populate('handledby', 'firstName lastName email')
       .populate('tags', 'name color')
       .populate('company', 'name');
@@ -241,7 +212,7 @@ exports.createCustomer = async (req, res) => {
     // Check for duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      return res.status(409).json({ 
+      return res.status(409).json({  
         error: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`,
         duplicateField: field
       });
@@ -285,7 +256,7 @@ exports.getAllCustomers = async (req, res) => {
     res.status(500).json({
       error: 'An error occurred while retrieving customers',
       details: error.message
-    });
+    });s
   }
 };
 
@@ -295,10 +266,10 @@ exports.updateCustomer = async (req, res) => {
     const { customerId } = req.params;
     const updates = req.body;
 
-    // Validate ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ error: 'Invalid customer ID' });
-    }
+    // // Validate ID format
+    // if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    //   return res.status(400).json({ error: 'Invalid customer ID' });
+    // }
 
     // Validate that updates are not empty
     if (!Object.keys(updates).length) {
@@ -394,6 +365,74 @@ exports.getCustomerDetails = async (req, res) => {
     console.error('Error fetching customer details:', error);
     res.status(500).json({
       error: 'An error occurred while retrieving the customer details',
+    });
+  }
+};
+
+exports.getDocumentsByCustomer = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Validate Customer ID
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: 'Invalid customer ID format' });
+    }
+
+    // Check if customer exists
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Find all leads associated with this customer
+    const leads = await Lead.find({ Customer: customerId });
+    
+    // Extract lead IDs
+    const leadIds = leads.map(lead => lead._id);
+
+    // Find all documents associated with these leads
+    const Document = require('../models/document');
+    let documents = [];
+    
+    if (leads && leads.length > 0) {
+      documents = await Document.find({ leadId: { $in: leadIds } })
+        .populate('leadId', 'name email phone status')
+        .populate('createdBy', 'firstName lastName')
+        .populate('tags', 'name color')
+        .sort({ uploadedAt: -1 }); // Sort by upload date, newest first
+    }
+
+    // Also check if customer has documents directly associated
+    if (customer.document && customer.document.length > 0) {
+      const directDocuments = await Document.find({ _id: { $in: customer.document } })
+        .populate('leadId', 'name email phone status')
+        .populate('createdBy', 'firstName lastName')
+        .populate('tags', 'name color')
+        .sort({ uploadedAt: -1 });
+      
+      // Merge documents and remove duplicates
+      const allDocuments = [...documents, ...directDocuments];
+      const uniqueDocuments = allDocuments.filter((doc, index, self) => 
+        index === self.findIndex(d => d._id.toString() === doc._id.toString())
+      );
+      
+      documents = uniqueDocuments;
+    }
+
+    res.status(200).json({
+      message: 'Documents retrieved successfully',
+      customerId,
+      customerName: `${customer.firstName} ${customer.lastName}`,
+      totalLeads: leads.length,
+      totalDocuments: documents.length,
+      document: documents
+    });
+
+  } catch (error) {
+    console.error('Error fetching documents by customer:', error);
+    res.status(500).json({
+      error: 'An error occurred while retrieving the documents',
+      details: error.message
     });
   }
 };

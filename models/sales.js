@@ -34,7 +34,7 @@ const salesSchema = new mongoose.Schema({
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lead',
-    required: true
+    // required: true
   },
   Customer: { 
     type: mongoose.Schema.Types.ObjectId,
@@ -45,10 +45,6 @@ const salesSchema = new mongoose.Schema({
     ref: 'Company',
     required: true
   },
-  productIds: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'ProductService' // ✅ Fixed: Changed from 'Product' to 'ProductService'
-  }],
   invoices: [{ // ✅ Fixed: Changed from 'invoice' to 'invoices' for clarity
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Invoice'
@@ -68,7 +64,7 @@ const salesSchema = new mongoose.Schema({
     maxlength: 1000 // ✅ Added: Maximum length for notes
   },
   // ✅ Added: Additional useful fields
-  totalAmount: {
+  totalAmountPaid: {  
     type: Number,
     min: 0,
     default: 0
@@ -86,7 +82,37 @@ const salesSchema = new mongoose.Schema({
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  // ✅ Added: Items array from invoice model
+  items: [
+    {
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "ProductService",
+      },
+      itemName: {
+        type: String,
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+      unitPrice: {
+        type: Number,  
+        required: true,
+        min: 0,
+      },
+      description: {
+        type: String,
+      },
+      total: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+    },
+  ]
 }, {
   timestamps: true
 });
