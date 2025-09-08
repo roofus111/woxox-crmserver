@@ -437,3 +437,51 @@ exports.getDocumentsByCustomer = async (req, res) => {
   }
 };
 
+exports.getCustomerActivity = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Validate Customer ID
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: 'Invalid customer ID format' });
+    }
+
+    // Check if customer exists and belongs to the user's company
+    const customer = await Customer.findOne({ 
+      _id: customerId, 
+      company: req.user.company._id 
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Get activity log with populated user details
+    const customerWithActivity = await Customer.findById(customerId)
+      .populate('activityLog.performedBy', 'firstName lastName email')
+      .select('firstName lastName email phone activityLog');
+
+    // Sort activities by performedAt date (newest first)
+    const sortedActivities = customerWithActivity.activityLog.sort((a, b) => 
+      new Date(b.performedAt) - new Date(a.performedAt)
+    );
+
+    res.status(200).json({
+      message: 'Customer activity retrieved successfully',
+      customerId,
+      customerName: `${customerWithActivity.firstName} ${customerWithActivity.lastName}`,
+      customerEmail: customerWithActivity.email,
+      customerPhone: customerWithActivity.phone,
+      totalActivities: sortedActivities.length,
+      activities: sortedActivities
+    });
+
+  } catch (error) {
+    console.error('Error fetching customer activity:', error);
+    res.status(500).json({
+      error: 'An error occurred while retrieving customer activity',
+      details: error.message
+    });
+  }
+};
+
