@@ -266,14 +266,15 @@ exports.updateCustomer = async (req, res) => {
     const { customerId } = req.params;
     const updates = req.body;
 
-    // // Validate ID format
-    // if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-    //   return res.status(400).json({ error: 'Invalid customer ID' });
-    // }
-
     // Validate that updates are not empty
     if (!Object.keys(updates).length) {
       return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    // Get the original customer data before update for comparison
+    const originalCustomer = await Customer.findById(customerId);
+    if (!originalCustomer) {
+      return res.status(404).json({ error: 'Customer not found' });
     }
 
     // Find and update the customer
@@ -285,6 +286,30 @@ exports.updateCustomer = async (req, res) => {
     if (!updatedCustomer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
+
+    // Create activity details by comparing original and updated data
+    const changedFields = [];
+    Object.keys(updates).forEach(key => {
+      if (originalCustomer[key] !== updatedCustomer[key]) {
+        changedFields.push(`${key}: ${originalCustomer[key]} → ${updatedCustomer[key]}`);
+      }
+    });
+
+    // Add activity log entry for customer update
+    updatedCustomer.activityLog.push({
+      performedBy: req.user._id,
+      action: 'updated',
+      details: changedFields.length > 0 
+        ? `Customer updated: ${changedFields.join(', ')}`
+        : 'Customer updated',
+      performedAt: new Date()
+    });
+
+    // Update the updatedBy field
+    updatedCustomer.updatedBy = req.user._id;
+    updatedCustomer.updatedAt = new Date();
+
+    await updatedCustomer.save();
 
     res.status(200).json({
       message: 'Customer updated successfully',
