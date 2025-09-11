@@ -88,7 +88,7 @@ const customerSchema = new mongoose.Schema({
   purchase: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ProductService' }],
   payment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],
   lead: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Lead' }],
-  document: [{ type: mongoose.Schema.Types.ObjectId, ref: 'document' }],
+  document: [{ type: mongoose.Schema.Types.ObjectId, ref: 'File' }],
   
   // Activity tracking
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

@@ -409,48 +409,61 @@ exports.getDocumentsByCustomer = async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    // Find all leads associated with this customer
+    const Document = require('../models/Filehandler');
+    let allDocuments = [];
+
+    // 1. Find documents directly associated with customer via customerId field
+    const directCustomerDocs = await Document.find({ customerId: customerId })
+      .populate('leadId', 'name email phone status')
+      .populate('createdBy', 'firstName lastName')
+      .populate('tags', 'name color')
+      .sort({ uploadedAt: -1 });
+
+    // 2. Find all leads associated with this customer
     const leads = await Lead.find({ Customer: customerId });
-    
-    // Extract lead IDs
     const leadIds = leads.map(lead => lead._id);
 
-    // Find all documents associated with these leads
-    const Document = require('../models/document');
-    let documents = [];
-    
-    if (leads && leads.length > 0) {
-      documents = await Document.find({ leadId: { $in: leadIds } })
-        .populate('leadId', 'name email phone status')
-        .populate('createdBy', 'firstName lastName')
-        .populate('tags', 'name color')
-        .sort({ uploadedAt: -1 }); // Sort by upload date, newest first
-    }
-
-    // Also check if customer has documents directly associated
-    if (customer.document && customer.document.length > 0) {
-      const directDocuments = await Document.find({ _id: { $in: customer.document } })
+    // 3. Find documents associated with these leads
+    let leadDocuments = [];
+    if (leadIds.length > 0) {
+      leadDocuments = await Document.find({ leadId: { $in: leadIds } })
         .populate('leadId', 'name email phone status')
         .populate('createdBy', 'firstName lastName')
         .populate('tags', 'name color')
         .sort({ uploadedAt: -1 });
-      
-      // Merge documents and remove duplicates
-      const allDocuments = [...documents, ...directDocuments];
-      const uniqueDocuments = allDocuments.filter((doc, index, self) => 
-        index === self.findIndex(d => d._id.toString() === doc._id.toString())
-      );
-      
-      documents = uniqueDocuments;
     }
+
+    // 4. Find documents referenced in customer.document array (if any)
+    let referencedDocuments = [];
+    if (customer.document && customer.document.length > 0) {
+      referencedDocuments = await Document.find({ _id: { $in: customer.document } })
+        .populate('leadId', 'name email phone status')
+        .populate('createdBy', 'firstName lastName')
+        .populate('tags', 'name color')
+        .sort({ uploadedAt: -1 });
+    }
+
+    // 5. Combine all documents and remove duplicates
+    allDocuments = [...directCustomerDocs, ...leadDocuments, ...referencedDocuments];
+    const uniqueDocuments = allDocuments.filter((doc, index, self) => 
+      index === self.findIndex(d => d._id.toString() === doc._id.toString())
+    );
+
+    // Sort by upload date, newest first
+    uniqueDocuments.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
     res.status(200).json({
       message: 'Documents retrieved successfully',
       customerId,
-      customerName: `${customer.firstName} ${customer.lastName}`,
+      customerName: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
       totalLeads: leads.length,
-      totalDocuments: documents.length,
-      document: documents
+      totalDocuments: uniqueDocuments.length,
+      document: uniqueDocuments,
+      debug: {
+        directCustomerDocs: directCustomerDocs.length,
+        leadDocuments: leadDocuments.length,
+        referencedDocuments: referencedDocuments.length
+      }
     });
 
   } catch (error) {
