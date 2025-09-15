@@ -1,50 +1,57 @@
 const mongoose = require('mongoose');
 const { CompanyPurchase } = require('../models/Plan');
 const Company = require('../models/Company');
+const Billing = require('../models/Billing');
 
 // Create a new company purchase plan
+
 exports.createCompanyPurchase = async (req, res) => {
   try {
     const {
-      companyId,
       modules,
       validTill,
       planType,
       leadLimit,
       campaignLimit,
       autoRenew,
-      paymentMethod
+      paymentMethod,
+      billingInfo,
+      paymentInfo
     } = req.body;
 
-    // Validate required fields
-    if (!companyId || !modules || !modules.length) {
-      return res.status(400).json({ 
-        error: 'Company ID and modules are required' 
+    const companyId = req.user.company._id;
+    // 1. Basic validation
+    if (!companyId || !Array.isArray(modules) || modules.length === 0) {
+      return res.status(400).json({
+        error: "Company ID and at least one module are required",
       });
     }
 
-    // Validate company exists
-    const company = await Company.findById(companyId); 
-    if (!company) { 
-      return res.status(404).json({ 
-        error: 'Company not found' 
-      });
-    }
-
-    // Validate ObjectId format
+    // 2. Validate ObjectId format early
     if (!mongoose.Types.ObjectId.isValid(companyId)) {
-      return res.status(400).json({ 
-        error: 'Invalid company ID format' 
+      return res.status(400).json({
+        error: "Invalid company ID format",
       });
     }
-const companyPurchase = await CompanyPurchase.findOne({companyId});
-if(companyPurchase){
-  return res.status(400).json({
-    error: 'Company already has a purchase plan, Please upgrade/cancel the existing plan to create a new one'
-  });
-}
 
-    // Create new company purchase
+    // 3. Check company existence
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({
+        error: "Company not found",
+      });
+    }
+
+    // 4. Check if purchase already exists
+    const existingPurchase = await CompanyPurchase.findOne({ companyId });
+    if (existingPurchase) {
+      return res.status(400).json({
+        error:
+          "Company already has a purchase plan. Please upgrade/cancel the existing plan to create a new one.",
+      });
+    }
+
+    // 5. Create purchase
     const newCompanyPurchase = new CompanyPurchase({
       companyId,
       modules,
@@ -53,20 +60,52 @@ if(companyPurchase){
       leadLimit,
       campaignLimit,
       autoRenew,
-      paymentMethod
+      paymentMethod,
     });
 
     const savedPurchase = await newCompanyPurchase.save();
 
-    res.status(201).json({
-      message: 'Company purchase plan created successfully',
-      purchase: savedPurchase
+    // 6. Create billing info if provided
+    if (billingInfo && paymentInfo) {
+      const billing = new Billing({
+        companyId: companyId,
+        firstName: billingInfo.firstName,
+        lastName: billingInfo.lastName,
+        email: billingInfo.email,
+        phone: billingInfo.phone,
+        address: {
+          country: billingInfo.country,
+          zipPostalCode: billingInfo.zipCode,
+          streetAddress: billingInfo.address,
+          city: billingInfo.city,
+          stateProvince: billingInfo.state,
+        },
+        Plan: savedPurchase._id,
+        Payment: {
+          subtotal: paymentInfo.subtotal,
+          tax: paymentInfo.tax,
+          total: paymentInfo.total,
+          finalTotal: paymentInfo.finalTotal,
+          originalTotal: paymentInfo.originalTotal,
+          planCost: paymentInfo.planCost,
+          productsCost: paymentInfo.productsCost,
+          additionalUsersCost: paymentInfo.additionalUsersCost,
+        },
+      });
+
+      await billing.save();
+    }
+
+    // 7. Respond success
+    return res.status(201).json({
+      message: "Company purchase plan created successfully",
+      purchase: savedPurchase,
     });
   } catch (error) {
-    console.error('Error creating company purchase plan:', error);
-    res.status(500).json({
-      error: 'An error occurred while creating the purchase plan',
-      details: error.message
+    console.error("Error creating company purchase plan:", error);
+    return res.status(500).json({
+      error: "An error occurred while creating the purchase plan",
+      details: error.message,
     });
   }
 };
