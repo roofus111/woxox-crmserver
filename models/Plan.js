@@ -62,7 +62,7 @@ const CompanyPurchaseSchema = new mongoose.Schema({
   paymentMethod: { type: String },
   lastPaymentDate: { type: Date },
   nextPaymentDate: { type: Date },
-  billing: BillingSchema
+  billingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Billing' }
 });
 
 module.exports = {
