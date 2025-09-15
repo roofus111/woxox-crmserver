@@ -32,6 +32,10 @@ const FileSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Lead", // Assuming you have a Lead model already
   },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Customer", // Assuming you have a Customer model already
+  },
   tags: [{ type: mongoose.Schema.Types.ObjectId, ref: "TagManager" }],
   docName: {
     type: String,

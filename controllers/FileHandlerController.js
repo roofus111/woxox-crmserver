@@ -16,9 +16,10 @@ exports.createFile = async (req, res) => {
   try {
     const {
       leadId,
+      customerId, // Add customerId to destructuring
       docName,
       fileName,
-      fileType,
+      fileType,  
       fileUrl,
       parent,
       access,
@@ -66,6 +67,7 @@ exports.createFile = async (req, res) => {
     const newFile = new Files({
       User: req.user._id,
       leadId,
+      customerId, // Add customerId to the new file document
       docName: cleanFileName,
       fileName: fileName || uploadedFiles[0].fileName,
       fileType: fileType || uploadedFiles[0].fileType,

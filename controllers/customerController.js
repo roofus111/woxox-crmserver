@@ -266,14 +266,15 @@ exports.updateCustomer = async (req, res) => {
     const { customerId } = req.params;
     const updates = req.body;
 
-    // // Validate ID format
-    // if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-    //   return res.status(400).json({ error: 'Invalid customer ID' });
-    // }
-
     // Validate that updates are not empty
     if (!Object.keys(updates).length) {
       return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    // Get the original customer data before update for comparison
+    const originalCustomer = await Customer.findById(customerId);
+    if (!originalCustomer) {
+      return res.status(404).json({ error: 'Customer not found' });
     }
 
     // Find and update the customer
@@ -285,6 +286,30 @@ exports.updateCustomer = async (req, res) => {
     if (!updatedCustomer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
+
+    // Create activity details by comparing original and updated data
+    const changedFields = [];
+    Object.keys(updates).forEach(key => {
+      if (originalCustomer[key] !== updatedCustomer[key]) {
+        changedFields.push(`${key}: ${originalCustomer[key]} → ${updatedCustomer[key]}`);
+      }
+    });
+
+    // Add activity log entry for customer update
+    updatedCustomer.activityLog.push({
+      performedBy: req.user._id,
+      action: 'updated',
+      details: changedFields.length > 0 
+        ? `Customer updated: ${changedFields.join(', ')}`
+        : 'Customer updated',
+      performedAt: new Date()
+    });
+
+    // Update the updatedBy field
+    updatedCustomer.updatedBy = req.user._id;
+    updatedCustomer.updatedAt = new Date();
+
+    await updatedCustomer.save();
 
     res.status(200).json({
       message: 'Customer updated successfully',
@@ -384,54 +409,115 @@ exports.getDocumentsByCustomer = async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    // Find all leads associated with this customer
+    const Document = require('../models/Filehandler');
+    let allDocuments = [];
+
+    // 1. Find documents directly associated with customer via customerId field
+    const directCustomerDocs = await Document.find({ customerId: customerId })
+      .populate('leadId', 'name email phone status')
+      .populate('createdBy', 'firstName lastName')
+      .populate('tags', 'name color')
+      .sort({ uploadedAt: -1 });
+
+    // 2. Find all leads associated with this customer
     const leads = await Lead.find({ Customer: customerId });
-    
-    // Extract lead IDs
     const leadIds = leads.map(lead => lead._id);
 
-    // Find all documents associated with these leads
-    const Document = require('../models/document');
-    let documents = [];
-    
-    if (leads && leads.length > 0) {
-      documents = await Document.find({ leadId: { $in: leadIds } })
-        .populate('leadId', 'name email phone status')
-        .populate('createdBy', 'firstName lastName')
-        .populate('tags', 'name color')
-        .sort({ uploadedAt: -1 }); // Sort by upload date, newest first
-    }
-
-    // Also check if customer has documents directly associated
-    if (customer.document && customer.document.length > 0) {
-      const directDocuments = await Document.find({ _id: { $in: customer.document } })
+    // 3. Find documents associated with these leads
+    let leadDocuments = [];
+    if (leadIds.length > 0) {
+      leadDocuments = await Document.find({ leadId: { $in: leadIds } })
         .populate('leadId', 'name email phone status')
         .populate('createdBy', 'firstName lastName')
         .populate('tags', 'name color')
         .sort({ uploadedAt: -1 });
-      
-      // Merge documents and remove duplicates
-      const allDocuments = [...documents, ...directDocuments];
-      const uniqueDocuments = allDocuments.filter((doc, index, self) => 
-        index === self.findIndex(d => d._id.toString() === doc._id.toString())
-      );
-      
-      documents = uniqueDocuments;
     }
+
+    // 4. Find documents referenced in customer.document array (if any)
+    let referencedDocuments = [];
+    if (customer.document && customer.document.length > 0) {
+      referencedDocuments = await Document.find({ _id: { $in: customer.document } })
+        .populate('leadId', 'name email phone status')
+        .populate('createdBy', 'firstName lastName')
+        .populate('tags', 'name color')
+        .sort({ uploadedAt: -1 });
+    }
+
+    // 5. Combine all documents and remove duplicates
+    allDocuments = [...directCustomerDocs, ...leadDocuments, ...referencedDocuments];
+    const uniqueDocuments = allDocuments.filter((doc, index, self) => 
+      index === self.findIndex(d => d._id.toString() === doc._id.toString())
+    );
+
+    // Sort by upload date, newest first
+    uniqueDocuments.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
     res.status(200).json({
       message: 'Documents retrieved successfully',
       customerId,
-      customerName: `${customer.firstName} ${customer.lastName}`,
+      customerName: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
       totalLeads: leads.length,
-      totalDocuments: documents.length,
-      document: documents
+      totalDocuments: uniqueDocuments.length,
+      document: uniqueDocuments,
+      debug: {
+        directCustomerDocs: directCustomerDocs.length,
+        leadDocuments: leadDocuments.length,
+        referencedDocuments: referencedDocuments.length
+      }
     });
 
   } catch (error) {
     console.error('Error fetching documents by customer:', error);
     res.status(500).json({
       error: 'An error occurred while retrieving the documents',
+      details: error.message
+    });
+  }
+};
+
+exports.getCustomerActivity = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    // Validate Customer ID
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: 'Invalid customer ID format' });
+    }
+
+    // Check if customer exists and belongs to the user's company
+    const customer = await Customer.findOne({ 
+      _id: customerId, 
+      company: req.user.company._id 
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Get activity log with populated user details
+    const customerWithActivity = await Customer.findById(customerId)
+      .populate('activityLog.performedBy', 'firstName lastName email')
+      .select('firstName lastName email phone activityLog');
+
+    // Sort activities by performedAt date (newest first)
+    const sortedActivities = customerWithActivity.activityLog.sort((a, b) => 
+      new Date(b.performedAt) - new Date(a.performedAt)
+    );
+
+    res.status(200).json({
+      message: 'Customer activity retrieved successfully',
+      customerId,
+      customerName: `${customerWithActivity.firstName} ${customerWithActivity.lastName}`,
+      customerEmail: customerWithActivity.email,
+      customerPhone: customerWithActivity.phone,
+      totalActivities: sortedActivities.length,
+      activities: sortedActivities
+    });
+
+  } catch (error) {
+    console.error('Error fetching customer activity:', error);
+    res.status(500).json({
+      error: 'An error occurred while retrieving customer activity',
       details: error.message
     });
   }
