@@ -1,7 +1,7 @@
 const Company = require("../models/Company");
 const Invoice = require("../models/invoice");
 const Sales = require("../models/sales");
-const Payment = require("../models/Payment");
+const Payment = require("../models/payment");
 const mongoose = require('mongoose');
 
 const getTotalInvoiceCount = async (companyId) => {
