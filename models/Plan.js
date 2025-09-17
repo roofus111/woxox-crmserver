@@ -24,7 +24,8 @@ const PurchasePlanSchema = new mongoose.Schema({
   employeeLimit: { type: Number, required: true, default: 1 },
   leadLimit: { type: Number, required: true, default: 2000 },
   campaignLimit: { type: Number, required: true, default: 5 },
-  moduleAccess: [AddonSchema]
+  moduleAccess: [AddonSchema],
+  FreeAddons:[{ type: String }]
 }, { _id: false });
 
 const ModulePurchaseSchema = new mongoose.Schema({
