@@ -13,7 +13,7 @@ const createTransporter = () => {
   const config = {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: false, // true for 465, false for other ports
+    secure: true, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
@@ -162,7 +162,7 @@ const sendOTPEmail = async (email, otp, type = 'email_verification') => {
     }
 
     const mailOptions = {
-      from: `"CRM System" <${process.env.SMTP_USER}>`,
+      from: `"Woxox CRM" <${process.env.SMTP_USER}>`,
       to: email,
       subject: subject,
       html: htmlContent
