@@ -12,6 +12,7 @@ const AddonSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   activatedDate: { type: Date, default: Date.now },
   deactivatedDate: { type: Date },
+  expireOn:{type:Date},
   total: { type: Number, required: true }
 });
 

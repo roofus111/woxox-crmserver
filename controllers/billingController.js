@@ -91,9 +91,10 @@ exports.createBilling = async (req, res) => {
 exports.getAllBillings = async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
+    const companyId = req.user.company._id
     
     // Build filter object
-    const filter = {};
+    const filter = {companyId:companyId};
     if (status) {
       filter.status = status;
     }

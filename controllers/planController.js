@@ -396,3 +396,189 @@ exports.getPurchasePlansByType = async (req, res) => {
     });
   }
 };
+
+// Uninstall addon from a plan (deactivate instead of remove)
+exports.uninstallAddons = async (req, res) => {
+  try {
+    const companyId = req.user.company._id;
+    const { planId } = req.params;
+    const { addonId } = req.body; // Expecting single addon ID to uninstall
+    const planIndex = 0;
+
+    // Validate input
+    if (!addonId || typeof addonId !== 'string') {
+      return res.status(400).json({ 
+        error: 'Single addon ID is required' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(planId)) {
+      return res.status(400).json({ 
+        error: 'Invalid plan ID format' 
+      });
+    }
+
+    // Find the plan first to get the addon details
+    const plan = await CompanyPurchase.findOne({ 
+      _id: planId, 
+      companyId: companyId 
+    });
+
+    if (!plan) {
+      return res.status(404).json({ 
+        error: 'No matching plan found for this company' 
+      });
+    }
+
+    // Find the specific addon to uninstall
+    const addonToUninstall = plan.modules?.[planIndex]?.plans?.[planIndex]?.moduleAccess?.find(
+      addon => addon._id == addonId
+    );
+
+    if (!addonToUninstall) {
+      return res.status(404).json({ 
+        error: 'Addon not found in this plan' 
+      });
+    }
+
+    // Calculate expire date (activatedDate + 30 days)
+    const activatedDate = new Date(addonToUninstall.activatedDate);
+    const expireDate = new Date(activatedDate);
+    expireDate.setDate(expireDate.getDate() + 30);
+
+    // Update the addon to inactive status
+    const updatedPlan = await CompanyPurchase.findOneAndUpdate(
+      { 
+        _id: planId, 
+        companyId: companyId,
+        [`modules.${planIndex}.plans.${planIndex}.moduleAccess._id`]: addonId
+      },
+      {
+        $set: {
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.isActive`]: false,
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.deactivatedDate`]: new Date(),
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.expireOn`]: expireDate,
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedPlan) {
+      return res.status(404).json({ 
+        error: 'Failed to update addon status' 
+      });
+    }
+
+    // Get the updated addon for response
+    const updatedAddon = updatedPlan.modules?.[planIndex]?.plans?.[planIndex]?.moduleAccess?.find(
+      addon => addon._id === addonId
+    );
+
+    res.status(200).json({
+      message: 'Addon uninstalled successfully (deactivated)',
+      data: {
+        uninstalledAddon: updatedAddon,
+        deactivatedDate: updatedAddon?.deactivatedDate,
+        expireOn: updatedAddon?.expireOn,
+        autoRenew: updatedPlan.autoRenew
+      }
+    });
+  } catch (error) {
+    console.error('Error uninstalling addon:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while uninstalling addon',
+      details: error.message 
+    });
+  }
+};
+
+// Install addon to a plan (reactivate)
+exports.installAddons = async (req, res) => {
+  try {
+    const companyId = req.user.company._id;
+    const { planId } = req.params;
+    const { addonId } = req.body; // Expecting single addon ID to install/reactivate
+    const planIndex = 0;
+
+    // Validate input
+    if (!addonId || typeof addonId !== 'string') {
+      return res.status(400).json({ 
+        error: 'Single addon ID is required' 
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(planId)) {
+      return res.status(400).json({ 
+        error: 'Invalid plan ID format' 
+      });
+    }
+
+    // Find the plan first to get the addon details
+    const plan = await CompanyPurchase.findOne({ 
+      _id: planId, 
+      companyId: companyId 
+    });
+
+    if (!plan) {
+      return res.status(404).json({ 
+        error: 'No matching plan found for this company' 
+      });
+    }
+
+    // Find the specific addon to install/reactivate
+    const addonToInstall = plan.modules?.[planIndex]?.plans?.[planIndex]?.moduleAccess?.find(
+      addon => addon._id == addonId
+    );
+
+    if (!addonToInstall) {
+      return res.status(404).json({ 
+        error: 'Addon not found in this plan' 
+      });
+    }
+
+    // Update the addon to active status and remove deactivation info
+    const updatedPlan = await CompanyPurchase.findOneAndUpdate(
+      { 
+        _id: planId, 
+        companyId: companyId,
+        [`modules.${planIndex}.plans.${planIndex}.moduleAccess._id`]: addonId
+      },
+      {
+        $set: {
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.isActive`]: true
+        },
+        $unset: {
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.deactivatedDate`]: "",
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess.$.expireOn`]: ""
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedPlan) {
+      return res.status(404).json({ 
+        error: 'Failed to update addon status' 
+      });
+    }
+
+    // Get the updated addon for response
+    const updatedAddon = updatedPlan.modules?.[planIndex]?.plans?.[planIndex]?.moduleAccess?.find(
+      addon => addon._id === addonId
+    );
+
+    res.status(200).json({
+      message: 'Addon installed successfully (reactivated)',
+      data: {
+        installedAddon: updatedAddon,
+        activatedDate: updatedAddon?.activatedDate,
+        isActive: updatedAddon?.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Error installing addon:', error);
+    res.status(500).json({ 
+      error: 'An error occurred while installing addon',
+      details: error.message 
+    });
+  }
+};

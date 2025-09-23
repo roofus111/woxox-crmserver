@@ -2,6 +2,61 @@
  * @swagger
  * components:
  *   schemas:
+ *     Addon:
+ *       type: object
+ *       properties:
+ *         addonId:
+ *           type: string
+ *           description: Unique identifier for the addon
+ *         addonName:
+ *           type: string
+ *           description: Name of the addon
+ *         price:
+ *           type: number
+ *           description: Price of the addon
+ *         quantity:
+ *           type: number
+ *           description: Quantity of the addon
+ *         unit:
+ *           type: string
+ *           default: user
+ *           description: Unit of measurement for the addon
+ *         free:
+ *           type: boolean
+ *           default: false
+ *           description: Whether the addon is free
+ *         OnTimeInstall:
+ *           type: boolean
+ *           description: Whether it's a one-time installation
+ *         OnTimeInstallPrice:
+ *           type: number
+ *           description: Price for one-time installation
+ *         isActive:
+ *           type: boolean
+ *           default: true
+ *           description: Whether the addon is currently active
+ *         activatedDate:
+ *           type: string
+ *           format: date-time
+ *           description: Date when the addon was activated
+ *         deactivatedDate:
+ *           type: string
+ *           format: date-time
+ *           description: Date when the addon was deactivated
+ *         expireOn:
+ *           type: string
+ *           format: date-time
+ *           description: Date when the addon expires
+ *         total:
+ *           type: number
+ *           description: Total cost of the addon
+ *       required:
+ *         - addonId
+ *         - addonName
+ *         - price
+ *         - quantity
+ *         - total
+ *     
  *     PurchasePlan:
  *       type: object
  *       properties:
@@ -502,31 +557,222 @@ router.patch('/:id/status', planController.updatePurchaseStatus);
 router.get('/type/:planType', planController.getPurchasePlansByType);
 
 router.post('/push-addons/:planId', async (req, res) => {
-    try {
-      const companyId = req.user.companyId; // Not used in this query yet
-      const { planId } = req.params;
-      const {addons} = req.body; // Assuming you pass moduleId & planIndex
-      console.log(addons);
-const planIndex = 0;
-      const result = await CompanyPurchase.updateOne(
-        { _id: planId},
-        {
-          $push: {
-            [`modules.${planIndex}.plans.${planIndex}.moduleAccess`]: { $each: addons }
+  try {
+    const companyId = req.user.company._id;
+    const { planId } = req.params;
+    const { addons } = req.body; // Expecting array of addon IDs
+    const planIndex = 0;
+
+    const updatedPlan = await CompanyPurchase.findOneAndUpdate(
+      { _id: planId, companyId: companyId },
+      {
+        $addToSet: {
+          [`modules.${planIndex}.plans.${planIndex}.moduleAccess`]: {
+            $each: addons
           }
         }
-      );
-  
-      if (result.modifiedCount === 0) {
-        return res.status(404).json({ message: 'No matching document found' });
-      }
-  
-      res.status(200).json({ message: 'Addons pushed successfully', result });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: 'Server error', error });
+      },
+      { new: true }
+    );
+
+    if (!updatedPlan) {
+      return res.status(404).json({ message: 'No matching document found' });
     }
-  });
-  
+
+    res.status(200).json({
+      message: 'Addons updated successfully (duplicates ignored)',
+      data: updatedPlan.modules?.[0]?.plans?.[0]?.moduleAccess
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+/**
+ * @swagger
+ * /api/plans/uninstall-addons/{planId}:
+ *   delete:
+ *     summary: Uninstall addon from a plan (deactivate)
+ *     description: Deactivates a specific addon from a company's purchase plan by setting it to inactive, setting deactivated date, and expire date to 30 days from activation date
+ *     tags:
+ *       - Plans
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Purchase plan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               addonId:
+ *                 type: string
+ *                 description: Single addon ID to uninstall/deactivate
+ *                 example: "addon123"
+ *             required:
+ *               - addonId
+ *     responses:
+ *       200:
+ *         description: Addon uninstalled successfully (deactivated)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Addon uninstalled successfully (deactivated)"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     uninstalledAddon:
+ *                       $ref: '#/components/schemas/Addon'
+ *                       description: The deactivated addon details
+ *                     deactivatedDate:
+ *                       type: string
+ *                       format: date-time
+ *                       description: Date when the addon was deactivated
+ *                     expireOn:
+ *                       type: string
+ *                       format: date-time
+ *                       description: Expiration date (30 days from activation date)
+ *                     autoRenew:
+ *                       type: boolean
+ *                       description: Auto-renewal status (set to false)
+ *       400:
+ *         description: Bad request - invalid input or plan ID format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Single addon ID is required"
+ *       404:
+ *         description: Plan or addon not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   examples:
+ *                     - "No matching plan found for this company"
+ *                     - "Addon not found in this plan"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "An error occurred while uninstalling addon"
+ *                 details:
+ *                   type: string
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put('/uninstall-addons/:planId', planController.uninstallAddons);
+
+/**
+ * @swagger
+ * /api/plans/install-addons/{planId}:
+ *   put:
+ *     summary: Install addon to a plan (reactivate)
+ *     description: Reactivates a specific addon in a company's purchase plan by setting it to active, updating activation date, and removing deactivation/expiration info
+ *     tags:
+ *       - Plans
+ *     parameters:
+ *       - in: path
+ *         name: planId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Purchase plan ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               addonId:
+ *                 type: string
+ *                 description: Single addon ID to install/reactivate
+ *                 example: "addon123"
+ *             required:
+ *               - addonId
+ *     responses:
+ *       200:
+ *         description: Addon installed successfully (reactivated)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Addon installed successfully (reactivated)"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     installedAddon:
+ *                       $ref: '#/components/schemas/Addon'
+ *                       description: The reactivated addon details
+ *                     activatedDate:
+ *                       type: string
+ *                       format: date-time
+ *                       description: New activation date
+ *                     isActive:
+ *                       type: boolean
+ *                       description: Active status (set to true)
+ *       400:
+ *         description: Bad request - invalid input or plan ID format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Single addon ID is required"
+ *       404:
+ *         description: Plan or addon not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   examples:
+ *                     - "No matching plan found for this company"
+ *                     - "Addon not found in this plan"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "An error occurred while installing addon"
+ *                 details:
+ *                   type: string
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put('/install-addons/:planId', planController.installAddons);
 
 module.exports = router;
