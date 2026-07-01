@@ -35,7 +35,7 @@ const messageSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true
+    default: ''
   },
   messageType: {
     type: String,
@@ -212,7 +212,8 @@ messageSchema.statics.getMessageHistory = function(userId1, userId2, options = {
     $or: [
       { from: userId1, to: userId2 },
       { from: userId2, to: userId1 }
-    ]
+    ],
+    deleted: { $ne: true }
   })
     .sort({ createdAt: sort })
     .skip(offset)

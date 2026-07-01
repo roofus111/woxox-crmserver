@@ -57,6 +57,8 @@ const cron = require("node-cron");
 const LeadFollowUp = require("./models/followUp");
 const messageRoutes=require('./routes/messageRoutes')
 const billingRoutes=require('./routes/billingRoutes')
+const { initWhatsAppModule } = require('./modules/whatsapp');
+const { initEmailModule } = require('./modules/email');
 const alertBeforeMinutes = 30;
 // const io = new Server(server, {
 //   cors: {
@@ -85,6 +87,13 @@ mongoose.connection.once("open", () => console.log("Connected to MongoDB"));
 
 // Middleware
 app.use(cors());
+
+// Raw body capture for WhatsApp webhook signature verification
+app.use('/api/whatsapp/webhook', express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  },
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -134,6 +143,10 @@ app.use('/api/admin',adminRoutes)
 app.use('/api/market',marketRoutes)
 app.use('/api/plan',planRoutes)
 app.use('/api/billing',billingRoutes)
+
+// WhatsApp Business Cloud API module
+initWhatsAppModule(app);
+initEmailModule(app);
 
 // Initialize S3 client
 const s3Client = new S3Client({
@@ -387,21 +400,7 @@ const typingUsers = new Map();
 // });
 
 // Helper function to upload files to S3
-async function uploadFileToS3(fileData) {
-  try {
-    const key = `chat-files/${Date.now()}-${fileData.name}`;
-    await s3Client.send(new PutObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: key,
-      Body: fileData.buffer,
-      ContentType: fileData.mimetype
-    }));
-    return `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${key}`;
-  } catch (error) {
-    console.error("Error uploading to S3:", error);
-    throw error;
-  }
-}
+const { uploadFileToS3 } = require('./utils/uploadFile');
 
 cron.schedule("0,30 * * * *", async () => {
   console.log("Running follow-up check");
@@ -514,7 +513,7 @@ const options={
     },
   ],
   },
-  apis:["./routes/*.js"],
+  apis:["./routes/*.js", "./modules/whatsapp/routes/*.js", "./modules/email/routes/*.js"],
 };
 const spacs=swaggerjsdoc(options)
 app.use(

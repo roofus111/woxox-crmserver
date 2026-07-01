@@ -1,53 +1,28 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const messageController = require('../controllers/messageController');
 const authenticateUser = require('../middleware/authenticateUser');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
 router.use(authenticateUser);
-// Chat List Routes
-router.get(
-    '/conversations/:userId',
-    messageController.getUsersWithLastMessageDetails
-);
 
-// Message History Routes
-router.get(
-    '/history/:userId/:withUserId',
-    messageController.getMessages
-);
+router.get('/contacts', messageController.getContacts);
+router.get('/online-users', messageController.getOnlineUsers);
+router.get('/last/conversations', messageController.getUsersWithLastMessageDetails);
+router.get('/conversations', messageController.getUsersWithLastMessageDetails);
 
-// Single Message Routes
-router.get(
-    '/:messageId',
-    messageController.getMessage
-);
+router.get('/history/:withUserId', messageController.getMessages);
+router.post('/send', messageController.sendMessage);
+router.post('/upload', upload.single('file'), messageController.uploadFile);
+router.put('/read-conversation/:withUserId', messageController.markConversationRead);
 
-// Message Management Routes
-router.put(
-    '/:messageId',
-    messageController.updateMessage
-);
+router.put('/read/:messageId', messageController.markAsRead);
+router.post('/reaction/:messageId', messageController.addReaction);
 
-router.delete(
-    '/:messageId',
-    messageController.deleteMessage
-);
+router.get('/:messageId', messageController.getMessage);
+router.put('/:messageId', messageController.updateMessage);
+router.delete('/:messageId', messageController.deleteMessage);
 
-// Message Status Routes
-router.put(
-    '/read/:messageId',
-    messageController.markAsRead
-);
-
-// Message Reactions Routes
-router.post(
-    '/reaction/:messageId',
-    messageController.addReaction
-);
-
-// Last Message Routes
-router.get(
-    '/last/conversations',
-    messageController.getUsersWithLastMessageDetails
-);
-
-module.exports = router; 
+module.exports = router;

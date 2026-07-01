@@ -3,10 +3,13 @@ const { Server } = require("socket.io");
 const User = require("./models/User");
 const Message = require("./models/Message");
 const ChatGroup = require("./models/ChatGroup");
+const { uploadFileToS3 } = require("./utils/uploadFile");
 
 
 const onlineUsers = new Map();
 const typingUsers = new Map();
+
+const getOnlineUserIds = () => Array.from(onlineUsers.keys());
 
 function initializeSocket(server) {
   const io = new Server(server, {
@@ -16,6 +19,13 @@ function initializeSocket(server) {
     }
   });
 
+  try {
+    const { setIO } = require("./modules/whatsapp/events/socketBridge");
+    setIO(io);
+  } catch (err) {
+    console.warn("WhatsApp socket bridge not loaded:", err.message);
+  }
+
   io.on("connection", (socket) => {
     console.log("New client connected:", socket.id);
 
@@ -23,12 +33,50 @@ function initializeSocket(server) {
 
     socket.on("register", async (userId) => {
       try {
-        socket.join(userId);
-        onlineUsers.set(userId, socket.id);
-        await User.findByIdAndUpdate(userId, { socketId: socket.id });
-        io.emit("user_status_change", { userId, status: "online" });
+        const uid = userId?.toString();
+        if (!uid) return;
+
+        socket.join(uid);
+        onlineUsers.set(uid, socket.id);
+        await User.findByIdAndUpdate(uid, { socketId: socket.id });
+
+        socket.emit("online_users", { userIds: getOnlineUserIds() });
+        io.emit("user_status_change", { userId: uid, status: "online" });
+
+        const user = await User.findById(uid).select("company");
+        if (user?.company) {
+          socket.join(`company_${user.company.toString()}`);
+        }
       } catch (err) {
         console.error("Register error:", err);
+      }
+    });
+
+    socket.on("whatsapp:join_conversation", ({ conversationId }) => {
+      if (conversationId) socket.join(`wa_conv_${conversationId}`);
+    });
+
+    socket.on("whatsapp:leave_conversation", ({ conversationId }) => {
+      if (conversationId) socket.leave(`wa_conv_${conversationId}`);
+    });
+
+    socket.on("whatsapp:typing_start", ({ conversationId, userId }) => {
+      if (conversationId) {
+        socket.to(`wa_conv_${conversationId}`).emit("whatsapp:typing", {
+          conversationId,
+          userId,
+          isTyping: true,
+        });
+      }
+    });
+
+    socket.on("whatsapp:typing_end", ({ conversationId, userId }) => {
+      if (conversationId) {
+        socket.to(`wa_conv_${conversationId}`).emit("whatsapp:typing", {
+          conversationId,
+          userId,
+          isTyping: false,
+        });
       }
     });
 
@@ -54,25 +102,34 @@ function initializeSocket(server) {
           to, 
           content, 
           messageType = 'text', 
-          fileData, 
+          fileData,
+          fileUrl: preUploadedUrl,
+          fileName: preFileName,
+          fileSize: preFileSize,
+          fileMimeType: preFileMimeType,
           replyTo,
           clientMessageId,
           priority = 'normal'
         } = data;
 
-        // Create message object
         const messageData = {
           from,
           to,
-          content,
+          content: content || preFileName || '',
           messageType,
           clientMessageId,
           priority,
           status: 'sent'
         };
 
-        // Handle file uploads if present
-        if (fileData && messageType !== 'text') {
+        if (preUploadedUrl) {
+          Object.assign(messageData, {
+            fileUrl: preUploadedUrl,
+            fileName: preFileName,
+            fileSize: preFileSize,
+            fileMimeType: preFileMimeType
+          });
+        } else if (fileData && messageType !== 'text') {
           const fileUrl = await uploadFileToS3(fileData);
           Object.assign(messageData, {
             fileUrl,
@@ -94,16 +151,23 @@ function initializeSocket(server) {
 
         const newMessage = await new Message(messageData).save();
 
-        // Emit to recipient if online
-        const recipientSocket = onlineUsers.get(to);
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("new_message", {
-            messageId: newMessage._id,
-            ...messageData,
-            timestamp: newMessage.createdAt
-          });
+        io.to(to.toString()).emit("new_message", {
+          messageId: newMessage._id,
+          from,
+          to,
+          content: newMessage.content,
+          messageType: newMessage.messageType,
+          fileUrl: newMessage.fileUrl,
+          fileName: newMessage.fileName,
+          fileSize: newMessage.fileSize,
+          fileMimeType: newMessage.fileMimeType,
+          status: newMessage.status,
+          timestamp: newMessage.createdAt,
+          clientMessageId
+        });
 
-          // Mark as delivered
+        const recipientOnline = onlineUsers.has(to.toString());
+        if (recipientOnline) {
           await newMessage.markAsDelivered();
         }
 
@@ -157,15 +221,12 @@ function initializeSocket(server) {
         );
 
         // Notify recipient
-        const recipientSocket = onlineUsers.get(message.to.toString());
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("message_edited", {
+        io.to(message.to.toString()).emit("message_edited", {
             messageId,
             newContent,
             editedAt: updatedMessage.updatedAt,
             editHistory: updatedMessage.editHistory
           });
-        }
 
         socket.emit("edit_success", { 
           messageId, 
@@ -195,18 +256,13 @@ function initializeSocket(server) {
 
         await message.addReaction(userId, emoji);
 
-        // Notify other participants
         const recipientId = message.to.toString();
-        const recipientSocket = onlineUsers.get(recipientId);
-        
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("message_reaction", {
+        io.to(recipientId).emit("message_reaction", {
             messageId,
             userId,
             emoji,
             reactionCounts: message.reactionCounts
           });
-        }
 
         socket.emit("reaction_success", { 
           messageId, 
@@ -231,15 +287,12 @@ function initializeSocket(server) {
         await message.markAsRead(userId);
 
         // Notify sender
-        const senderSocket = onlineUsers.get(message.from.toString());
-        if (senderSocket) {
-          io.to(senderSocket).emit("message_read", {
+        io.to(message.from.toString()).emit("message_read", {
             messageId,
             readBy: userId,
             readAt: new Date(),
             status: message.status
           });
-        }
       } catch (err) {
         console.error("Mark read error:", err);
       }
@@ -260,13 +313,10 @@ function initializeSocket(server) {
         await message.softDelete(userId);
 
         // Notify recipient
-        const recipientSocket = onlineUsers.get(message.to.toString());
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("message_deleted", { 
-            messageId,
-            deletedAt: message.deletedAt
-          });
-        }
+        io.to(message.to.toString()).emit("message_deleted", { 
+          messageId,
+          deletedAt: message.deletedAt
+        });
 
         socket.emit("delete_success", { messageId });
       } catch (err) {
@@ -353,7 +403,7 @@ function initializeSocket(server) {
           message,
           messageType,
           fileUrl,
-          timestamp: newMessage.timestamp
+          timestamp: newMessage.createdAt
         });
 
         socket.emit("message_sent", { success: true, messageId: newMessage._id });
@@ -394,7 +444,7 @@ function initializeSocket(server) {
           if (onlineUsers.get(user._id.toString()) === socket.id) {
             onlineUsers.delete(user._id.toString());
             await User.findByIdAndUpdate(user._id, { $unset: { socketId: 1 } });
-            io.emit("user_status_change", { userId: user._id, status: "offline" });
+            io.emit("user_status_change", { userId: user._id.toString(), status: "offline" });
           }
         }
         console.log(`Client disconnected: ${socket.id}`);
@@ -408,4 +458,15 @@ function initializeSocket(server) {
   return io;
 }
 
-module.exports = { initializeSocket };
+let ioInstance = null;
+
+function initializeSocketWithStore(server) {
+  ioInstance = initializeSocket(server);
+  return ioInstance;
+}
+
+function getIO() {
+  return ioInstance;
+}
+
+module.exports = { initializeSocket: initializeSocketWithStore, getIO, getOnlineUserIds };

@@ -1,12 +1,224 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const { uploadFileToS3 } = require('../utils/uploadFile');
+const { getIO, getOnlineUserIds } = require('../socketServer');
+
+const getCompanyId = (user) => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && user.company._id) {
+        return user.company._id;
+    }
+    return user.company;
+};
 
 const messageController = {
+    async getContacts(req, res) {
+        try {
+            const userId = req.user._id || req.user.id;
+            const companyId = getCompanyId(req.user);
+
+            if (!companyId) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'User has no company assigned'
+                });
+            }
+
+            const users = await User.find({
+                company: companyId,
+                isActive: { $ne: false },
+                _id: { $ne: userId }
+            }).select('name firstName lastName role profileImage email phone');
+
+            const onlineIds = new Set(getOnlineUserIds());
+
+            const contacts = users.map(user => ({
+                _id: user._id,
+                name: user.name,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                email: user.email,
+                avatar: user.profileImage?.fileUrl || null,
+                status: onlineIds.has(user._id.toString()) ? 'online' : 'offline'
+            }));
+
+            res.status(200).json({ success: true, data: contacts });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to fetch contacts',
+                message: error.message
+            });
+        }
+    },
+
+    async getOnlineUsers(req, res) {
+        try {
+            const companyId = getCompanyId(req.user);
+            if (!companyId) {
+                return res.status(400).json({ success: false, error: 'User has no company assigned' });
+            }
+
+            const onlineIds = getOnlineUserIds();
+            const companyUsers = await User.find({
+                company: companyId,
+                isActive: { $ne: false },
+                _id: { $in: onlineIds }
+            }).select('_id name');
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    userIds: companyUsers.map(u => u._id.toString()),
+                    users: companyUsers
+                }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to fetch online users',
+                message: error.message
+            });
+        }
+    },
+
+    async sendMessage(req, res) {
+        try {
+            const from = req.user.id;
+            const { to, content, messageType = 'text', fileUrl, fileName, fileSize, fileMimeType, replyTo, clientMessageId } = req.body;
+
+            if (!to) {
+                return res.status(400).json({ success: false, error: 'Recipient is required' });
+            }
+
+            const messageData = {
+                from,
+                to,
+                content: content || fileName || '',
+                messageType,
+                clientMessageId,
+                status: 'sent'
+            };
+
+            if (fileUrl) {
+                Object.assign(messageData, { fileUrl, fileName, fileSize, fileMimeType });
+            }
+            if (replyTo) messageData.replyTo = replyTo;
+
+            const newMessage = await new Message(messageData).save();
+            await newMessage.populate('from', 'name avatar profileImage');
+            await newMessage.populate('to', 'name avatar profileImage');
+
+            const io = getIO();
+            if (io) {
+                io.to(to.toString()).emit('new_message', {
+                    messageId: newMessage._id,
+                    from: newMessage.from,
+                    to: newMessage.to,
+                    content: newMessage.content,
+                    messageType: newMessage.messageType,
+                    fileUrl: newMessage.fileUrl,
+                    fileName: newMessage.fileName,
+                    fileSize: newMessage.fileSize,
+                    fileMimeType: newMessage.fileMimeType,
+                    status: newMessage.status,
+                    timestamp: newMessage.createdAt,
+                    clientMessageId
+                });
+            }
+
+            const recipient = await User.findById(to).select('socketId');
+            if (recipient?.socketId) {
+                await newMessage.markAsDelivered();
+            }
+
+            res.status(201).json({ success: true, data: newMessage });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to send message',
+                message: error.message
+            });
+        }
+    },
+
+    async uploadFile(req, res) {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ success: false, error: 'No file uploaded' });
+            }
+
+            const fileUrl = await uploadFileToS3(req.file);
+            const messageType = req.file.mimetype.startsWith('image/') ? 'image'
+                : req.file.mimetype.startsWith('video/') ? 'video'
+                : req.file.mimetype.startsWith('audio/') ? 'audio'
+                : 'file';
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    fileUrl,
+                    fileName: req.file.originalname,
+                    fileSize: req.file.size,
+                    fileMimeType: req.file.mimetype,
+                    messageType
+                }
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to upload file',
+                message: error.message
+            });
+        }
+    },
+
+    async markConversationRead(req, res) {
+        try {
+            const userId = req.user.id;
+            const { withUserId } = req.params;
+
+            const unreadMessages = await Message.find({
+                from: withUserId,
+                to: userId,
+                status: { $ne: 'read' },
+                deleted: { $ne: true }
+            });
+
+            const io = getIO();
+            for (const message of unreadMessages) {
+                await message.markAsRead(userId);
+                if (io) {
+                    io.to(message.from.toString()).emit('message_read', {
+                        messageId: message._id,
+                        readBy: userId,
+                        readAt: new Date(),
+                        status: 'read'
+                    });
+                }
+            }
+
+            res.status(200).json({
+                success: true,
+                message: 'Conversation marked as read',
+                count: unreadMessages.length
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to mark conversation as read',
+                message: error.message
+            });
+        }
+    },
+
     // Get messages between two users with pagination
     async getMessages(req, res) {
         try {
-            const { userId, withUserId } = req.params;
+            const userId = req.user.id;
+            const { withUserId } = req.params;
             const { page = 1, limit = 50 } = req.query;
             const offset = (page - 1) * limit;
 
@@ -17,7 +229,7 @@ const messageController = {
 
             res.status(200).json({
                 success: true,
-                data: messages,
+                data: messages.reverse(),
                 pagination: {
                     page: parseInt(page),
                     limit: parseInt(limit)
@@ -63,7 +275,7 @@ const messageController = {
     async deleteMessage(req, res) {
         try {
             const { messageId } = req.params;
-            const { userId } = req.body;
+            const userId = req.user.id;
 
             const message = await Message.findById(messageId);
 
@@ -100,7 +312,8 @@ const messageController = {
     async updateMessage(req, res) {
         try {
             const { messageId } = req.params;
-            const { userId, newContent } = req.body;
+            const userId = req.user.id;
+            const { newContent } = req.body;
 
             const message = await Message.findById(messageId);
 
@@ -152,7 +365,8 @@ const messageController = {
     async addReaction(req, res) {
         try {
             const { messageId } = req.params;
-            const { userId, emoji } = req.body;
+            const userId = req.user.id;
+            const { emoji } = req.body;
 
             const message = await Message.findById(messageId);
 
@@ -186,7 +400,7 @@ const messageController = {
     async markAsRead(req, res) {
         try {
             const { messageId } = req.params;
-            const { userId } = req.body;
+            const userId = req.user.id;
 
             const message = await Message.findById(messageId);
 
@@ -324,7 +538,6 @@ const messageController = {
                     $limit: parseInt(limit)
                 }
             ]);
-            console.log(conversations);
             // Get total count for pagination
             const totalCount = await Message.aggregate([
                 {
@@ -353,10 +566,13 @@ const messageController = {
             ]);
 
             // Process conversations to add online status and format dates
-            const processedConversations = conversations.map(conv => ({                ...conv,
+            const onlineIds = new Set(getOnlineUserIds());
+            const processedConversations = conversations.map(conv => ({
+                ...conv,
                 user: {
                     ...conv.user,
-                    isOnline: conv.user.status === 'online',
+                    isOnline: onlineIds.has(conv.user._id?.toString()),
+                    status: onlineIds.has(conv.user._id?.toString()) ? 'online' : 'offline',
                     lastSeen: conv.user.lastSeen ? new Date(conv.user.lastSeen).toISOString() : null
                 },
                 lastMessage: {

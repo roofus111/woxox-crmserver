@@ -19,7 +19,14 @@ const LeadActivitySchema = new Schema({
   action: {
     type: String,
     required: true,
-    enum: ['created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted','followUp','notPicked','Rescheduled','Answered','NotAnswered','Busy','Wrong Number','Not Reachable','Callback Requested','whatsapp_temp_sent'], // Various lead-related actions
+    enum: [
+      'created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted',
+      'followUp', 'notPicked', 'Rescheduled', 'Answered', 'NotAnswered', 'Busy',
+      'Wrong Number', 'Not Reachable', 'Callback Requested',
+      'whatsapp_temp_sent', 'whatsapp_message_received', 'whatsapp_message_sent',
+      'email_sent', 'email_received', 'email_opened', 'email_clicked', 'email_bounced',
+      'email_spam', 'email_unsubscribed', 'email_replied', 'email_attachment_downloaded',
+    ],
   },
   timestamp: {
     type: Date,
@@ -31,7 +38,11 @@ const LeadActivitySchema = new Schema({
   },
   ipAddress: {
     type: String,
-    required: true,  // IP address where the action was performed
+    default: '0.0.0.0',
+  },
+  metadata: {
+    type: Schema.Types.Mixed,
+    required: false,
   },
   userAgent: {
     type: String,
