@@ -50,16 +50,22 @@ exports.login = async (req, res) => {
     }
 
     // Generate access token
+    const jwtSecret = process.env.JWT_SECRET;
+    const refreshSecret = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET is not configured");
+    }
+
     const accessToken = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
+      jwtSecret,
       { expiresIn: "10h" }
     );
 
     // Generate refresh token
     const refreshToken = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.REFRESH_TOKEN_SECRET,
+      refreshSecret,
       { expiresIn: "7d" }
     );
     console.log(accessToken, refreshToken);
