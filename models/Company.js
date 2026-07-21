@@ -27,6 +27,8 @@ const CompanySchema = new mongoose.Schema({
     finance :{ type:Boolean,default: false },
     documentation :{ type:Boolean,default: false },
   },
+  // SaaS product entitlements (Product-Based Navigation)
+  enabledProducts: [{ type: String }],
   purchaseModuleId: { type: mongoose.Schema.Types.ObjectId, ref: 'CompanyPurchase' }
 });
 

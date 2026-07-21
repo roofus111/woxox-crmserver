@@ -1,5 +1,10 @@
 const { Expense } = require("../models/Expense");
 const BankAccount = require("../models/Account");
+const { postExpenseJournal, voidJournalBySource } = require("../services/financeLedgerService");
+
+function accountBalance(bankAccount) {
+    return Number(bankAccount.balance ?? bankAccount.currentBalance ?? 0);
+}
 
 // Create a new expense
 exports.createExpense = async (req, res) => {
@@ -65,7 +70,7 @@ exports.createExpense = async (req, res) => {
         const totalAmount = amount + (amount * (vat || 0) / 100);
 
         // Check if there's sufficient balance with total amount including VAT
-        if (bankAccount.currentBalance < totalAmount) {
+        if (accountBalance(bankAccount) < totalAmount) {
             return res.status(400).json({
                 message: "Insufficient balance in the bank account (including VAT)."
             });
@@ -86,6 +91,18 @@ exports.createExpense = async (req, res) => {
                 paymentMethod: paymentMethod,
                 reference: newExpense._id
             }, req.user._id);
+
+            try {
+                await postExpenseJournal({
+                    companyId: req.user.company._id,
+                    userId: req.user._id,
+                    expense: newExpense,
+                    amount: totalAmount,
+                    bankAccountId
+                });
+            } catch (journalErr) {
+                console.error('Expense journal post failed:', journalErr.message);
+            }
 
             res.status(201).json({
                 message: "Expense created successfully!",
@@ -166,7 +183,7 @@ exports.updateExpense = async (req, res) => {
         const newTotalAmount = newAmount + (newAmount * (newVat || 0) / 100);
 
         // Check if there's sufficient balance for the new amount
-        const balanceAfterReversal = bankAccount.currentBalance + oldTotalAmount;
+        const balanceAfterReversal = accountBalance(bankAccount) + oldTotalAmount;
         if (balanceAfterReversal < newTotalAmount) {
             return res.status(400).json({
                 message: "Insufficient balance in the bank account (including VAT)."
@@ -211,15 +228,40 @@ exports.updateExpense = async (req, res) => {
     }
 };
 
-// exports.deleteExpense = async (req, res) => {
-//     try {
-//         const expense = await Expense.findByIdAndDelete(req.params.id);
-//         if (!expense) {
-//             return res.status(404).json({ message: 'Expense not found' });
-//         }
-//         res.status(200).json({ message: 'Expense deleted successfully' });
-//     } catch (error) {
-//         res.status(500).json({ message: 'Server error', error });
-//     }
-// };
+exports.deleteExpense = async (req, res) => {
+    try {
+        const expense = await Expense.findById(req.params.id);
+        if (!expense) {
+            return res.status(404).json({ message: 'Expense not found' });
+        }
+
+        const totalAmount = expense.amount + (expense.amount * (expense.vat || 0) / 100);
+        const bankAccount = await BankAccount.findById(expense.bankAccountId);
+        if (bankAccount) {
+            await bankAccount.addTransaction({
+                company: expense.company,
+                date: Date.now(),
+                type: 'expense',
+                amount: -totalAmount,
+                description: `Reversal (delete): ${expense.description || 'Expense'}`,
+                category: 'Uncategorized',
+                paymentMethod: expense.paymentMethod,
+                reference: expense._id
+            }, req.user._id);
+        }
+
+        await voidJournalBySource({
+            companyId: req.user.company._id,
+            sourceType: 'expense',
+            sourceId: expense._id,
+            reason: 'Expense deleted'
+        });
+
+        await Expense.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'Expense deleted successfully' });
+    } catch (error) {
+        console.error('deleteExpense', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
 

@@ -94,9 +94,14 @@ exports.createTask = async (req, res) => {
 // Get all tasks
 exports.getAllTasks = async (req, res) => {
     try {
-        const tasks = await Task.find({ company: req.user.company._id })
+        const filter = { company: req.user.company._id };
+        if (req.query.projectId) {
+            filter.projectId = req.query.projectId;
+        }
+        const tasks = await Task.find(filter)
             .populate('assignee', 'name')
-            .populate('leadId', 'name');
+            .populate('leadId', 'name')
+            .populate('projectId', 'name status');
         res.status(200).json(tasks);
     } catch (error) {
         res.status(500).json({ message: error.message });

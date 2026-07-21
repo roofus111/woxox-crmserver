@@ -557,10 +557,12 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const authenticateUser = require('../middleware/authenticateUser');
+const { authorizeProduct } = require('../middleware/authorizeProduct');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(authenticateUser);
+router.use(authorizeProduct('projectsLite', 'projectsMax', 'crm'));
 
 router.post('/createTask', taskController.createTask);
 router.get('/getalltasks', taskController.getAllTasks);

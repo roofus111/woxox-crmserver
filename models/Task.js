@@ -45,6 +45,7 @@ const taskSchema = new Schema({
   activityLog: [activityLogSchema],
   files: [fileSchema],
   leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', index: true },
   tagIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tag' }],
   completedAt: { type: Date },
   teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },

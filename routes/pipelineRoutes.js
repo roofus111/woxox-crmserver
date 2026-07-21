@@ -82,8 +82,10 @@ const express = require('express');
 const router = express.Router();
 const pipelineController = require('../controllers/pipelineController');
 const authenticateUser = require('../middleware/authenticateUser');
+const { authorizeProduct } = require('../middleware/authorizeProduct');
 
 router.use(authenticateUser);
+router.use(authorizeProduct('projectsLite', 'projectsMax', 'crm'));
 /**
  * @swagger
  * /api/pipelines/createpipeline:

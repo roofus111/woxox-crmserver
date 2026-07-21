@@ -145,7 +145,7 @@ router.put('/updateincome/:id', IncomeController.updateIncome);
  *       404:
  *         description: Income not found
  */
-// router.delete('/deleteincome/:id', IncomeController.deleteIncome);
+router.delete('/deleteincome/:id', IncomeController.deleteIncome);
 
 
 module.exports = router;

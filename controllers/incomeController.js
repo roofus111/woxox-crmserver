@@ -1,6 +1,7 @@
 const Income = require("../models/Income");
 const BankAccount = require("../models/Account");
 const mongoose = require('mongoose');
+const { postIncomeJournal, voidJournalBySource } = require("../services/financeLedgerService");
 
 // Create a new income entry
 exports.createIncome = async (req, res) => {
@@ -34,6 +35,18 @@ exports.createIncome = async (req, res) => {
                 paymentMethod: income.paymentMethod,
                 reference: income._id
             }, req.user._id);
+        }
+
+        try {
+            await postIncomeJournal({
+                companyId: req.user.company._id,
+                userId: req.user._id,
+                income,
+                amount: income.amount || 0,
+                bankAccountId: income.bankAccountId
+            });
+        } catch (journalErr) {
+            console.error('Income journal post failed:', journalErr.message);
         }
 
         res.status(201).json(income);
@@ -133,16 +146,43 @@ exports.updateIncome = async (req, res) => {
     }
 };
 
-// // Delete an income entry by ID
-// exports.deleteIncome = async (req, res) => {
-//     try {
-//         const income = await Income.findOneAndDelete({ _id: req.params.id, company: req.user.company._id });
-//         if (!income) {
-//             return res.status(404).json({ message: "Income entry not found" });
-//         }
-//         res.status(200).json({ message: "Account deleted successfully" });
-//     } catch (error) {
-//         res.status(400).json({ message: error.message });
-//     }
-// };
+exports.deleteIncome = async (req, res) => {
+    try {
+        const income = await Income.findOne({ _id: req.params.id, company: req.user.company._id });
+        if (!income) {
+            return res.status(404).json({ message: "Income entry not found" });
+        }
+
+        if (income.bankAccountId) {
+            const account = await BankAccount.findOne({
+                _id: income.bankAccountId,
+                company: req.user.company._id
+            });
+            if (account) {
+                await account.addTransaction({
+                    company: req.user.company._id,
+                    date: Date.now(),
+                    type: 'income',
+                    amount: -(income.amount || 0),
+                    description: `Reversal (delete): ${income.description || 'Income'}`,
+                    category: income.category?.[0] || null,
+                    paymentMethod: income.paymentMethod,
+                    reference: income._id
+                }, req.user._id);
+            }
+        }
+
+        await voidJournalBySource({
+            companyId: req.user.company._id,
+            sourceType: 'income',
+            sourceId: income._id,
+            reason: 'Income deleted'
+        });
+
+        await Income.findByIdAndDelete(income._id);
+        res.status(200).json({ message: "Income deleted successfully" });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
 
