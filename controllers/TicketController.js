@@ -15,6 +15,10 @@ const s3 = new AWS.S3({
 // Create a new ticket with file upload
 exports.createTicket = async (req, res) => {
   try {
+    if (!req.user?.company?._id) {
+      return res.status(403).json({ message: 'Unauthorized: company profile is missing' });
+    }
+
     const {
       customerId,
       assignedTo,
@@ -28,6 +32,13 @@ exports.createTicket = async (req, res) => {
     } = req.body;
 
     const files = req.files; // Assuming you're using a middleware like multer for file handling
+
+    if (!customerId) {
+      return res.status(400).json({ message: 'Customer is required' });
+    }
+    if (!subject || !description || !category || !priority) {
+      return res.status(400).json({ message: 'Subject, description, category, and priority are required' });
+    }
 
     // Validate Customer ID
     const customerExists = await Customer.findById(customerId);
@@ -68,13 +79,14 @@ exports.createTicket = async (req, res) => {
     // Create the new ticket
     const newTicket = new Ticket({
       customer: customerId,
-      company:req.user.company?._id,
+      company: req.user.company._id,
       issue_details: {
         subject: subject,
         description: description,
-        category:category,
+        category: category,
         sub_category: sub_category || null,
-        priority:priority,
+        priority: priority,
+        status: 'Open',
         attachments: uploadedFiles,
       },
       assignedTo: assignedTo || null,
@@ -82,7 +94,7 @@ exports.createTicket = async (req, res) => {
       history: [
         {
           status: 'Open',
-          changed_by: req.user._id, // Replace with logged-in user later
+          changed_by: req.user._id,
           timestamp: new Date(),
         },
       ],
@@ -101,6 +113,10 @@ exports.createTicket = async (req, res) => {
 // Get tickets (with filters or by ID)
 exports.getTickets = async (req, res) => {
   try {
+    if (!req.user?.company?._id) {
+      return res.status(403).json({ message: 'Unauthorized: company profile is missing' });
+    }
+
     const { ticketId, customerId, assignedTo, status, priority } = req.query;
 
     // If a specific ticket ID is provided, fetch the ticket by ID
@@ -119,10 +135,10 @@ exports.getTickets = async (req, res) => {
     }
 
     // Build a query object for filtering
-    const query = {company: req.user.company._id};
+    const query = { company: req.user.company._id };
     if (customerId) query.customer = customerId;
     if (assignedTo) query.assignedTo = assignedTo;
-    if (status) query['history.status'] = status;
+    if (status) query['issue_details.status'] = status;
     if (priority) query['issue_details.priority'] = priority;
 
     // Fetch tickets with applied filters
@@ -130,13 +146,11 @@ exports.getTickets = async (req, res) => {
       .populate('customer') // Populate customer details
       .populate('notes.author','firstName lastName')
       .populate('assignedTo','firstName lastName role')
-       .populate('history.changed_by', 'firstName lastName'); // Populate assigned user details
+       .populate('history.changed_by', 'firstName lastName')
+      .sort({ 'timestamps.created_at': -1 });
 
-    if (tickets.length === 0) {
-      return res.status(404).json({ message: 'No tickets found' });
-    }
-
-    return res.status(200).json(tickets);
+    // Empty list is normal for new companies — return 200 []
+    return res.status(200).json(tickets || []);
   } catch (error) {
     console.error('Error fetching tickets:', error);
     return res.status(500).json({ message: 'Internal server error', error: error.message });

@@ -256,7 +256,7 @@ exports.getAllCustomers = async (req, res) => {
     res.status(500).json({
       error: 'An error occurred while retrieving customers',
       details: error.message
-    });s
+    });
   }
 };
 
