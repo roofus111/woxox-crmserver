@@ -88,4 +88,59 @@ router.post('/provision-tenant', async (req, res) => {
   }
 })
 
+/**
+ * Mint a one-time handoff token so Super Admin can open the customer CRM session.
+ * POST /api/super-admin/impersonate-handoff
+ * Body: { adminEmail, actorEmail?, reason? }
+ */
+router.post('/impersonate-handoff', async (req, res) => {
+  try {
+    const expected = process.env.SUPER_ADMIN_PROVISION_SECRET
+    const provided = req.headers['x-super-admin-secret']
+    if (!expected || provided !== expected) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const crypto = require('crypto')
+    const ImpersonationHandoff = require('../models/ImpersonationHandoff')
+    const { adminEmail, actorEmail, reason } = req.body || {}
+    if (!adminEmail) {
+      return res.status(400).json({ message: 'adminEmail required' })
+    }
+
+    const email = String(adminEmail).trim().toLowerCase()
+    const user = await User.findOne({ email })
+    if (!user) {
+      return res.status(404).json({ message: 'Legacy admin user not found for this email' })
+    }
+    if (user.isActive === false) {
+      return res.status(403).json({ message: 'Legacy user is inactive' })
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+
+    await ImpersonationHandoff.create({
+      tokenHash,
+      userId: user._id,
+      actorEmail: actorEmail || null,
+      reason: reason || 'super-admin-legacy-open',
+      expiresAt,
+    })
+
+    return res.status(201).json({
+      message: 'Handoff token created',
+      handoffToken: rawToken,
+      expiresAt,
+      email: user.email,
+      userId: user._id,
+      companyId: user.company,
+    })
+  } catch (err) {
+    console.error('impersonate-handoff error', err)
+    return res.status(500).json({ message: err.message || 'Handoff failed' })
+  }
+})
+
 module.exports = router

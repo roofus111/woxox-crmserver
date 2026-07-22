@@ -20,94 +20,133 @@ exports.register = async (req, res) => {
   }
 };
 
+async function issueLoginSession(user, req) {
+  const jwtSecret = process.env.JWT_SECRET;
+  const refreshSecret = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET is not configured");
+  }
+
+  const accessToken = jwt.sign(
+    { id: user._id, role: user.role },
+    jwtSecret,
+    { expiresIn: "10h" }
+  );
+
+  const refreshToken = jwt.sign(
+    { id: user._id, role: user.role },
+    refreshSecret,
+    { expiresIn: "7d" }
+  );
+
+  const refreshTokenDoc = new RefreshToken({
+    userId: user._id,
+    token: refreshToken,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    userAgent: req.headers["user-agent"],
+    ipAddress: req.ip,
+  });
+  await refreshTokenDoc.save();
+
+  const refreshTokenExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  let plan = null;
+  if (user.company) {
+    plan = await CompanyPurchase.findOne({ companyId: user.company });
+  }
+
+  return {
+    token: accessToken,
+    refreshToken,
+    expiresIn: 3600,
+    refreshTokenExpiry: new Date(refreshTokenExpiry).toISOString(),
+    user: {
+      id: user._id,
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      companyId: user.company,
+      plan,
+    },
+  };
+}
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Validate input
     if (!email || !password) {
       return res
         .status(400)
         .json({ message: "Email and password are required" });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email: email.toLowerCase() })
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Check if user is active
     if (user.isActive === false) {
       return res.status(403).json({ message: "User account is inactive" });
     }
 
-
-    // Verify password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Generate access token
-    const jwtSecret = process.env.JWT_SECRET;
-    const refreshSecret = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new Error("JWT_SECRET is not configured");
-    }
-
-    const accessToken = jwt.sign(
-      { id: user._id, role: user.role },
-      jwtSecret,
-      { expiresIn: "10h" }
-    );
-
-    // Generate refresh token
-    const refreshToken = jwt.sign(
-      { id: user._id, role: user.role },
-      refreshSecret,
-      { expiresIn: "7d" }
-    );
-    console.log(accessToken, refreshToken);
-    // Store refresh token in database
-    const refreshTokenDoc = new RefreshToken({
-      userId: user._id,
-      token: refreshToken,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      userAgent: req.headers["user-agent"],
-      ipAddress: req.ip,
-    });
-
-    await refreshTokenDoc.save();
-
-    // Calculate expiry times
-    const accessTokenExpiry = Date.now() + 60 * 60 * 1000; // 1 hour
-    const refreshTokenExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-    let plan=null
-    if(user.company){
-      plan=await CompanyPurchase.findOne({companyId:user.company})
-    }
-    // Respond with user info and tokens
-    res.status(200).json({
-      token: accessToken,
-      refreshToken,
-      expiresIn: 3600, // 1 hour in seconds
-      refreshTokenExpiry: new Date(refreshTokenExpiry).toISOString(),
-      user: {
-        id: user._id,
-        name: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-        companyId: user.company,
-        plan:plan
-      },
-    });
+    const payload = await issueLoginSession(user, req);
+    return res.status(200).json(payload);
   } catch (err) {
     console.error("Login error:", err);
     res
       .status(500)
       .json({ error: "An error occurred while processing your request" });
+  }
+};
+
+/**
+ * Redeem a one-time Super Admin impersonation handoff token.
+ * POST /api/login-impersonation { handoffToken }
+ */
+exports.loginWithHandoff = async (req, res) => {
+  const ImpersonationHandoff = require("../models/ImpersonationHandoff");
+  const { handoffToken } = req.body || {};
+
+  try {
+    if (!handoffToken || typeof handoffToken !== "string") {
+      return res.status(400).json({ message: "handoffToken required" });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(handoffToken).digest("hex");
+    const handoff = await ImpersonationHandoff.findOne({ tokenHash });
+    if (!handoff) {
+      return res.status(401).json({ message: "Invalid or expired handoff token" });
+    }
+    if (handoff.usedAt) {
+      return res.status(401).json({ message: "Handoff token already used" });
+    }
+    if (handoff.expiresAt.getTime() < Date.now()) {
+      return res.status(401).json({ message: "Handoff token expired" });
+    }
+
+    const user = await User.findById(handoff.userId);
+    if (!user || user.isActive === false) {
+      return res.status(403).json({ message: "User account is inactive" });
+    }
+
+    handoff.usedAt = new Date();
+    await handoff.save();
+
+    const payload = await issueLoginSession(user, req);
+    payload.impersonation = {
+      actorEmail: handoff.actorEmail || null,
+      reason: handoff.reason || null,
+    };
+    return res.status(200).json(payload);
+  } catch (err) {
+    console.error("loginWithHandoff error:", err);
+    return res.status(500).json({ message: err.message || "Handoff login failed" });
   }
 };
 

@@ -70,7 +70,7 @@
  *           description: The date and time when the user was created.
  *           example: "2023-01-01T12:00:00Z"
  */const express = require('express');
- const { register, login, changePassword, adminChangePassword,verifyAndRefreshToken,refreshToken,revokeToken } = require('../controllers/authController');
+ const { register, login, loginWithHandoff, changePassword, adminChangePassword,verifyAndRefreshToken,refreshToken,revokeToken } = require('../controllers/authController');
  const authenticateUser = require('../middleware/authenticateUser');
  const router = express.Router();
  
@@ -208,6 +208,7 @@
   *       bearerFormat: JWT
   */
  router.post('/login', login);
+ router.post('/login-impersonation', loginWithHandoff);
  
  /**
   * @swagger
