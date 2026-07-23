@@ -51,20 +51,26 @@ exports.createFile = async (req, res) => {
       uploadedFiles.push(stored);
     }
 
+    const rootFlag =
+      root === true ||
+      root === 'true' ||
+      root === '1' ||
+      (!parent && !leadId && !customerId);
+
     // Create new file document
     const newFile = new Files({
       User: req.user._id,
-      leadId,
-      customerId, // Add customerId to the new file document
-      docName: cleanFileName,
+      leadId: leadId || undefined,
+      customerId: customerId || undefined,
+      docName: (docName && String(docName).trim()) || cleanFileName,
       fileName: fileName || uploadedFiles[0].fileName,
       fileType: fileType || uploadedFiles[0].fileType,
       fileUrl: fileUrl || uploadedFiles[0].fileUrl,
-      root,
+      root: rootFlag,
       uploadedAt: new Date(),
       createdBy: req.user._id,
-      company: companyId, // Ensure file is linked to the company
-      parent,
+      company: companyId,
+      parent: parent && parent !== 'null' && parent !== 'undefined' ? parent : undefined,
       access: access || "private",
       shared,
     });
