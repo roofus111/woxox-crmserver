@@ -1,7 +1,14 @@
 const SignEnvelope = require('../models/SignEnvelope')
+const User = require('../models/User')
 const { storeCompanyDocument } = require('../utils/uploadFile')
-const { stampAndStoreSignedPdf, getPdfPageCount } = require('../utils/docSignPdf')
-const { sendSignerInvite } = require('../utils/docSignMail')
+const { stampAndStoreSignedPdf, getPdfPageCount, fetchPdfBytes } = require('../utils/docSignPdf')
+const {
+  sendSignerInvite,
+  sendCompletionNotice,
+  sendDeclineNotice,
+  checkMailReady,
+  signLink
+} = require('../utils/docSignMail')
 
 function companyId(req) {
   const c = req.user?.company
@@ -17,8 +24,18 @@ function clientIp(req) {
   )
 }
 
+function enrichSigners(envelope) {
+  return (envelope.signers || []).map(s => {
+    const plain = s.toObject ? s.toObject() : { ...s }
+    return {
+      ...plain,
+      signLink: plain.token ? signLink(plain.token) : null
+    }
+  })
+}
+
 function publicEnvelope(envelope, signer) {
-  const fields = (envelope.fields || [])
+  const myFields = (envelope.fields || [])
     .filter(f => String(f.signerId) === String(signer._id))
     .map(f => ({
       fieldId: f.fieldId,
@@ -33,18 +50,41 @@ function publicEnvelope(envelope, signer) {
       value: signer.status === 'signed' ? f.value : undefined
     }))
 
+  // Show values already applied by previous signers (sequential trust)
+  const overlayFields = (envelope.fields || [])
+    .filter(f => {
+      if (String(f.signerId) === String(signer._id)) return false
+      if (!f.value) return false
+      const owner = envelope.signers.id(f.signerId) || envelope.signers.find(s => String(s._id) === String(f.signerId))
+      return owner?.status === 'signed'
+    })
+    .map(f => ({
+      fieldId: f.fieldId,
+      type: f.type,
+      page: f.page,
+      x: f.x,
+      y: f.y,
+      width: f.width,
+      height: f.height,
+      label: f.label,
+      value: f.value,
+      readonly: true
+    }))
+
   return {
     id: envelope._id,
     title: envelope.title,
     message: envelope.message,
     status: envelope.status,
     document: {
-      fileUrl: envelope.document?.fileUrl,
+      fileUrl: `/api/docsign/public/${signer.token}/file`,
       originalName: envelope.document?.originalName,
       pageCount: envelope.document?.pageCount || 1
     },
     signedDocumentUrl:
-      envelope.status === 'completed' ? envelope.signedDocument?.fileUrl : null,
+      envelope.status === 'completed'
+        ? `/api/docsign/public/${signer.token}/signed-file`
+        : null,
     signer: {
       id: signer._id,
       name: signer.name,
@@ -52,13 +92,40 @@ function publicEnvelope(envelope, signer) {
       status: signer.status,
       order: signer.order
     },
-    fields,
-    canSign: canSignerAct(envelope, signer)
+    fields: myFields,
+    overlayFields,
+    canSign: canSignerAct(envelope, signer),
+    waitingReason: !canSignerAct(envelope, signer)
+      ? waitingReason(envelope, signer)
+      : null
   }
+}
+
+function waitingReason(envelope, signer) {
+  if (envelope.status === 'completed') return 'This document is already fully signed.'
+  if (envelope.status === 'voided') return 'This envelope was voided.'
+  if (envelope.status === 'declined') return 'This envelope was declined.'
+  if (envelope.status === 'expired' || (envelope.expiresAt && envelope.expiresAt < new Date())) {
+    return 'This signing link has expired.'
+  }
+  if (signer.status === 'signed') return 'You have already signed.'
+  if (signer.status === 'declined') return 'You declined this document.'
+  if (envelope.signingOrder) {
+    const next = nextPendingSigner(envelope)
+    if (next && String(next._id) !== String(signer._id)) {
+      return `Waiting for ${next.name || next.email} to sign first.`
+    }
+  }
+  if (envelope.status !== 'sent') return 'This envelope is not open for signing yet.'
+  return 'You cannot sign this document right now.'
 }
 
 function activeSigners(envelope) {
   return (envelope.signers || []).filter(s => s.role === 'signer')
+}
+
+function ccRecipients(envelope) {
+  return (envelope.signers || []).filter(s => s.role === 'cc')
 }
 
 function nextPendingSigner(envelope) {
@@ -76,7 +143,7 @@ function canSignerAct(envelope, signer) {
   return next && String(next._id) === String(signer._id)
 }
 
-async function notifyCurrentSigners(envelope, { reminder = false } = {}) {
+async function notifyCurrentSigners(envelope, { reminder = false, userId } = {}) {
   const targets = []
   if (envelope.signingOrder) {
     const next = nextPendingSigner(envelope)
@@ -89,16 +156,49 @@ async function notifyCurrentSigners(envelope, { reminder = false } = {}) {
 
   const results = []
   for (const signer of targets) {
-    if (!signer.token) {
-      signer.token = SignEnvelope.newSignerToken()
-    }
+    if (!signer.token) signer.token = SignEnvelope.newSignerToken()
     if (signer.status === 'pending') signer.status = 'sent'
-    const mail = await sendSignerInvite({ envelope, signer, isReminder: reminder })
+    const mail = await sendSignerInvite({ envelope, signer, isReminder: reminder, userId })
     if (reminder) {
       signer.lastRemindedAt = new Date()
       signer.reminderCount = (signer.reminderCount || 0) + 1
     }
-    results.push({ email: signer.email, ...mail })
+    results.push({ email: signer.email, name: signer.name, ...mail })
+  }
+  return results
+}
+
+async function notifyCompletion(envelope, userId) {
+  const recipients = []
+  try {
+    const creator = await User.findById(envelope.createdBy).select('email name firstName lastName')
+    if (creator?.email) {
+      recipients.push({
+        email: creator.email,
+        name: creator.name || `${creator.firstName || ''} ${creator.lastName || ''}`.trim()
+      })
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const cc of ccRecipients(envelope)) {
+    recipients.push({ email: cc.email, name: cc.name })
+  }
+
+  const seen = new Set()
+  const results = []
+  for (const r of recipients) {
+    const key = String(r.email).toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    results.push(
+      await sendCompletionNotice({
+        envelope,
+        recipient: r,
+        signedUrl: envelope.signedDocument?.fileUrl,
+        userId
+      })
+    )
   }
   return results
 }
@@ -123,7 +223,33 @@ async function maybeCompleteEnvelope(envelope, req) {
     meta: { signedUrl: stored.fileUrl }
   })
   await envelope.save()
+  try {
+    await notifyCompletion(envelope, req.user?._id)
+  } catch (err) {
+    console.error('[docsign] completion notice failed', err.message)
+  }
   return true
+}
+
+async function streamPdf(res, fileUrl, downloadName) {
+  const bytes = await fetchPdfBytes(fileUrl)
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Length', bytes.length)
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${(downloadName || 'document.pdf').replace(/"/g, '')}"`
+  )
+  res.setHeader('Cache-Control', 'private, max-age=60')
+  return res.send(bytes)
+}
+
+exports.getMailStatus = async (req, res) => {
+  try {
+    const status = await checkMailReady(companyId(req))
+    res.json(status)
+  } catch (error) {
+    res.status(500).json({ ready: false, message: error.message })
+  }
 }
 
 exports.listEnvelopes = async (req, res) => {
@@ -143,6 +269,10 @@ exports.listEnvelopes = async (req, res) => {
     res.json({
       items: items.map(item => ({
         ...item,
+        signers: (item.signers || []).map(s => ({
+          ...s,
+          signLink: s.token ? signLink(s.token) : null
+        })),
         signerSummary: {
           total: (item.signers || []).filter(s => s.role === 'signer').length,
           signed: (item.signers || []).filter(s => s.status === 'signed').length,
@@ -165,7 +295,15 @@ exports.getEnvelope = async (req, res) => {
       company: companyId(req)
     })
     if (!envelope) return res.status(404).json({ message: 'Envelope not found' })
-    res.json(envelope)
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    json.documentProxyUrl = `/api/docsign/envelopes/${envelope._id}/file`
+    json.signedProxyUrl = envelope.signedDocument?.fileUrl
+      ? `/api/docsign/envelopes/${envelope._id}/signed-file`
+      : null
+    const mail = await checkMailReady(companyId(req))
+    json.mailStatus = mail
+    res.json(json)
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to load envelope' })
   }
@@ -192,6 +330,17 @@ exports.createEnvelope = async (req, res) => {
       return res.status(400).json({ message: 'At least one signer is required' })
     }
 
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    for (const s of signers) {
+      if (!s.name?.trim() || !emailOk.test(String(s.email || ''))) {
+        return res.status(400).json({ message: 'Each recipient needs a valid name and email' })
+      }
+    }
+
+    if (!signers.some(s => (s.role || 'signer') === 'signer')) {
+      return res.status(400).json({ message: 'Add at least one signer (not only CC)' })
+    }
+
     const stored = await storeCompanyDocument(file, cid, 'docsign')
     const pageCount = await getPdfPageCount(stored.fileUrl)
 
@@ -216,7 +365,7 @@ exports.createEnvelope = async (req, res) => {
         pageCount
       },
       signers: signers.map((s, idx) => ({
-        name: s.name,
+        name: s.name.trim(),
         email: String(s.email || '').toLowerCase().trim(),
         role: s.role === 'cc' ? 'cc' : 'signer',
         order: Number(s.order || idx + 1),
@@ -233,7 +382,11 @@ exports.createEnvelope = async (req, res) => {
     })
 
     await envelope.save()
-    res.status(201).json(envelope)
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    json.documentProxyUrl = `/api/docsign/envelopes/${envelope._id}/file`
+    json.mailStatus = await checkMailReady(cid)
+    res.status(201).json(json)
   } catch (error) {
     console.error('createEnvelope', error)
     res.status(500).json({ message: error.message || 'Failed to create envelope' })
@@ -259,7 +412,7 @@ exports.updateEnvelope = async (req, res) => {
     if (signingOrder != null) envelope.signingOrder = Boolean(signingOrder)
     if (reminder) {
       envelope.reminder = {
-        ...envelope.reminder?.toObject?.() || envelope.reminder || {},
+        ...(envelope.reminder?.toObject?.() || envelope.reminder || {}),
         ...reminder
       }
     }
@@ -312,7 +465,10 @@ exports.updateEnvelope = async (req, res) => {
     })
 
     await envelope.save()
-    res.json(envelope)
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    json.documentProxyUrl = `/api/docsign/envelopes/${envelope._id}/file`
+    res.json(json)
   } catch (error) {
     console.error('updateEnvelope', error)
     res.status(400).json({ message: error.message || 'Failed to update envelope' })
@@ -346,20 +502,37 @@ exports.sendEnvelope = async (req, res) => {
       if (!signer.token) signer.token = SignEnvelope.newSignerToken()
     }
 
+    const mailReady = await checkMailReady(companyId(req))
     envelope.status = 'sent'
     envelope.sentAt = envelope.sentAt || new Date()
-    const mailResults = await notifyCurrentSigners(envelope, { reminder: false })
+    const mailResults = await notifyCurrentSigners(envelope, {
+      reminder: false,
+      userId: req.user._id
+    })
 
     envelope.pushAudit({
       action: 'sent',
       actorEmail: req.user.email,
       actorName: req.user.name || req.user.username,
       ip: clientIp(req),
-      meta: { recipients: mailResults.map(r => r.email) }
+      meta: {
+        recipients: mailResults.map(r => r.email),
+        mailOk: mailResults.filter(r => r.sent).length,
+        mailFailed: mailResults.filter(r => !r.sent).length
+      }
     })
 
     await envelope.save()
-    res.json({ envelope, mailResults })
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    res.json({
+      envelope: json,
+      mailResults,
+      mailStatus: mailReady,
+      warning: mailResults.some(r => !r.sent)
+        ? 'Some emails could not be sent. Copy the signing links below and share them manually.'
+        : null
+    })
   } catch (error) {
     console.error('sendEnvelope', error)
     res.status(500).json({ message: error.message || 'Failed to send envelope' })
@@ -377,7 +550,10 @@ exports.remindEnvelope = async (req, res) => {
       return res.status(400).json({ message: 'Reminders only apply to sent envelopes' })
     }
 
-    const mailResults = await notifyCurrentSigners(envelope, { reminder: true })
+    const mailResults = await notifyCurrentSigners(envelope, {
+      reminder: true,
+      userId: req.user._id
+    })
     envelope.pushAudit({
       action: 'reminder_sent',
       actorEmail: req.user.email,
@@ -386,10 +562,63 @@ exports.remindEnvelope = async (req, res) => {
       meta: { recipients: mailResults.map(r => r.email) }
     })
     await envelope.save()
-    res.json({ envelope, mailResults })
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    res.json({
+      envelope: json,
+      mailResults,
+      warning: mailResults.some(r => !r.sent)
+        ? 'Reminder email failed for some recipients. Use copy-link instead.'
+        : null
+    })
   } catch (error) {
     console.error('remindEnvelope', error)
     res.status(500).json({ message: error.message || 'Failed to send reminders' })
+  }
+}
+
+exports.remindSigner = async (req, res) => {
+  try {
+    const envelope = await SignEnvelope.findOne({
+      _id: req.params.id,
+      company: companyId(req)
+    })
+    if (!envelope) return res.status(404).json({ message: 'Envelope not found' })
+    if (envelope.status !== 'sent') {
+      return res.status(400).json({ message: 'Envelope is not open for reminders' })
+    }
+    const signer = envelope.signers.id(req.params.signerId)
+    if (!signer || signer.role !== 'signer') {
+      return res.status(404).json({ message: 'Signer not found' })
+    }
+    if (['signed', 'declined'].includes(signer.status)) {
+      return res.status(400).json({ message: 'Signer already finished' })
+    }
+    if (!signer.token) signer.token = SignEnvelope.newSignerToken()
+    const mail = await sendSignerInvite({
+      envelope,
+      signer,
+      isReminder: true,
+      userId: req.user._id
+    })
+    signer.lastRemindedAt = new Date()
+    signer.reminderCount = (signer.reminderCount || 0) + 1
+    if (signer.status === 'pending') signer.status = 'sent'
+    envelope.pushAudit({
+      action: 'reminder_sent',
+      actorEmail: req.user.email,
+      actorName: req.user.name || req.user.username,
+      ip: clientIp(req),
+      meta: { email: signer.email }
+    })
+    await envelope.save()
+    res.json({
+      mailResult: mail,
+      signer: { ...signer.toObject(), signLink: signLink(signer.token) },
+      warning: mail.sent ? null : mail.error || 'Email failed — copy the signing link'
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to remind signer' })
   }
 }
 
@@ -413,7 +642,9 @@ exports.voidEnvelope = async (req, res) => {
       meta: { reason: req.body.reason || '' }
     })
     await envelope.save()
-    res.json(envelope)
+    const json = envelope.toObject()
+    json.signers = enrichSigners(envelope)
+    res.json(json)
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to void envelope' })
   }
@@ -433,6 +664,57 @@ exports.deleteEnvelope = async (req, res) => {
     res.json({ ok: true })
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to delete envelope' })
+  }
+}
+
+exports.streamEnvelopeFile = async (req, res) => {
+  try {
+    const envelope = await SignEnvelope.findOne({
+      _id: req.params.id,
+      company: companyId(req)
+    })
+    if (!envelope?.document?.fileUrl) return res.status(404).json({ message: 'Document not found' })
+    await streamPdf(res, envelope.document.fileUrl, envelope.document.originalName || 'document.pdf')
+  } catch (error) {
+    console.error('streamEnvelopeFile', error)
+    res.status(500).json({ message: error.message || 'Failed to load PDF' })
+  }
+}
+
+exports.streamSignedFile = async (req, res) => {
+  try {
+    const envelope = await SignEnvelope.findOne({
+      _id: req.params.id,
+      company: companyId(req)
+    })
+    if (!envelope?.signedDocument?.fileUrl) {
+      return res.status(404).json({ message: 'Signed PDF not ready' })
+    }
+    await streamPdf(res, envelope.signedDocument.fileUrl, `${envelope.title || 'signed'}.pdf`)
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load signed PDF' })
+  }
+}
+
+exports.streamPublicFile = async (req, res) => {
+  try {
+    const envelope = await SignEnvelope.findOne({ 'signers.token': req.params.token })
+    if (!envelope?.document?.fileUrl) return res.status(404).json({ message: 'Document not found' })
+    await streamPdf(res, envelope.document.fileUrl, envelope.document.originalName || 'document.pdf')
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load PDF' })
+  }
+}
+
+exports.streamPublicSignedFile = async (req, res) => {
+  try {
+    const envelope = await SignEnvelope.findOne({ 'signers.token': req.params.token })
+    if (!envelope || envelope.status !== 'completed' || !envelope.signedDocument?.fileUrl) {
+      return res.status(404).json({ message: 'Signed PDF not available' })
+    }
+    await streamPdf(res, envelope.signedDocument.fileUrl, `${envelope.title || 'signed'}.pdf`)
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load signed PDF' })
   }
 }
 
@@ -465,10 +747,19 @@ exports.markPublicViewed = async (req, res) => {
   try {
     const envelope = await SignEnvelope.findOne({ 'signers.token': req.params.token })
     if (!envelope) return res.status(404).json({ message: 'Signing link not found' })
+    if (['voided', 'expired', 'declined'].includes(envelope.status)) {
+      return res.status(410).json({ message: `This envelope is ${envelope.status}` })
+    }
+    if (envelope.expiresAt && envelope.expiresAt < new Date()) {
+      envelope.status = 'expired'
+      await envelope.save()
+      return res.status(410).json({ message: 'This signing link has expired' })
+    }
+
     const signer = envelope.signers.find(s => s.token === req.params.token)
     if (!signer) return res.status(404).json({ message: 'Signer not found' })
 
-    if (signer.status === 'sent' || signer.status === 'pending') {
+    if (envelope.status === 'sent' && (signer.status === 'sent' || signer.status === 'pending')) {
       signer.status = 'viewed'
       signer.viewedAt = new Date()
       envelope.pushAudit({
@@ -495,7 +786,7 @@ exports.signPublicEnvelope = async (req, res) => {
 
     if (!canSignerAct(envelope, signer)) {
       return res.status(400).json({
-        message: 'You cannot sign this document yet (waiting for earlier signers or already signed)'
+        message: waitingReason(envelope, signer)
       })
     }
 
@@ -531,8 +822,12 @@ exports.signPublicEnvelope = async (req, res) => {
 
     const completed = await maybeCompleteEnvelope(envelope, req)
     if (!completed && envelope.signingOrder) {
-      await notifyCurrentSigners(envelope, { reminder: false })
-      await envelope.save()
+      try {
+        await notifyCurrentSigners(envelope, { reminder: false })
+        await envelope.save()
+      } catch (err) {
+        console.error('[docsign] next signer notify failed', err.message)
+      }
     }
 
     const fresh = await SignEnvelope.findById(envelope._id)
@@ -567,13 +862,28 @@ exports.declinePublicEnvelope = async (req, res) => {
       meta: { reason: signer.declineReason }
     })
     await envelope.save()
+
+    try {
+      const creator = await User.findById(envelope.createdBy).select('email name firstName lastName')
+      if (creator?.email) {
+        await sendDeclineNotice({
+          envelope,
+          signer,
+          reason: signer.declineReason,
+          creatorEmail: creator.email,
+          creatorName: creator.name || `${creator.firstName || ''} ${creator.lastName || ''}`.trim()
+        })
+      }
+    } catch (err) {
+      console.error('[docsign] decline notice failed', err.message)
+    }
+
     res.json(publicEnvelope(envelope, signer))
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to decline' })
   }
 }
 
-/** Cron: auto-remind pending signers */
 exports.runReminderJob = async () => {
   const now = new Date()
   const envelopes = await SignEnvelope.find({
@@ -602,6 +912,7 @@ exports.runReminderJob = async () => {
         if ((signer.reminderCount || 0) >= max) continue
         const last = signer.lastRemindedAt || envelope.sentAt || envelope.createdAt
         if (last && now - new Date(last) < intervalMs) continue
+        if (!signer.token) signer.token = SignEnvelope.newSignerToken()
         await sendSignerInvite({ envelope, signer, isReminder: true })
         signer.lastRemindedAt = now
         signer.reminderCount = (signer.reminderCount || 0) + 1

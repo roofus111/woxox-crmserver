@@ -1,7 +1,8 @@
 const fs = require('fs')
 const path = require('path')
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib')
-const { storeCompanyDocument } = require('./uploadFile')
+const { GetObjectCommand, S3Client } = require('@aws-sdk/client-s3')
+const { storeCompanyDocument, DOCS_UPLOAD_ROOT, hasS3Config } = require('./uploadFile')
 
 function dataUrlToBuffer(dataUrl) {
   if (!dataUrl || typeof dataUrl !== 'string') return null
@@ -10,8 +11,102 @@ function dataUrlToBuffer(dataUrl) {
   return Buffer.from(match[2], 'base64')
 }
 
+function localCandidatesForUrl(fileUrl) {
+  const candidates = []
+  if (!fileUrl) return candidates
+
+  if (path.isAbsolute(fileUrl)) {
+    candidates.push(fileUrl)
+    return candidates
+  }
+
+  let pathname = fileUrl
+  try {
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      pathname = new URL(fileUrl).pathname
+    }
+  } catch {
+    /* keep as-is */
+  }
+
+  if (pathname.startsWith('/uploads/')) {
+    const rel = pathname.replace(/^\//, '')
+    candidates.push(path.join('/app', rel))
+    candidates.push(path.join(__dirname, '..', rel))
+    // fileuploads live under DOCS_UPLOAD_ROOT which may differ from /uploads mount
+    const m = pathname.match(/^\/uploads\/fileuploads\/(.+)$/)
+    if (m) {
+      candidates.push(path.join(DOCS_UPLOAD_ROOT, m[1]))
+    }
+    const d = pathname.match(/^\/uploads\/docsign\/(.+)$/)
+    if (d) {
+      candidates.push(path.join(DOCS_UPLOAD_ROOT, '..', 'docsign', d[1]))
+      candidates.push(path.join(DOCS_UPLOAD_ROOT, d[1]))
+    }
+  }
+
+  return candidates
+}
+
+function parseS3Location(fileUrl) {
+  if (!fileUrl || !(fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) return null
+  try {
+    const u = new URL(fileUrl)
+    // https://bucket.s3.region.amazonaws.com/key
+    const virtual = u.hostname.match(/^(.+)\.s3[.-]([a-z0-9-]+)\.amazonaws\.com$/i)
+    if (virtual) {
+      return { bucket: virtual[1], key: decodeURIComponent(u.pathname.replace(/^\//, '')) }
+    }
+    // https://s3.region.amazonaws.com/bucket/key
+    const pathStyle = u.hostname.match(/^s3[.-]([a-z0-9-]+)\.amazonaws\.com$/i)
+    if (pathStyle) {
+      const parts = u.pathname.replace(/^\//, '').split('/')
+      return { bucket: parts.shift(), key: decodeURIComponent(parts.join('/')) }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function fetchFromS3(fileUrl) {
+  if (!hasS3Config()) return null
+  const loc = parseS3Location(fileUrl)
+  if (!loc?.bucket || !loc?.key) return null
+
+  const s3 = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
+  })
+  const out = await s3.send(
+    new GetObjectCommand({
+      Bucket: loc.bucket,
+      Key: loc.key
+    })
+  )
+  const chunks = []
+  for await (const chunk of out.Body) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
 async function fetchPdfBytes(fileUrl) {
   if (!fileUrl) throw new Error('Missing document URL')
+
+  for (const candidate of localCandidatesForUrl(fileUrl)) {
+    if (fs.existsSync(candidate)) {
+      return fs.promises.readFile(candidate)
+    }
+  }
+
+  try {
+    const fromS3 = await fetchFromS3(fileUrl)
+    if (fromS3) return fromS3
+  } catch (err) {
+    console.warn('[docsign] S3 fetch failed:', err.message)
+  }
 
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     const res = await fetch(fileUrl)
@@ -19,26 +114,9 @@ async function fetchPdfBytes(fileUrl) {
     return Buffer.from(await res.arrayBuffer())
   }
 
-  const localCandidates = []
-  if (fileUrl.startsWith('/uploads/')) {
-    localCandidates.push(path.join(__dirname, '..', fileUrl.replace(/^\//, '')))
-    localCandidates.push(path.join('/app', fileUrl.replace(/^\//, '')))
-  } else if (path.isAbsolute(fileUrl)) {
-    localCandidates.push(fileUrl)
-  }
-
-  for (const candidate of localCandidates) {
-    if (fs.existsSync(candidate)) {
-      return fs.promises.readFile(candidate)
-    }
-  }
-
   throw new Error('Could not load source PDF for signing')
 }
 
-/**
- * Stamp completed field values onto the source PDF and store the signed copy.
- */
 async function stampAndStoreSignedPdf(envelope) {
   const sourceBytes = await fetchPdfBytes(envelope.document.fileUrl)
   const pdfDoc = await PDFDocument.load(sourceBytes)
@@ -105,7 +183,8 @@ async function getPdfPageCount(fileUrl) {
     const bytes = await fetchPdfBytes(fileUrl)
     const pdfDoc = await PDFDocument.load(bytes)
     return pdfDoc.getPageCount()
-  } catch {
+  } catch (err) {
+    console.warn('[docsign] page count failed:', err.message)
     return 1
   }
 }
