@@ -293,12 +293,12 @@ exports.AssignUserToLead = async (req, res) => {
     // Create an activity log for this assignment
     const activity = new LeadActivity({
       leadId: leadId,
-      user: userId,
+      userId: req.user._id,
       company: req.user.company._id,
-      details: `Lead is assigned to ${user.firstName} ${user.lastName} by ${creator.name} `, // Assigned by is the person making the assignment
+      details: `Lead is assigned to ${user.firstName} ${user.lastName} by ${creator.name} `,
       action: "assigned",
       timestamp: new Date(),
-      ipAddress: req.ip, // Capture the IP address from the request object
+      ipAddress: req.ip,
       userAgent: req.get("User-Agent"),
     });
     const followup = new FollowUp({
@@ -1512,39 +1512,22 @@ exports.getExcelHeaders = (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+    // Prefer /api/excel/headers for the Add Leads wizard; this keeps older stubs working.
     const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    const headers = xlsx.utils.sheet_to_json(worksheet, { header: 1 })[0];
+    const matrix = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+    const headers = (matrix[0] || []).map((h) => String(h || "").trim()).filter(Boolean);
+    const rows = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
+    const leadSchemaFields = ["name", "phone", "email", "district"];
 
-    // Get dynamic fields from req.body
-    const leadSchemaFields = req.body.dynamicFields || [
-      "name",
-      "district",
-      "email",
-      "phone",
-      "campaign",
-      "campaignid",
-      "status",
-      "source",
-      "Customer",
-      "company",
-      "tags",
-      "assignedTo",
-      "untouched",
-      "notes",
-      "createdAt",
-      "profile",
-      "stages",
-      "additionalFields",
-    ];
-
-    // Extract dynamic fields that are present in the headers
-    const dynamicFieldsFromHeaders = leadSchemaFields.filter((field) =>
-      headers.includes(field)
-    );
-
-    res.json({ headers, leadSchemaFields, dynamicFieldsFromHeaders });
+    res.json({
+      headers,
+      leadSchemaFields,
+      mappableFields: leadSchemaFields,
+      sampleRows: rows.slice(0, 3),
+      rowCount: rows.length,
+    });
   } catch (error) {
     console.error("Error reading Excel file:", error);
     res.status(500).json({ error: "Failed to read Excel file." });
@@ -1556,70 +1539,68 @@ exports.matchHeadersWithSchema = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const { fieldMap, campaignId } = req.body;
-    const parsedMap = JSON.parse(fieldMap);
 
+    // Deprecated: use POST /api/excel/upload-mapped from Add Leads.
+    // fieldMap format: { name: "Excel Header", phone: "...", ... }
+    let parsedMap = req.body.fieldMap;
+    if (typeof parsedMap === "string") {
+      parsedMap = JSON.parse(parsedMap);
+    }
+    if (!parsedMap || !parsedMap.name || !parsedMap.phone) {
+      return res.status(400).json({ error: "fieldMap with name and phone is required" });
+    }
+
+    const campaignId = req.body.campaignId || req.body.campaignid;
     const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    const jsonData = xlsx.utils.sheet_to_json(worksheet);
+    const jsonData = xlsx.utils.sheet_to_json(worksheet, { defval: "" });
 
-    // Transform Excel data to Lead documents
-    const leadsToInsert = jsonData.map(row => {
+    const companyId = req.user.company?._id || req.user.company;
+    const leadsToInsert = [];
+    const invalidLeads = [];
+
+    for (const row of jsonData) {
       const lead = {
-        company: req.user.company._id,
+        company: companyId,
         campaignid: campaignId,
-        status: 'New',
-        untouched: true
+        status: "New",
+        untouched: true,
+        source: req.body.source || "",
+        name: String(row[parsedMap.name] ?? "").trim(),
+        phone: String(row[parsedMap.phone] ?? "").trim(),
+        email: parsedMap.email ? String(row[parsedMap.email] ?? "").trim() : "",
+        district: parsedMap.district ? String(row[parsedMap.district] ?? "").trim() : "",
       };
 
-      // Map Excel columns to Lead schema fields
-      for (let header in parsedMap) {
-        const schemaField = parsedMap[header];
-        console.log(schemaField);
-        // Handle nested profile fields
-        if (schemaField.startsWith('profile.')) {
-          const profileField = schemaField.split('.')[1];
-          lead.profile = lead.profile || {};
-          lead.profile[profileField] = row[header];
-        } else {
-          lead[header] = row[schemaField];
-        }
+      if (!lead.name || !lead.phone) {
+        invalidLeads.push(row);
+        continue;
       }
-     
-      return lead;
-    });
+      leadsToInsert.push(lead);
+    }
 
-    // Validate required fields
-    const invalidLeads = leadsToInsert.filter(lead => !lead.name || !lead.phone);
-    if (invalidLeads.length > 0) {
+    if (!leadsToInsert.length) {
       return res.status(400).json({
-        error: "Some leads are missing required fields (name or phone)",
-        invalidLeads
+        error: "No valid leads found (name and phone required)",
+        invalidLeads,
       });
     }
 
-    // Insert leads in batches of 100
-    const batchSize = 100;
-    const results = [];
-    
-    for (let i = 0; i < leadsToInsert.length; i += batchSize) {
-      const batch = leadsToInsert.slice(i, i + batchSize);
-      const savedLeads = await Lead.insertMany(batch, { ordered: false });
-      results.push(...savedLeads);
-    }
+    const results = await Lead.insertMany(leadsToInsert, { ordered: false });
 
     res.json({
       success: true,
       message: `Successfully imported ${results.length} leads`,
-      leads: results
+      created: results.length,
+      skipped: invalidLeads.length,
+      leads: results,
     });
-
   } catch (error) {
     console.error("Error importing leads:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to import leads",
-      details: error.message 
+      details: error.message,
     });
   }
 };
