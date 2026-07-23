@@ -5,7 +5,8 @@ const { v4: uuidv4 } = require("uuid"); // For generating unique file names
 const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const mongoose = require("mongoose");
-// Configure AWS S3
+const { storeCompanyDocument, hasS3Config } = require("../utils/uploadFile");
+// Configure AWS S3 (only used when credentials exist)
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -44,23 +45,10 @@ exports.createFile = async (req, res) => {
     const companyId = req.user.company._id;
     const uploadedFiles = [];
     const cleanFileName = files[0].originalname;
-    // Upload each file to S3 and get its URL
+    // Upload each file to S3 (or local disk when S3 is not configured)
     for (const file of files) {
-      const fileContent = file.buffer;
-      const fileKey = `${uuidv4()}-${file.originalname}`;
-      const params = {
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: `fileuploads/${companyId}/${fileKey}`, // Store files under company ID
-        Body: fileContent,
-        ContentType: file.mimetype,
-      };
-
-      const uploadResult = await s3.upload(params).promise();
-      uploadedFiles.push({
-        fileName: fileKey,
-        fileType: file.mimetype,
-        fileUrl: uploadResult.Location, // S3 file URL
-      });
+      const stored = await storeCompanyDocument(file, companyId);
+      uploadedFiles.push(stored);
     }
 
     // Create new file document
@@ -123,38 +111,41 @@ exports.getFilesAndFoldersByParentId = async (req, res) => {
     // 2️⃣ Fetch Folders from MongoDB (Filtered by company)
     const dbFolders = await Folders.find(filter);
 
-    // 3️⃣ Fetch Files & Folders from S3 (Scoped to Company)
-    const s3Params = {
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Prefix: `fileuploads/${companyId}/${parentId}/`, // Ensure files belong to the correct company
-      Delimiter: "/",
-    };
-
-    const command = new ListObjectsV2Command(s3Params);
-    const s3Data = await s3Client.send(command);
-
-    // ✅ Extract Files from S3 Response
-    const s3Files = s3Data.Contents
-      ? s3Data.Contents.map((file) => ({
-          key: file.Key,
-          url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${file.Key}`,
-          lastModified: file.LastModified,
-          size: file.Size,
-          type: "file",
-        }))
-      : [];
-
-    // ✅ Extract Folders from S3 Response
-    const s3Folders = s3Data.CommonPrefixes
-      ? s3Data.CommonPrefixes.map((folder) => ({
-          name: folder.Prefix.replace(
-            `fileuploads/${companyId}/${parentId}/`,
-            ""
-          ).replace("/", ""),
-          path: folder.Prefix,
-          type: "folder",
-        }))
-      : [];
+    // 3️⃣ Optionally enrich from S3 when configured
+    let s3Files = [];
+    let s3Folders = [];
+    if (hasS3Config() && process.env.AWS_BUCKET_NAME && parentId) {
+      try {
+        const s3Params = {
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Prefix: `fileuploads/${companyId}/${parentId}/`,
+          Delimiter: "/",
+        };
+        const command = new ListObjectsV2Command(s3Params);
+        const s3Data = await s3Client.send(command);
+        s3Files = s3Data.Contents
+          ? s3Data.Contents.map((file) => ({
+              key: file.Key,
+              url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${file.Key}`,
+              lastModified: file.LastModified,
+              size: file.Size,
+              type: "file",
+            }))
+          : [];
+        s3Folders = s3Data.CommonPrefixes
+          ? s3Data.CommonPrefixes.map((folder) => ({
+              name: folder.Prefix.replace(
+                `fileuploads/${companyId}/${parentId}/`,
+                ""
+              ).replace("/", ""),
+              path: folder.Prefix,
+              type: "folder",
+            }))
+          : [];
+      } catch (s3Err) {
+        console.warn("S3 list skipped:", s3Err.message);
+      }
+    }
 
     // 4️⃣ Ensure Updated File Names Are Reflected
     const updatedFiles = dbFiles.map((dbFile) => {
@@ -569,25 +560,16 @@ exports.uploadFile = async (req, res) => {
     }
 
     // Generate unique file key
-    const fileKey = `${uuidv4()}-${file.originalname}`;
-    const params = {
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: `fileuploads/${companyId}/${fileKey}`,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    };
-
-    // Upload to S3
-    const uploadResult = await s3.upload(params).promise();
+    const stored = await storeCompanyDocument(file, companyId);
 
     // Find and update the requested file document
     const updatedFile = await Files.findByIdAndUpdate(
       requestId,
       {
         $set: {
-          fileName: fileKey,
-          fileType: file.mimetype,
-          fileUrl: uploadResult.Location,
+          fileName: stored.fileName,
+          fileType: stored.fileType,
+          fileUrl: stored.fileUrl,
           uploadedAt: new Date(),
           request: false,
           updatedBy: req.user._id,
