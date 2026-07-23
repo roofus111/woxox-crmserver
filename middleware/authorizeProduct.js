@@ -22,6 +22,7 @@ const authorizeRoles = (...roles) => (req, res, next) => {
  */
 const ADDON_BY_PRODUCT = {
   crm: [],
+  docsign: ['DSG0825'],
   projectsLite: ['PRJLITE0825', 'PRJ0825', 'WFM0825', 'PLM0825'],
   projectsMax: ['PRJ0825', 'PLM0825', 'WFM0825']
 }

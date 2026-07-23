@@ -44,6 +44,7 @@ const teamRoutes=require('./routes/teamRouter')
 const roleRoutes=require('./routes/roleRoutes')
 const productServiceRoutes=require('./routes/productServiceRoutes')
 const templateRoutes=require('./routes/templateRoutes')
+const docSignRoutes=require('./routes/docSignRoutes')
 const notificationRoutes=require('./routes/notificationRoutes')
 const adminRoutes=require('./routes/adminRouter')
 const superAdminProvisionRoutes=require('./routes/superAdminProvisionRoutes')
@@ -61,7 +62,6 @@ const LeadFollowUp = require("./models/followUp");
 const messageRoutes=require('./routes/messageRoutes')
 const billingRoutes=require('./routes/billingRoutes')
 const { initWhatsAppModule } = require('./modules/whatsapp');
-const { initEmailModule } = require('./modules/email');
 const { initPersonalWhatsAppModule } = require('./modules/personalWhatsapp');
 const alertBeforeMinutes = 30;
 // const io = new Server(server, {
@@ -129,6 +129,7 @@ app.use("/api/customer",Customer)
 app.use("/api/ticket",Ticket)
 app.use("/api/hr",HR)
 app.use("/api/files",Files)
+app.use("/api/docsign",docSignRoutes)
 app.use("/api/folders",Folder)
 app.use("/api/attendance",Attendance)
 app.use("/api/TagModel",TagModel)
@@ -162,7 +163,6 @@ app.use('/api/billing',billingRoutes)
 
 // WhatsApp Business Cloud API module
 initWhatsAppModule(app);
-initEmailModule(app);
 initPersonalWhatsAppModule(app);
 
 // Initialize S3 client
@@ -547,6 +547,16 @@ cron.schedule("0,30 * * * *", async () => {
     }
   } catch (error) {
     console.error("Cron job failed:", error);
+  }
+});
+
+// Doc Sign: auto-remind pending signers daily at 09:00 UTC
+cron.schedule('0 9 * * *', async () => {
+  try {
+    const { runReminderJob } = require('./controllers/docSignController')
+    await runReminderJob()
+  } catch (error) {
+    console.error('Doc Sign reminder cron failed:', error)
   }
 });
 
