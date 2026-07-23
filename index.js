@@ -142,6 +142,7 @@ app.use("/api/blog",Blog)
 app.use("/api/account",accountRoutes)
 app.use("/api/tagmanager",tagMManagerRoutes)
 app.use("/api/Insights",InsightsRoutes)
+app.use("/api/insights",InsightsRoutes) // lowercase alias for clients/proxies
 app.use("/api/income",incomeRoutes)
 app.use("/api/ledger",ledgerRoutes)
 app.use("/api/projects",projectRoutes)

@@ -989,7 +989,7 @@ class InsightsController {
   /** Operating dashboard KPIs from Mongo (same shape as platform /dashboard/summary). */
   static async getOperatingDashboard(req, res) {
     try {
-      const companyId = req.user?.company?._id;
+      const companyId = req.user?.company?._id || req.user?.company;
       if (!companyId) {
         return res.json(InsightsController.emptyOperatingDashboard());
       }
