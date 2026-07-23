@@ -217,6 +217,9 @@ const sendOTPEmail = async (email, otp, type = 'email_verification') => {
     }
   }
 };
+
+// Send email verification OTP
+const sendEmailVerificationOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
