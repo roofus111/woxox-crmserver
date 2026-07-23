@@ -103,18 +103,25 @@ exports.getNotifications = async (req, res) => {
       type,
       priority,
       page = 1,
-      limit = 10,
+      limit = 30,
       startDate,
       endDate
     } = req.query;
 
-    // Build query
+    const companyId = req.user.company?._id || req.user.company;
+    if (!companyId) {
+      return res.status(200).json({
+        success: true,
+        notifications: [],
+        pagination: { total: 0, page: 1, limit: parseInt(limit), pages: 0 }
+      });
+    }
+
     const query = {
       recipient: req.user._id,
-      company: req.user.company._id
+      company: companyId
     };
 
-    // Add optional filters
     if (status) query.status = status;
     if (type) query.type = type;
     if (priority) query.priority = priority;
@@ -124,23 +131,20 @@ exports.getNotifications = async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Execute query with pagination and sorting
     const notifications = await Notification.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('sender', 'name email')
-      .populate('recipient', 'name email');
+      .populate('sender', 'name email firstName lastName')
+      .populate('recipient', 'name email firstName lastName');
 
-    // Get total count for pagination
     const total = await Notification.countDocuments(query);
 
     res.status(200).json({
       success: true,
-      notifications,
+      notifications: notifications || [],
       pagination: {
         total,
         page: parseInt(page),
@@ -154,6 +158,33 @@ exports.getNotifications = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching notifications',
+      error: error.message
+    });
+  }
+};
+
+exports.markAllNotificationsRead = async (req, res) => {
+  try {
+    const companyId = req.user.company?._id || req.user.company;
+    const result = await Notification.updateMany(
+      {
+        recipient: req.user._id,
+        company: companyId,
+        status: 'unread'
+      },
+      { status: 'read', readAt: new Date() }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'All notifications marked as read',
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Error marking notifications read:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error marking notifications read',
       error: error.message
     });
   }

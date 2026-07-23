@@ -6,6 +6,7 @@ router.use(authenticateUser);
 
 router.post('/create', notificationController.createNotification);
 router.get('/getall', notificationController.getNotifications);
+router.put('/mark-all-read', notificationController.markAllNotificationsRead);
 router.put('/update/:id', notificationController.updateNotificationStatus);
 router.delete('/delete/:id', notificationController.deleteNotification);
 module.exports = router;

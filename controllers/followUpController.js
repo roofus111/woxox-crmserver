@@ -27,14 +27,19 @@ exports.createFollowUp = async (req, res) => {
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    const assigneeId = (assignedTo && String(assignedTo).trim())
+      ? String(assignedTo).trim()
+      : req.user._id;
+    const companyId = req.user.company?._id || req.user.company;
+
     const newFollowUp = new LeadFollowUp({
-      company: req.user.company,
+      company: companyId,
       leadId,
       followUpDate,
       status,
       notes,
       nextFollowUpDate,
-      assignedTo: assignedTo.trim() ? assignedTo : req.user._id,
+      assignedTo: assigneeId,
       createdBy: req.user._id,
     });
 
@@ -42,7 +47,7 @@ exports.createFollowUp = async (req, res) => {
 
     const newActivity = new LeadActivity({
       leadId,
-      company: req.user.company._id,
+      company: companyId,
       userId: req.user._id,
       action: "followUp",
       details: `Created a new follow-up on ${followUpDate}`,
@@ -57,6 +62,26 @@ exports.createFollowUp = async (req, res) => {
       followUp: savedFollowUp,
       activity: savedActivity,
     });
+
+    // Notify assignee outside the transaction (non-blocking for response)
+    if (String(assigneeId) !== String(req.user._id) && companyId) {
+      try {
+        const { notifyUser } = require("../utils/notifyUser");
+        await notifyUser({
+          companyId,
+          recipientId: assigneeId,
+          senderId: req.user._id,
+          type: "follow_up_reminder",
+          title: "New follow-up assigned",
+          message: notes || `A follow-up was scheduled for you`,
+          relatedEntity: { entityType: "FollowUp", entityId: savedFollowUp._id },
+          priority: "medium",
+          metadata: { leadId },
+        });
+      } catch (notifyErr) {
+        console.warn("Follow-up create notify failed:", notifyErr.message);
+      }
+    }
   } catch (error) {
     await session.abortTransaction();
     res.status(500).json({ message: "Server error", error: error.message });
@@ -67,44 +92,35 @@ exports.createFollowUp = async (req, res) => {
 
 exports.getAllfollowUps = async (req, res) => {
   try {
-    let searchCriteria = {}
-    if(req.user.role =='user'){
-       searchCriteria = { assignedTo : req.user._id, company: req.user.company,}
-    }
-    else {
-       searchCriteria = {company: req.user.company}
-  
+    const companyId = req.user.company?._id || req.user.company;
+    let searchCriteria = { company: companyId };
+    if (req.user.role == "user") {
+      searchCriteria = { assignedTo: req.user._id, company: companyId };
     }
 
-    console.log(searchCriteria);
-    
-    const followUp = await LeadFollowUp.find(
-      searchCriteria
-    )
+    const followUp = await LeadFollowUp.find(searchCriteria)
       .populate("leadId")
-      .populate("assignedTo",'name')
-      .populate("createdBy",'name');
-    res.status(200).json(followUp);
+      .populate("assignedTo", "name firstName lastName")
+      .populate("createdBy", "name firstName lastName");
+    res.status(200).json(followUp || []);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 exports.getMyfollowUps = async (req, res) => {
   try {
-    let searchCriteria = {}
-    searchCriteria = { assignedTo : req.user._id, company: req.user.company}
-   
-    const followUp = await LeadFollowUp.find(
-      searchCriteria
-    )
+    const companyId = req.user.company?._id || req.user.company;
+    const searchCriteria = { assignedTo: req.user._id, company: companyId };
+
+    const followUp = await LeadFollowUp.find(searchCriteria)
       .populate("leadId")
-      .populate("assignedTo",'name')
-      .populate("createdBy",'name')
+      .populate("assignedTo", "name firstName lastName")
+      .populate("createdBy", "name firstName lastName")
       .populate({
-        path: 'leadId', // Populate the leadId field
-        populate: { path: 'tags', select: 'name color' } // Populate tags within the Lead model
+        path: "leadId",
+        populate: { path: "tags", select: "name color" },
       });
-    res.status(200).json(followUp);
+    res.status(200).json(followUp || []);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -114,20 +130,17 @@ exports.getMyfollowUps = async (req, res) => {
 exports.getFollowUpsByLead = async (req, res) => {
   try {
     const { leadId } = req.params;
+    const companyId = req.user.company?._id || req.user.company;
 
-    // Fetch all follow-ups for the given lead
-    const followUps = await LeadFollowUp.find({ leadId }).populate(
-      "assignedTo",
-      "name email"
-    ).populate("createdBy",'name');;
+    const followUps = await LeadFollowUp.find({
+      leadId,
+      ...(companyId ? { company: companyId } : {}),
+    })
+      .populate("assignedTo", "name email firstName lastName")
+      .populate("createdBy", "name firstName lastName");
 
-    if (followUps.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No follow-ups found for this lead" });
-    }
-
-    res.status(200).json(followUps);
+    // Empty list is valid — return [] so lead UI can show an empty state
+    return res.status(200).json(followUps || []);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }

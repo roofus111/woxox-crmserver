@@ -70,7 +70,8 @@ const alertBeforeMinutes = 30;
 //     methods: ["GET", "POST","PUT"], // Allow these HTTP methods
 //   },
 // });
-const { initializeSocket } = require("./socketServer");
+const { initializeSocket, getIO, getOnlineUserIds } = require("./socketServer");
+const { notifyUser } = require("./utils/notifyUser");
 initializeSocket(server);
 const Message = require("./models/Message");
 const ChatGroup = require("./models/ChatGroup");
@@ -99,6 +100,12 @@ app.use('/api/whatsapp/webhook', express.json({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+const path = require('path');
+const os = require('os');
+const chatUploadRoot = process.env.CHAT_UPLOAD_DIR || path.join(os.tmpdir(), 'woxox-uploads');
+app.use('/uploads', require('express').static(chatUploadRoot));
+// also serve /app/uploads if present (compose volume)
+app.use('/uploads', require('express').static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use("/api", authRoutes);
@@ -114,7 +121,8 @@ app.use("/api/invoice", invoice);
 app.use("/api/payment", payment);
 app.use("/api/notes", Note);
 app.use("/api/tasks", Task);
-app.use("/api/pipelines",Pipeline) 
+app.use("/api/pipelines",Pipeline)
+app.use("/api/Pipelines",Pipeline) // case-sensitive alias for older clients
 app.use("/api/campaign",Campaign)
 app.use("/api/customer",Customer)
 app.use("/api/ticket",Ticket)
@@ -143,6 +151,7 @@ app.use("/api/productservice",productServiceRoutes)
 app.use("/api/template",templateRoutes)
 app.use("/api/notification",notificationRoutes)
 app.use("/api/message",messageRoutes)
+app.use("/api/chat-groups", require('./routes/chatGroupRoutes'))
 app.use('/api/mail', mailRoutes);
 app.use('/api/admin',adminRoutes)
 app.use('/api/super-admin', superAdminProvisionRoutes)
@@ -413,86 +422,125 @@ cron.schedule("0,30 * * * *", async () => {
   try {
     const now = new Date();
     const alertBeforeMinutes = 30;
-    
-    // Check for upcoming and overdue follow-ups
+    const io = getIO();
+    const onlineIds = new Set(getOnlineUserIds());
+
     const followUps = await LeadFollowUp.find({
       $or: [
-        // Upcoming follow-ups (original check)
         {
           nextFollowUpDate: {
             $gte: now,
             $lte: new Date(now.getTime() + alertBeforeMinutes * 60000),
           },
           status: { $in: ["Pending", "In Progress"] },
+          $or: [
+            { lastAlertType: { $exists: false } },
+            { lastAlertType: null },
+            { lastAlertType: { $ne: "upcoming" } },
+          ],
         },
-        // Overdue follow-ups (1hr, 24hr, 48hr checks)
         {
-          nextFollowUpDate: {
-            $lt: now,
-          },
+          nextFollowUpDate: { $lt: now },
           status: { $in: ["Pending", "In Progress"] },
-          lastAlertSent: { $exists: false },
-        }
-      ]
+        },
+      ],
     })
       .populate("assignedTo")
       .populate("leadId")
       .exec();
 
     for (const followUp of followUps) {
-      const userId = followUp.assignedTo._id;
+      if (!followUp.assignedTo || !followUp.nextFollowUpDate) continue;
+      const leadName = followUp.leadId?.name || "a lead";
+      const userId = followUp.assignedTo._id || followUp.assignedTo;
+      const userIdStr = userId.toString();
+      const companyId =
+        followUp.company?._id ||
+        followUp.company ||
+        followUp.assignedTo?.company;
       const followUpTime = followUp.nextFollowUpDate.getTime();
       const timeDifference = now.getTime() - followUpTime;
       const hoursDifference = timeDifference / (1000 * 60 * 60);
 
       let alertMessage;
       let shouldSendAlert = false;
+      let alertType = null;
+      let priority = "medium";
 
       if (timeDifference < 0) {
-        // Upcoming follow-up (original alert)
         const hours = followUp.nextFollowUpDate.getHours();
-        const minutes = followUp.nextFollowUpDate.getMinutes().toString().padStart(2, "0");
+        const minutes = followUp.nextFollowUpDate
+          .getMinutes()
+          .toString()
+          .padStart(2, "0");
         const ampm = hours >= 12 ? "PM" : "AM";
         const formattedHours = hours % 12 || 12;
         const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
-        
-        alertMessage = `You have a Follow-up Meeting with ${followUp.leadId.name} today at ${formattedTime}`;
+
+        alertMessage = `You have a Follow-up Meeting with ${leadName} today at ${formattedTime}`;
+        shouldSendAlert = followUp.lastAlertType !== "upcoming";
+        alertType = "upcoming";
+      } else if (hoursDifference >= 48 && followUp.lastAlertType !== "48hr") {
+        alertMessage = `URGENT: Follow-up with ${leadName} is overdue by 48 hours`;
         shouldSendAlert = true;
-      } else {
-        // Overdue follow-up alerts
-        if (hoursDifference >= 1 && hoursDifference < 2 && followUp.lastAlertType !== '1hr') {
-          alertMessage = `⚠️ Follow-up with ${followUp.leadId.name} is overdue by 1 hour`;
-          shouldSendAlert = true;
-          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
-            lastAlertSent: now,
-            lastAlertType: '1hr'
+        alertType = "48hr";
+        priority = "urgent";
+      } else if (
+        hoursDifference >= 24 &&
+        hoursDifference < 48 &&
+        followUp.lastAlertType !== "24hr" &&
+        followUp.lastAlertType !== "48hr"
+      ) {
+        alertMessage = `Follow-up with ${leadName} is overdue by 24 hours`;
+        shouldSendAlert = true;
+        alertType = "24hr";
+        priority = "high";
+      } else if (
+        hoursDifference >= 1 &&
+        hoursDifference < 24 &&
+        !["1hr", "24hr", "48hr"].includes(followUp.lastAlertType)
+      ) {
+        alertMessage = `Follow-up with ${leadName} is overdue by 1 hour`;
+        shouldSendAlert = true;
+        alertType = "1hr";
+        priority = "high";
+      }
+
+      if (!shouldSendAlert || !alertType) continue;
+
+      await LeadFollowUp.findByIdAndUpdate(followUp._id, {
+        lastAlertSent: now,
+        lastAlertType: alertType,
+      });
+
+      if (companyId) {
+        try {
+          await notifyUser({
+            companyId,
+            recipientId: userId,
+            type: "follow_up_reminder",
+            title: timeDifference > 0 ? "Follow-up overdue" : "Follow-up reminder",
+            message: alertMessage,
+            relatedEntity: { entityType: "FollowUp", entityId: followUp._id },
+            priority,
+            metadata: { leadId: followUp.leadId?._id || followUp.leadId, alertType },
           });
-        } else if (hoursDifference >= 24 && hoursDifference < 25 && followUp.lastAlertType !== '24hr') {
-          alertMessage = `⚠️ Follow-up with ${followUp.leadId.name} is overdue by 24 hours`;
-          shouldSendAlert = true;
-          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
-            lastAlertSent: now,
-            lastAlertType: '24hr'
-          });
-        } else if (hoursDifference >= 48 && hoursDifference < 49 && followUp.lastAlertType !== '48hr') {
-          alertMessage = `⚠️ URGENT: Follow-up with ${followUp.leadId.name} is overdue by 48 hours`;
-          shouldSendAlert = true;
-          await LeadFollowUp.findByIdAndUpdate(followUp._id, { 
-            lastAlertSent: now,
-            lastAlertType: '48hr'
-          });
+        } catch (notifyErr) {
+          console.warn("Follow-up notification persist failed:", notifyErr.message);
         }
       }
 
-      if (shouldSendAlert && onlineUsers.has(userId)) {
-        io.to(userId).emit("followUpAlert", {
+      if (io && onlineIds.has(userIdStr)) {
+        io.to(userIdStr).emit("followUpAlert", {
           message: alertMessage,
           details: followUp,
-          isOverdue: timeDifference > 0
+          isOverdue: timeDifference > 0,
         });
-        console.log(`Alert sent to user ${userId}: ${alertMessage}`);
-      } else if (shouldSendAlert) {
-        console.log(`User ${userId} not connected, skipping notification`);
+        console.log(`Alert sent to user ${userIdStr}: ${alertMessage}`);
+      } else {
+        console.log(
+          `User ${userIdStr} offline — notification saved for later`
+        );
       }
     }
   } catch (error) {

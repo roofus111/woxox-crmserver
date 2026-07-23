@@ -315,6 +315,26 @@ exports.AssignUserToLead = async (req, res) => {
     // Save the activity log to the database
     await activity.save();
     await followup.save();
+
+    try {
+      const { notifyUser } = require("../utils/notifyUser");
+      const companyId = req.user.company?._id || req.user.company;
+      const leadLabel = updatedLead.name || "a lead";
+      await notifyUser({
+        companyId,
+        recipientId: user._id,
+        senderId: req.user._id,
+        type: "lead_assigned",
+        title: "Lead assigned to you",
+        message: `${creator.firstName || creator.name || "Someone"} assigned lead "${leadLabel}" to you`,
+        relatedEntity: { entityType: "Lead", entityId: updatedLead._id },
+        priority: "high",
+        metadata: { followUpId: followup._id },
+      });
+    } catch (notifyErr) {
+      console.warn("Lead assign notification failed:", notifyErr.message);
+    }
+
     res.status(200).json(updatedLead);
   } catch (error) {
     res

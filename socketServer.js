@@ -82,12 +82,84 @@ function initializeSocket(server) {
 
     socket.on("send_notification", async ({ to, title, message, type }) => {
       try {
-        const recipientSocket = onlineUsers.get(to);
-        if (recipientSocket) {
-          io.to(recipientSocket).emit("new_notification", {
-            title, message, type, timestamp: new Date()
+        const recipientId = to?.toString();
+        if (!recipientId) {
+          socket.emit("notification_sent", { success: false, error: "Missing recipient" });
+          return;
+        }
+
+        const normalizedType =
+          type === "lead_assignment" || type === "lead_assigned"
+            ? "lead_assigned"
+            : type === "follow_up" || type === "followUpAlert"
+              ? "follow_up_reminder"
+              : type && [
+                  "lead_assigned",
+                  "lead_status_change",
+                  "ticket_created",
+                  "ticket_updated",
+                  "ticket_assigned",
+                  "task_assigned",
+                  "task_due",
+                  "task_completed",
+                  "payment_received",
+                  "payment_due",
+                  "document_shared",
+                  "follow_up_reminder",
+                  "leave_request",
+                  "leave_approved",
+                  "leave_rejected",
+                  "expense_approved",
+                  "expense_rejected",
+                  "message_received",
+                  "event_reminder",
+                ].includes(type)
+                ? type
+                : "message_received";
+
+        // Persist when we can resolve company from recipient
+        try {
+          const recipient = await User.findById(recipientId).select("company");
+          if (recipient?.company) {
+            const Notification = require("./models/Notification");
+            const doc = await Notification.create({
+              company: recipient.company,
+              recipient: recipientId,
+              type: normalizedType,
+              title: title || "Notification",
+              message: message || "",
+              relatedEntity: {
+                entityType: "Event",
+                entityId: recipientId,
+              },
+              priority: "medium",
+            });
+            io.to(recipientId).emit("new_notification", {
+              _id: doc._id,
+              title: doc.title,
+              message: doc.message,
+              type: doc.type,
+              status: doc.status,
+              createdAt: doc.createdAt,
+            });
+          } else {
+            io.to(recipientId).emit("new_notification", {
+              title,
+              message,
+              type: normalizedType,
+              timestamp: new Date(),
+            });
+          }
+        } catch (persistErr) {
+          console.warn("send_notification persist failed:", persistErr.message);
+          io.to(recipientId).emit("new_notification", {
+            title,
+            message,
+            type: normalizedType,
+            timestamp: new Date(),
           });
         }
+
         socket.emit("notification_sent", { success: true, message: "Message sent" });
       } catch (error) {
         console.error("Notification error:", error);
@@ -150,6 +222,18 @@ function initializeSocket(server) {
         }
 
         const newMessage = await new Message(messageData).save();
+        if (replyTo) {
+          await newMessage.populate('replyTo', 'content messageType fileName from');
+        }
+
+        const replyPayload = newMessage.replyTo
+          ? {
+              _id: newMessage.replyTo._id || newMessage.replyTo,
+              content: newMessage.replyTo.content,
+              messageType: newMessage.replyTo.messageType,
+              fileName: newMessage.replyTo.fileName,
+            }
+          : null;
 
         io.to(to.toString()).emit("new_message", {
           messageId: newMessage._id,
@@ -161,6 +245,7 @@ function initializeSocket(server) {
           fileName: newMessage.fileName,
           fileSize: newMessage.fileSize,
           fileMimeType: newMessage.fileMimeType,
+          replyTo: replyPayload,
           status: newMessage.status,
           timestamp: newMessage.createdAt,
           clientMessageId
@@ -169,6 +254,12 @@ function initializeSocket(server) {
         const recipientOnline = onlineUsers.has(to.toString());
         if (recipientOnline) {
           await newMessage.markAsDelivered();
+          io.to(from.toString()).emit("message_delivered", {
+            messageId: newMessage._id,
+            clientMessageId,
+            status: "delivered",
+            deliveredAt: newMessage.deliveredAt,
+          });
         }
 
         // Confirm to sender
@@ -256,13 +347,22 @@ function initializeSocket(server) {
 
         await message.addReaction(userId, emoji);
 
-        const recipientId = message.to.toString();
-        io.to(recipientId).emit("message_reaction", {
-            messageId,
-            userId,
-            emoji,
-            reactionCounts: message.reactionCounts
-          });
+        const payload = {
+          messageId,
+          userId,
+          emoji,
+          reactionCounts: message.reactionCounts
+        };
+
+        if (message.groupId) {
+          io.to(`group_${message.groupId}`).emit("message_reaction", payload);
+        } else {
+          const recipients = new Set([
+            message.from?.toString(),
+            message.to?.toString(),
+          ].filter(Boolean));
+          recipients.forEach((id) => io.to(id).emit("message_reaction", payload));
+        }
 
         socket.emit("reaction_success", { 
           messageId, 
@@ -276,6 +376,44 @@ function initializeSocket(server) {
           messageId 
         });
       }
+    });
+
+    socket.on("remove_reaction", async ({ messageId, userId }) => {
+      try {
+        const message = await Message.findById(messageId);
+        if (!message) return;
+        await message.removeReaction(userId);
+        const payload = { messageId, userId };
+        if (message.groupId) {
+          io.to(`group_${message.groupId}`).emit("message_reaction_removed", payload);
+        } else {
+          [message.from?.toString(), message.to?.toString()].filter(Boolean)
+            .forEach((id) => io.to(id).emit("message_reaction_removed", payload));
+        }
+      } catch (err) {
+        console.error("Remove reaction error:", err);
+      }
+    });
+
+    // WebRTC call signaling (1:1)
+    socket.on("call_invite", ({ to, from, callType = "audio", offer }) => {
+      io.to(to.toString()).emit("call_incoming", { from, to, callType, offer });
+    });
+
+    socket.on("call_answer", ({ to, from, answer }) => {
+      io.to(to.toString()).emit("call_answered", { from, to, answer });
+    });
+
+    socket.on("call_ice_candidate", ({ to, from, candidate }) => {
+      io.to(to.toString()).emit("call_ice_candidate", { from, to, candidate });
+    });
+
+    socket.on("call_reject", ({ to, from, reason }) => {
+      io.to(to.toString()).emit("call_rejected", { from, to, reason });
+    });
+
+    socket.on("call_end", ({ to, from }) => {
+      io.to(to.toString()).emit("call_ended", { from, to });
     });
 
     // Enhanced read receipts
@@ -379,34 +517,58 @@ function initializeSocket(server) {
 
     socket.on("group_message", async (data) => {
       try {
-        const { from, groupId, message, messageType = 'text', fileData } = data;
-        let fileUrl = null;
-        
-        if (fileData && messageType !== 'text') {
-          fileUrl = await uploadFileToS3(fileData);
+        const {
+          from,
+          groupId,
+          content,
+          message,
+          messageType = 'text',
+          fileUrl,
+          fileName,
+          fileSize,
+          replyTo,
+          clientMessageId,
+          mentions = [],
+        } = data;
+
+        const group = await ChatGroup.findById(groupId);
+        if (!group) {
+          socket.emit("message_sent", { success: false, error: "Group not found" });
+          return;
         }
 
         const newMessage = await new Message({
           from,
           groupId,
-          content: message,
+          content: content || message || fileName || '',
           messageType,
           fileUrl,
-          fileName: fileData?.name,
-          fileSize: fileData?.size
+          fileName,
+          fileSize,
+          replyTo,
+          clientMessageId,
+          mentions,
         }).save();
+
+        await newMessage.populate('from', 'name avatar profileImage');
+        if (replyTo) await newMessage.populate('replyTo', 'content messageType fileName from');
 
         io.to(`group_${groupId}`).emit("new_group_message", {
           messageId: newMessage._id,
-          from,
+          from: newMessage.from,
           groupId,
-          message,
+          content: newMessage.content,
+          message: newMessage,
           messageType,
-          fileUrl,
+          fileUrl: newMessage.fileUrl,
+          fileName: newMessage.fileName,
+          replyTo: newMessage.replyTo,
+          mentions,
+          clientMessageId,
           timestamp: newMessage.createdAt
         });
 
-        socket.emit("message_sent", { success: true, messageId: newMessage._id });
+        socket.emit("message_sent", { success: true, messageId: newMessage._id, clientMessageId });
       } catch (err) {
         console.error("Group message error:", err);
         socket.emit("message_sent", { success: false, error: "Send failed" });
