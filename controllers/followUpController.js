@@ -2,12 +2,19 @@ const { RestoreObjectCommand } = require("@aws-sdk/client-s3");
 const LeadFollowUp = require("../models/followUp"); // Import the LeadFollowUp model
 const Lead = require("../models/Lead"); // Assuming you have a Lead model
 const LeadActivity = require("../models/LeadActivity"); // Assuming the model is in the models folder
-const mongoose = require("mongoose");
 
+function resolveCompanyId(user) {
+  return user?.company?._id || user?.company || null;
+}
+
+function resolveAssigneeId(assignedTo, fallbackUserId) {
+  if (assignedTo == null) return fallbackUserId;
+  const trimmed = String(assignedTo).trim();
+  return trimmed ? trimmed : fallbackUserId;
+}
+
+// Standalone Mongo (no replica set) cannot use multi-doc transactions.
 exports.createFollowUp = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const {
       leadId,
@@ -16,77 +23,118 @@ exports.createFollowUp = async (req, res) => {
       notes,
       nextFollowUpDate,
       assignedTo,
+      transferLeadOwnership = true,
     } = req.body;
 
     if (!leadId || !followUpDate || !status) {
-      throw new Error("Missing required fields");
+      return res.status(400).json({ message: "Missing required fields", required: ["leadId", "followUpDate", "status"] });
     }
 
-    const lead = await Lead.findById(leadId).session(session);
+    const companyId = resolveCompanyId(req.user);
+    if (!companyId) {
+      return res.status(403).json({ message: "Company profile is missing. Log out and sign in again." });
+    }
+
+    const lead = await Lead.findById(leadId);
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    const assigneeId = (assignedTo && String(assignedTo).trim())
-      ? String(assignedTo).trim()
-      : req.user._id;
-    const companyId = req.user.company?._id || req.user.company;
+    const assigneeId = resolveAssigneeId(assignedTo, req.user._id);
+    const scheduledAt = nextFollowUpDate || followUpDate;
 
     const newFollowUp = new LeadFollowUp({
       company: companyId,
       leadId,
-      followUpDate,
+      followUpDate: scheduledAt,
       status,
       notes,
-      nextFollowUpDate,
+      nextFollowUpDate: scheduledAt,
       assignedTo: assigneeId,
       createdBy: req.user._id,
     });
 
-    const savedFollowUp = await newFollowUp.save({ session });
+    const savedFollowUp = await newFollowUp.save();
 
-    const newActivity = new LeadActivity({
-      leadId,
-      company: companyId,
-      userId: req.user._id,
-      action: "followUp",
-      details: `Created a new follow-up on ${followUpDate}`,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
+    // When scheduling for a manager/teammate, hand the lead to them so they own follow-through
+    const shouldTransferLead =
+      transferLeadOwnership !== false &&
+      assignedTo &&
+      String(assigneeId) !== String(req.user._id) &&
+      String(lead.assignedTo || '') !== String(assigneeId);
 
-    const savedActivity = await newActivity.save({ session });
+    if (shouldTransferLead) {
+      try {
+        const User = require("../models/User");
+        const assigneeUser = await User.findById(assigneeId).select("firstName lastName name");
+        const previousAssignee = lead.assignedTo;
+        lead.assignedTo = assigneeId;
+        if (previousAssignee) lead.reshared = true;
+        await lead.save();
 
-    await session.commitTransaction();
+        await LeadActivity.create({
+          leadId,
+          company: companyId,
+          userId: req.user._id,
+          action: "assigned",
+          details: `Lead handed to ${assigneeUser?.firstName || ""} ${assigneeUser?.lastName || assigneeUser?.name || "assignee"} via follow-up schedule`,
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          metadata: { followUpId: savedFollowUp._id, reason: "follow_up_handoff" },
+        });
+      } catch (assignErr) {
+        console.warn("Follow-up lead handoff failed:", assignErr.message);
+      }
+    }
+
+    let savedActivity = null;
+    try {
+      const newActivity = new LeadActivity({
+        leadId,
+        company: companyId,
+        userId: req.user._id,
+        action: "followUp",
+        details: `Created a new follow-up on ${scheduledAt}`,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { followUpId: savedFollowUp._id, assignedTo: assigneeId },
+      });
+      savedActivity = await newActivity.save();
+    } catch (activityErr) {
+      console.warn("Follow-up activity log failed:", activityErr.message);
+    }
+
     res.status(201).json({
       followUp: savedFollowUp,
       activity: savedActivity,
+      leadTransferred: Boolean(shouldTransferLead),
     });
 
-    // Notify assignee outside the transaction (non-blocking for response)
-    if (String(assigneeId) !== String(req.user._id) && companyId) {
+    if (String(assigneeId) !== String(req.user._id)) {
       try {
         const { notifyUser } = require("../utils/notifyUser");
         await notifyUser({
           companyId,
           recipientId: assigneeId,
           senderId: req.user._id,
-          type: "follow_up_reminder",
-          title: "New follow-up assigned",
-          message: notes || `A follow-up was scheduled for you`,
-          relatedEntity: { entityType: "FollowUp", entityId: savedFollowUp._id },
+          type: shouldTransferLead ? "lead_assigned" : "follow_up_reminder",
+          title: shouldTransferLead ? "Lead assigned to you" : "New follow-up assigned",
+          message: shouldTransferLead
+            ? (notes || `A lead was handed to you with a scheduled follow-up`)
+            : (notes || `A follow-up was scheduled for you`),
+          relatedEntity: shouldTransferLead
+            ? { entityType: "Lead", entityId: leadId }
+            : { entityType: "FollowUp", entityId: savedFollowUp._id },
           priority: "medium",
-          metadata: { leadId },
+          metadata: { leadId, followUpId: savedFollowUp._id },
         });
       } catch (notifyErr) {
         console.warn("Follow-up create notify failed:", notifyErr.message);
       }
     }
   } catch (error) {
-    await session.abortTransaction();
+    console.error("Error creating follow-up:", error);
     res.status(500).json({ message: "Server error", error: error.message });
-  } finally {
-    session.endSession();
   }
 };
 
@@ -147,86 +195,70 @@ exports.getFollowUpsByLead = async (req, res) => {
 };
 
 exports.updateFollowUp = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  console.log(req.body);
-  
-
   try {
     const { followUpId } = req.params;
-    const { followUpDate, status, notes, nextFollowUpDate, assignedTo,completionNote } = req.body;
+    const { followUpDate, status, notes, nextFollowUpDate, assignedTo, completionNote } = req.body;
 
     if (!followUpId) {
-      throw new Error("Follow-up ID is required.");
+      return res.status(400).json({ message: "Follow-up ID is required." });
     }
 
-    // Find the follow-up
-    const followUp = await LeadFollowUp.findById(followUpId).session(session);
+    const followUp = await LeadFollowUp.findById(followUpId);
     if (!followUp) {
-      await session.abortTransaction();
       return res.status(404).json({ message: "Follow-up not found" });
     }
 
-    // Store original nextFollowUpDate for comparison
     const originalNextFollowUpDate = followUp.nextFollowUpDate;
+    const companyId = resolveCompanyId(req.user);
 
-    // Update fields only if provided
     if (followUpDate) followUp.followUpDate = followUpDate;
     if (status) followUp.status = status;
     if (notes) followUp.notes = notes;
     if (assignedTo) followUp.assignedTo = assignedTo;
     if (completionNote) followUp.completionNote = completionNote;
 
-    // Handle nextFollowUpDate updates explicitly
     if (nextFollowUpDate) {
       followUp.nextFollowUpDate = nextFollowUpDate;
-      followUp.updatedAt = Date.now(); // Always update the timestamp
+      followUp.updatedAt = Date.now();
     }
 
     followUp.updatedBy = req.user._id;
 
-    // Save the updates
-    const updatedFollowUp = await followUp.save({ session });
+    const updatedFollowUp = await followUp.save();
 
-    // Log general update activity
-    const generalActivity = new LeadActivity({
-      leadId: updatedFollowUp.leadId,
-      company: req.user.company._id,
-      userId: req.user._id,
-      action: "followUp",
-      details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
+    if (companyId) {
+      try {
+        await LeadActivity.create({
+          leadId: updatedFollowUp.leadId,
+          company: companyId,
+          userId: req.user._id,
+          action: "followUp",
+          details: `Updated follow-up on ${new Date(followUpDate || updatedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+        });
 
-    await generalActivity.save({ session });
-
-    // Log specific next follow-up date activity, if changed
-    if (nextFollowUpDate && nextFollowUpDate !== originalNextFollowUpDate?.toISOString()) {
-      const nextFollowUpActivity = new LeadActivity({
-        leadId: updatedFollowUp.leadId,
-        company: req.user.company._id,
-        userId: req.user._id,
-        action: "Rescheduled",
-        details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-IN")}`,
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-      });
-
-      await nextFollowUpActivity.save({ session });
+        if (nextFollowUpDate && nextFollowUpDate !== originalNextFollowUpDate?.toISOString()) {
+          await LeadActivity.create({
+            leadId: updatedFollowUp.leadId,
+            company: companyId,
+            userId: req.user._id,
+            action: "Rescheduled",
+            details: `Rescheduled to  ${new Date(nextFollowUpDate).toLocaleDateString("en-IN")}`,
+            ipAddress: req.ip,
+            userAgent: req.headers["user-agent"],
+          });
+        }
+      } catch (activityErr) {
+        console.warn("Follow-up update activity log failed:", activityErr.message);
+      }
     }
-
-    // Commit the transaction
-    await session.commitTransaction();
-    session.endSession();
 
     res.status(200).json({
       message: "Follow-up updated successfully.",
       followUp: updatedFollowUp
     });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     console.error("Error updating follow-up:", error.message);
     res.status(500).json({
       message: "An error occurred while updating the follow-up.",
@@ -237,51 +269,44 @@ exports.updateFollowUp = async (req, res) => {
 
 //delete a follow up
 exports.deleteFollowUp = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { followUpId } = req.params;
 
     if (!followUpId) {
-      throw new Error("Follow-up ID is required.");
+      return res.status(400).json({ message: "Follow-up ID is required." });
     }
 
-    // Find and delete the follow-up
-    const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId, { session });
+    const deletedFollowUp = await LeadFollowUp.findByIdAndDelete(followUpId);
 
     if (!deletedFollowUp) {
-      await session.abortTransaction();
       return res.status(404).json({ message: "Follow-up not found." });
     }
 
-    // Create a new activity log for the deletion
-    const newActivity = new LeadActivity({
-      leadId: deletedFollowUp.leadId,
-      userId: req.user._id,
-      company: req.user.company._id,
-      action: "deleted",
-      details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
-
-    await newActivity.save({ session });
-
-    // Commit the transaction
-    await session.commitTransaction();
+    const companyId = resolveCompanyId(req.user);
+    let newActivity = null;
+    if (companyId) {
+      try {
+        newActivity = await LeadActivity.create({
+          leadId: deletedFollowUp.leadId,
+          userId: req.user._id,
+          company: companyId,
+          action: "deleted",
+          details: `Deleted follow-up scheduled on ${new Date(deletedFollowUp.followUpDate).toLocaleDateString("en-IN")}`,
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+        });
+      } catch (activityErr) {
+        console.warn("Follow-up delete activity log failed:", activityErr.message);
+      }
+    }
 
     res.status(200).json({
       message: "Follow-up deleted successfully.",
       activity: newActivity,
     });
   } catch (error) {
-    // Abort the transaction on error
-    await session.abortTransaction();
+    console.error("Error deleting follow-up:", error.message);
     res.status(500).json({ message: "Server error.", error: error.message });
-  } finally {
-    // End the session
-    session.endSession();
   }
 };
 
@@ -635,9 +660,6 @@ exports.getFilteredFollowUps = async (req, res) => {
 
 
 exports.createWoxiFollowUp = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const {
       leadId,
@@ -649,7 +671,6 @@ exports.createWoxiFollowUp = async (req, res) => {
       company
     } = req.body;
 
-    // Enhanced validation
     if (!leadId || !followUpDate || !status) {
       return res.status(400).json({ 
         message: "Required fields missing", 
@@ -657,59 +678,59 @@ exports.createWoxiFollowUp = async (req, res) => {
       });
     }
 
-    // Validate date formats
     if (!Date.parse(followUpDate) || (nextFollowUpDate && !Date.parse(nextFollowUpDate))) {
       return res.status(400).json({ message: "Invalid date format" });
     }
 
-    // Check if lead exists
-    const lead = await Lead.findById(leadId).session(session);
+    const lead = await Lead.findById(leadId);
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
-    // Create follow-up object
+    const companyId = company || resolveCompanyId(req.user);
+    if (!companyId) {
+      return res.status(403).json({ message: "Company profile is missing" });
+    }
+
     const newFollowUp = new LeadFollowUp({
-      company,
+      company: companyId,
       leadId,
       followUpDate: new Date(followUpDate),
       status,
       notes,
       nextFollowUpDate: nextFollowUpDate ? new Date(nextFollowUpDate) : null,
-      assignedTo: assignedTo?.trim() ? assignedTo : req.user._id,
+      assignedTo: resolveAssigneeId(assignedTo, req.user._id),
       createdBy: req.user._id,
-      bot:true
+      bot: true
     });
 
-    const savedFollowUp = await newFollowUp.save({ session });
+    const savedFollowUp = await newFollowUp.save();
 
-    // Create activity log
-    const newActivity = new LeadActivity({
-      leadId,
-      company: req.user.company._id,
-      userId: req.user._id,
-      action: "followUp",
-      details: `Woxi created a new follow-up scheduled for ${new Date(followUpDate).toLocaleDateString("en-IN")}`,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
+    let savedActivity = null;
+    try {
+      savedActivity = await LeadActivity.create({
+        leadId,
+        company: companyId,
+        userId: req.user._id,
+        action: "followUp",
+        details: `Woxi created a new follow-up scheduled for ${new Date(followUpDate).toLocaleDateString("en-IN")}`,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+    } catch (activityErr) {
+      console.warn("Woxi follow-up activity log failed:", activityErr.message);
+    }
 
-    const savedActivity = await newActivity.save({ session });
-
-    await session.commitTransaction();
     res.status(201).json({
       message: "Follow-up created successfully",
       followUp: savedFollowUp,
       activity: savedActivity,
     });
   } catch (error) {
-    await session.abortTransaction();
     console.error("Error creating follow-up:", error);
     res.status(500).json({ 
       message: "Failed to create follow-up", 
       error: error.message 
     });
-  } finally {
-    session.endSession();
   }
 };

@@ -3,7 +3,26 @@ const Lead = require('../models/Lead');
 const Customer = require('../models/Customer');
 const ProductService = require('../models/productService');
 const Invoice = require('../models/invoice');
+const LeadActivity = require('../models/LeadActivity');
 const mongoose = require('mongoose');
+
+async function logSaleActivity(req, leadId, sale) {
+  if (!leadId || !req.user?.company?._id) return;
+  try {
+    await LeadActivity.create({
+      leadId,
+      company: req.user.company._id,
+      userId: req.user._id,
+      action: 'sale_created',
+      details: `Sale ${sale.salesId || sale._id} created`,
+      metadata: { saleId: sale._id, salesId: sale.salesId },
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+    });
+  } catch (err) {
+    console.warn('Sale activity log failed:', err.message);
+  }
+}
 
 // Create a new sale
 exports.createSale = async (req, res) => {
@@ -53,6 +72,8 @@ exports.createSale = async (req, res) => {
         { path: 'createdBy', select: 'name email' },
         { path: 'items.product', select: 'name description price' }
       ]);
+
+      await logSaleActivity(req, savedSale.leadId?._id || savedSale.leadId, savedSale);
 
       res.status(201).json({
         success: true,
@@ -164,6 +185,8 @@ exports.createSale = async (req, res) => {
         { path: 'createdBy', select: 'name email' },
         { path: 'items.product', select: 'name description price' }
       ]);
+
+      await logSaleActivity(req, savedSale.leadId?._id || savedSale.leadId, savedSale);
 
       res.status(201).json({
         success: true,

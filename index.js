@@ -62,6 +62,7 @@ const messageRoutes=require('./routes/messageRoutes')
 const billingRoutes=require('./routes/billingRoutes')
 const { initWhatsAppModule } = require('./modules/whatsapp');
 const { initEmailModule } = require('./modules/email');
+const { initPersonalWhatsAppModule } = require('./modules/personalWhatsapp');
 const alertBeforeMinutes = 30;
 // const io = new Server(server, {
 //   cors: {
@@ -162,6 +163,7 @@ app.use('/api/billing',billingRoutes)
 // WhatsApp Business Cloud API module
 initWhatsAppModule(app);
 initEmailModule(app);
+initPersonalWhatsAppModule(app);
 
 // Initialize S3 client
 const s3Client = new S3Client({

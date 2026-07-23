@@ -11,9 +11,15 @@ const chatGroupSchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    index: true
+  },
   members: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    role: { type: String, enum: ['admin', 'member'], default: 'member' }
+    role: { type: String, enum: ['admin', 'member'], default: 'member' },
+    joinedAt: { type: Date, default: Date.now }
   }],
   avatar: String,
   isActive: {
@@ -23,7 +29,16 @@ const chatGroupSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
+});
+
+chatGroupSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 module.exports = mongoose.model("ChatGroup", chatGroupSchema); 

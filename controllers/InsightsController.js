@@ -2,6 +2,10 @@ const BankAccount = require('../models/Account');
 const Lead = require('../models/Lead');
 const Campaign = require('../models/Campaign');
 const Employee = require('../models/HR');
+const Customer = require('../models/Customer');
+const Sales = require('../models/sales');
+const LeadFollowUp = require('../models/followUp');
+const LeadActivity = require('../models/LeadActivity');
 const mongoose = require('mongoose');
 const cache = require('memory-cache');
 const Redis = require('ioredis'); // For distributed caching
@@ -565,23 +569,22 @@ class InsightsController {
   // Get overall lead insights
   static async getLeadInsights(req, res) {
     try {
-      const filter = { company: req.user.company._id };
-      
-      // Get active campaigns first
-      const activeCampaigns = await Campaign.find({ 
-        company: req.user.company._id,
-        isActive: true 
-      });
-      
-      // Get leads for active campaigns only
-      const leads = await Lead.find({
-        company: req.user.company._id,
-        campaignid: { $in: activeCampaigns.map(c => c._id) }
-      }).populate('assignedTo', 'name email')
+      if (!req.user?.company?._id) {
+        return res.json(InsightsController.emptyLeadInsights());
+      }
+
+      const leadQuery = { company: req.user.company._id };
+      // Team members only see leads assigned to them
+      if (req.user.role === 'user') {
+        leadQuery.assignedTo = req.user._id;
+      }
+
+      const leads = await Lead.find(leadQuery)
+        .populate('assignedTo', 'name email')
         .populate('campaignid', 'name');
       
       if (!leads || leads.length === 0) {
-        return res.status(404).json({ message: 'No leads found' });
+        return res.json(InsightsController.emptyLeadInsights());
       }
 
       // Calculate overall metrics
@@ -698,6 +701,10 @@ class InsightsController {
   // Get campaign insights
   static async getCampaignInsights(req, res) {
     try {
+      if (!req.user?.company?._id) {
+        return res.json(InsightsController.emptyCampaignInsights());
+      }
+
       // Filter campaigns by company
       const filter = { company: req.user.company._id };
       
@@ -707,7 +714,7 @@ class InsightsController {
         .populate('Pipeline', 'name');
       
       if (!campaigns || campaigns.length === 0) {
-        return res.status(404).json({ message: 'No campaigns found' });
+        return res.json(InsightsController.emptyCampaignInsights());
       }
 
       // Get all leads to analyze campaign performance
@@ -803,6 +810,10 @@ class InsightsController {
   // Get HR insights
   static async getHRInsights(req, res) {
     try {
+      if (!req.user?.company?._id) {
+        return res.json(InsightsController.emptyHRInsights());
+      }
+
       // Filter employees by company
       const filter = { company: req.user.company._id };
       
@@ -812,7 +823,7 @@ class InsightsController {
         .populate('User', 'name email');
       
       if (!employees || employees.length === 0) {
-        return res.status(404).json({ message: 'No employees found' });
+        return res.json(InsightsController.emptyHRInsights());
       }
 
       // Calculate overall metrics
@@ -973,6 +984,240 @@ class InsightsController {
     } catch (error) {
       res.status(500).json({ message: 'Error clearing cache', error: error.message });
     }
+  }
+
+  /** Operating dashboard KPIs from Mongo (same shape as platform /dashboard/summary). */
+  static async getOperatingDashboard(req, res) {
+    try {
+      const companyId = req.user?.company?._id;
+      if (!companyId) {
+        return res.json(InsightsController.emptyOperatingDashboard());
+      }
+
+      const now = new Date();
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const followCriteria = { company: companyId };
+      const leadCriteria = { company: companyId };
+      const salesCriteria = { company: companyId };
+      const activityCriteria = { company: companyId };
+      const isTeamMember = req.user.role === 'user';
+      const userId = req.user._id;
+
+      if (isTeamMember) {
+        followCriteria.assignedTo = userId;
+        leadCriteria.assignedTo = userId;
+        activityCriteria.userId = userId;
+      }
+
+      // Team members: only deals they created or tied to their assigned leads
+      let teamLeadIds = null;
+      if (isTeamMember) {
+        teamLeadIds = await Lead.find(leadCriteria).distinct('_id');
+        salesCriteria.$or = [
+          { createdBy: userId },
+          ...(teamLeadIds.length ? [{ leadId: { $in: teamLeadIds } }] : []),
+        ];
+      }
+
+      const [
+        totalLeads,
+        qualifiedLeads,
+        convertedLeads,
+        lostLeads,
+        leadsByStatus,
+        totalContacts,
+        openDeals,
+        wonDeals,
+        lostDeals,
+        pipelineValueAgg,
+        wonValueAgg,
+        tasksDueToday,
+        openTasks,
+        activitiesToday,
+        recentActivities,
+      ] = await Promise.all([
+        Lead.countDocuments(leadCriteria),
+        Lead.countDocuments({
+          ...leadCriteria,
+          status: { $in: ['Interested', 'Qualified', 'In Progress', 'Processing'] },
+        }),
+        Lead.countDocuments({ ...leadCriteria, status: { $in: ['Converted', 'Won'] } }),
+        Lead.countDocuments({ ...leadCriteria, status: { $in: ['Lost', 'Not Interested'] } }),
+        Lead.aggregate([
+          { $match: leadCriteria },
+          { $group: { _id: { $ifNull: ['$status', 'Unknown'] }, count: { $sum: 1 } } },
+        ]),
+        isTeamMember ? Promise.resolve(0) : Customer.countDocuments({ company: companyId }),
+        Sales.countDocuments({
+          ...salesCriteria,
+          status: { $in: ['pending', 'in-progress'] },
+        }),
+        Sales.countDocuments({ ...salesCriteria, status: 'completed' }),
+        Sales.countDocuments({ ...salesCriteria, status: 'cancelled' }),
+        Sales.aggregate([
+          {
+            $match: {
+              ...salesCriteria,
+              status: { $in: ['pending', 'in-progress'] },
+            },
+          },
+          { $group: { _id: null, total: { $sum: '$totalAmountPaid' } } },
+        ]),
+        Sales.aggregate([
+          { $match: { ...salesCriteria, status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$totalAmountPaid' } } },
+        ]),
+        LeadFollowUp.countDocuments({
+          ...followCriteria,
+          status: { $ne: 'Completed' },
+          nextFollowUpDate: { $gte: startOfDay, $lte: endOfDay },
+        }),
+        LeadFollowUp.countDocuments({
+          ...followCriteria,
+          status: { $ne: 'Completed' },
+        }),
+        LeadActivity.countDocuments({
+          ...activityCriteria,
+          timestamp: { $gte: startOfDay, $lte: endOfDay },
+        }),
+        LeadActivity.find(activityCriteria)
+          .sort({ timestamp: -1 })
+          .limit(10)
+          .select('action details timestamp leadId')
+          .lean(),
+      ]);
+
+      return res.json({
+        scope: isTeamMember ? 'mine' : 'company',
+        kpis: {
+          totalLeads,
+          qualifiedLeads,
+          totalContacts,
+          totalCompanies: 0,
+          openDeals,
+          wonDeals,
+          lostDeals,
+          pipelineValue: Number(pipelineValueAgg[0]?.total ?? 0),
+          wonValue: Number(wonValueAgg[0]?.total ?? 0),
+          winRate: (() => {
+            const dealWinDenom = wonDeals + lostDeals;
+            const winDenom = convertedLeads + lostLeads;
+            if (dealWinDenom > 0) return Math.round((wonDeals / dealWinDenom) * 100);
+            if (winDenom > 0) return Math.round((convertedLeads / winDenom) * 100);
+            return 0;
+          })(),
+          tasksDueToday,
+          openTasks,
+          activitiesToday,
+        },
+        funnel: leadsByStatus.map((row) => ({
+          status: row._id,
+          count: row.count,
+        })),
+        recentActivities: recentActivities.map((a) => ({
+          id: String(a._id),
+          type: a.action,
+          subject: a.details || a.action,
+          createdAt: a.timestamp,
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching operating dashboard:', error);
+      res.status(500).json({
+        message: 'Error fetching operating dashboard',
+        error: error.message,
+      });
+    }
+  }
+
+  static emptyOperatingDashboard() {
+    return {
+      kpis: {
+        totalLeads: 0,
+        qualifiedLeads: 0,
+        totalContacts: 0,
+        totalCompanies: 0,
+        openDeals: 0,
+        wonDeals: 0,
+        lostDeals: 0,
+        pipelineValue: 0,
+        wonValue: 0,
+        winRate: 0,
+        tasksDueToday: 0,
+        openTasks: 0,
+        activitiesToday: 0,
+      },
+      funnel: [],
+      recentActivities: [],
+    };
+  }
+
+  static emptyLeadInsights() {
+    return {
+      overallSummary: {
+        totalLeads: 0,
+        convertedLeads: 0,
+        conversionRate: 0,
+        untouchedLeads: 0,
+        untouchedPercentage: 0,
+      },
+      statusBreakdown: {},
+      sourceBreakdown: {},
+      sourceConversionBreakdown: {},
+      campaignBreakdown: {},
+      assignedToBreakdown: {},
+      monthlyTrends: {},
+      metrics: {
+        averageNotesPerLead: 0,
+        mostCommonStatus: 'None',
+        mostCommonSource: 'None',
+        mostEffectiveSource: null,
+        mostActiveAssignee: 'None',
+      },
+    };
+  }
+
+  static emptyCampaignInsights() {
+    return {
+      overallSummary: {
+        totalCampaigns: 0,
+        totalLeads: 0,
+        averageConversionRate: 0,
+      },
+      campaignPerformance: [],
+      monthlyTrends: {},
+      userBreakdown: {},
+      pipelineBreakdown: {},
+      metrics: {
+        mostActiveCampaignOwner: 'None',
+        mostUsedPipeline: 'None',
+      },
+    };
+  }
+
+  static emptyHRInsights() {
+    return {
+      overallSummary: {
+        totalEmployees: 0,
+        activeEmployees: 0,
+        inactiveEmployees: 0,
+        averageTenureMonths: 0,
+      },
+      departmentBreakdown: {},
+      jobTitleBreakdown: {},
+      roleBreakdown: {},
+      statusBreakdown: {},
+      monthlyHiringTrends: {},
+      metrics: {
+        largestDepartment: 'None',
+        mostCommonJobTitle: 'None',
+        mostCommonRole: 'None',
+      },
+    };
   }
 }
 

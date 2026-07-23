@@ -23,6 +23,7 @@ const LeadActivitySchema = new Schema({
       'created', 'updated', 'status_change', 'note_added', 'assigned', 'deleted',
       'followUp', 'notPicked', 'Rescheduled', 'Answered', 'NotAnswered', 'Busy',
       'Wrong Number', 'Not Reachable', 'Callback Requested',
+      'ticket_created', 'sale_created',
       'whatsapp_temp_sent', 'whatsapp_message_received', 'whatsapp_message_sent',
       'email_sent', 'email_received', 'email_opened', 'email_clicked', 'email_bounced',
       'email_spam', 'email_unsubscribed', 'email_replied', 'email_attachment_downloaded',

@@ -16,13 +16,22 @@ const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token
 const MS_SCOPES = ['https://outlook.office365.com/IMAP.AccessAsUser.All', 'https://outlook.office365.com/SMTP.Send', 'offline_access', 'email'].join(' ');
 
 function getRedirectUri(provider) {
-  const base = process.env.API_BASE_URL || process.env.BACKEND_URL || 'http://localhost:8000';
-  return `${base}/api/email/oauth/${provider}/callback`;
+  const base =
+    process.env.API_BASE_URL ||
+    process.env.PUBLIC_API_URL ||
+    process.env.API_ORIGIN ||
+    process.env.BACKEND_URL ||
+    'http://localhost:8000';
+  return `${base.replace(/\/$/, '')}/api/email/oauth/${provider}/callback`;
 }
 
 function getFrontendRedirect() {
-  const base = process.env.FRONTEND_URL || 'http://localhost:3000';
-  return `${base}/en/manager/email/smtp?oauth=success`;
+  const base =
+    process.env.FRONTEND_URL ||
+    process.env.APP_ORIGIN ||
+    process.env.CORS_ORIGIN?.split(',')[0] ||
+    'http://localhost:3000';
+  return `${base.replace(/\/$/, '')}/en/manager/email/smtp?oauth=success`;
 }
 
 function buildGoogleAuthUrl(state, config) {

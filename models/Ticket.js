@@ -44,6 +44,7 @@ const TicketSchema = new mongoose.Schema({
      required: true,
       unique: true, default: () => `TICKET-${new Date().getTime()}` }, // Auto-generated
       customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer'},
+  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null },
   issue_details: {
     subject: { type: String, 
         required: true 

@@ -2,6 +2,8 @@ const AWS = require('aws-sdk');
 const Ticket = require('../models/Ticket');
 const Customer = require('../models/Customer');
 const User = require('../models/User');
+const Lead = require('../models/Lead');
+const LeadActivity = require('../models/LeadActivity');
 const { v4: uuidv4 } = require('uuid'); // For generating unique file names
 const {S3} = require("@aws-sdk/client-s3")
 const s3Client = require("../config/s3")
@@ -12,6 +14,24 @@ const s3 = new AWS.S3({
   region: process.env.AWS_REGION,
 });
 
+async function logLeadActivity(req, leadId, action, details, metadata = {}) {
+  if (!leadId || !req.user?.company?._id) return;
+  try {
+    await LeadActivity.create({
+      leadId,
+      company: req.user.company._id,
+      userId: req.user._id,
+      action,
+      details,
+      metadata,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+    });
+  } catch (err) {
+    console.warn('Lead activity log failed:', err.message);
+  }
+}
+
 // Create a new ticket with file upload
 exports.createTicket = async (req, res) => {
   try {
@@ -21,6 +41,7 @@ exports.createTicket = async (req, res) => {
 
     const {
       customerId,
+      leadId,
       assignedTo,
       notes,
       sla,
@@ -44,6 +65,17 @@ exports.createTicket = async (req, res) => {
     const customerExists = await Customer.findById(customerId);
     if (!customerExists) {
       return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    let linkedLeadId = leadId || null;
+    if (linkedLeadId) {
+      const leadExists = await Lead.findOne({
+        _id: linkedLeadId,
+        company: req.user.company._id,
+      });
+      if (!leadExists) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
     }
 
     // Validate Assigned User (if provided)
@@ -79,6 +111,7 @@ exports.createTicket = async (req, res) => {
     // Create the new ticket
     const newTicket = new Ticket({
       customer: customerId,
+      leadId: linkedLeadId,
       company: req.user.company._id,
       issue_details: {
         subject: subject,
@@ -103,6 +136,13 @@ exports.createTicket = async (req, res) => {
 
     // Save the ticket to the database
     const savedTicket = await newTicket.save();
+    await logLeadActivity(
+      req,
+      linkedLeadId,
+      'ticket_created',
+      `Ticket ${savedTicket.ticket_id} created: ${subject}`,
+      { ticketId: savedTicket._id, ticket_id: savedTicket.ticket_id }
+    );
     return res.status(201).json({ message: 'Ticket created successfully', ticket: savedTicket });
   } catch (error) {
     console.error('Error creating ticket:', error);
@@ -117,13 +157,14 @@ exports.getTickets = async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized: company profile is missing' });
     }
 
-    const { ticketId, customerId, assignedTo, status, priority } = req.query;
+    const { ticketId, customerId, leadId, assignedTo, status, priority } = req.query;
 
     // If a specific ticket ID is provided, fetch the ticket by ID
     if (ticketId) {
       const ticket = await Ticket.findById(ticketId)
-        .populate('customer') // Populate customer details
-        .populate('assignedTo','firstName lastName role') // Populate assigned user details
+        .populate('customer')
+        .populate('leadId', 'first_name last_name email phone')
+        .populate('assignedTo','firstName lastName role')
         .populate('notes.author','firstName lastName')
          .populate('history.changed_by', 'firstName lastName');
 
@@ -137,13 +178,15 @@ exports.getTickets = async (req, res) => {
     // Build a query object for filtering
     const query = { company: req.user.company._id };
     if (customerId) query.customer = customerId;
+    if (leadId) query.leadId = leadId;
     if (assignedTo) query.assignedTo = assignedTo;
     if (status) query['issue_details.status'] = status;
     if (priority) query['issue_details.priority'] = priority;
 
     // Fetch tickets with applied filters
     const tickets = await Ticket.find(query)
-      .populate('customer') // Populate customer details
+      .populate('customer')
+      .populate('leadId', 'first_name last_name email phone')
       .populate('notes.author','firstName lastName')
       .populate('assignedTo','firstName lastName role')
        .populate('history.changed_by', 'firstName lastName')
@@ -164,8 +207,9 @@ exports.getTicketById = async (req, res) => {
 
     // Find the ticket by ID and populate related fields
     const ticket = await Ticket.findById(ticketId)
-      .populate('customer') // Populate customer details
-      .populate('assignedTo','firstName lastName role') // Populate assigned user details
+      .populate('customer')
+      .populate('leadId', 'first_name last_name email phone name')
+      .populate('assignedTo','firstName lastName role')
       .populate('notes.author','firstName lastName')
     if (!ticket) {
       return res.status(404).json({ message: 'Ticket not found' });

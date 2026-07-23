@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const Company = require('../models/Company');
+const { ensureCompanyPlan } = require('../utils/ensureCompanyPlan');
 const User = require('../models/User');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
@@ -145,7 +146,9 @@ exports.createCompany = async (req, res) => {
     // Commit transaction
     await session.commitTransaction();
     session.endSession();
-    
+
+    await ensureCompanyPlan(newCompany._id);
+  
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,

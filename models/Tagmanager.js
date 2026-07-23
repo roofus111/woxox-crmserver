@@ -9,7 +9,6 @@ const tagSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    unique: true,
     trim: true
   },
   description: {
@@ -32,6 +31,8 @@ const tagSchema = new mongoose.Schema({
   },
   
 }, { timestamps: true });
+
+tagSchema.index({ company: 1, name: 1 }, { unique: true });
 
 // Method to increment leads count
 tagSchema.methods.incrementLeadsCount = function() {

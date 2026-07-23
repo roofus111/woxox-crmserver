@@ -120,6 +120,19 @@ const messageSchema = new mongoose.Schema({
     ref: "User"
   },
   forwardedAt: Date,
+
+  // Mentions (@user)
+  mentions: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  }],
+
+  // Starred by users
+  starredBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    index: true
+  }],
   
   // Reactions
   reactions: [reactionSchema],
@@ -150,6 +163,8 @@ messageSchema.index({ createdAt: -1 });
 messageSchema.index({ from: 1, to: 1, createdAt: -1 });
 messageSchema.index({ groupId: 1, createdAt: -1 });
 messageSchema.index({ clientMessageId: 1 }, { sparse: true });
+messageSchema.index({ content: 'text', fileName: 'text' });
+messageSchema.index({ starredBy: 1, createdAt: -1 });
 
 // Add updatedAt timestamp
 messageSchema.pre('save', function(next) {
@@ -197,6 +212,21 @@ messageSchema.methods.addReaction = function(userId, emoji) {
   return this.save();
 };
 
+messageSchema.methods.removeReaction = function(userId) {
+  this.reactions = this.reactions.filter(
+    r => r.user.toString() !== userId.toString()
+  );
+  return this.save();
+};
+
+messageSchema.methods.toggleStar = function(userId) {
+  const id = userId.toString();
+  const idx = this.starredBy.findIndex(u => u.toString() === id);
+  if (idx >= 0) this.starredBy.splice(idx, 1);
+  else this.starredBy.push(userId);
+  return this.save();
+};
+
 messageSchema.methods.softDelete = function(userId) {
   this.deleted = true;
   this.deletedAt = new Date();
@@ -219,7 +249,8 @@ messageSchema.statics.getMessageHistory = function(userId1, userId2, options = {
     .skip(offset)
     .limit(limit)
     .populate('from', 'name avatar')
-    .populate('to', 'name avatar');
+    .populate('to', 'name avatar')
+    .populate('replyTo', 'content messageType fileName from');
 };
 
 module.exports = mongoose.model("Message", messageSchema); 

@@ -1,36 +1,84 @@
 const Pipeline = require('../models/pipeline');
 
+function getCompanyId(user) {
+  if (!user) return null;
+  if (user.company) {
+    return typeof user.company === 'object' && user.company._id
+      ? user.company._id
+      : user.company;
+  }
+  return null;
+}
+
 // Create a new pipeline
 exports.createPipeline = async (req, res) => {
   try {
+    const companyId = getCompanyId(req.user);
+    if (!companyId) {
+      return res.status(400).json({
+        error: 'Your account is not linked to a company yet. Complete company registration first.',
+      });
+    }
+
     const pipeline = new Pipeline({
       ...req.body,
-      company: req.user.company._id,
+      company: companyId,
       User: req.user._id,
-    }); // Assuming validated data in req.body
+    });
     const savedPipeline = await pipeline.save();
     res.status(201).json(savedPipeline);
   } catch (error) {
+    console.error('createPipeline error:', error);
     res.status(400).json({ error: error.message });
   }
 };
+
 exports.getPipelines = async (req, res) => {
   try {
-    const pipelines = await Pipeline.find({ company: req.user.company._id })
-      .populate('User', 'name email'); // Populate user data
+    const companyId = getCompanyId(req.user);
+    if (!companyId) {
+      return res.status(200).json([]);
+    }
+
+    let pipelines = await Pipeline.find({ company: companyId }).populate(
+      'User',
+      'name email'
+    );
+
+    // Campaigns depend on legacy Mongo pipelines. If none exist yet, seed a
+    // default so the Campaign "Choose Pipeline" dropdown is never empty.
+    if (!pipelines.length) {
+      await Pipeline.create({
+        name: 'Sales Pipeline',
+        description: 'Auto-created for campaigns',
+        company: companyId,
+        User: req.user._id,
+        stages: [
+          { name: 'New', property: 'Pending', order: 0 },
+          { name: 'Contacted', property: 'Processing', order: 1 },
+          { name: 'Qualified', property: 'Processing', order: 2 },
+          { name: 'Won', property: 'Won', order: 3 },
+          { name: 'Lost', property: 'Lost', order: 4 },
+        ],
+      });
+      pipelines = await Pipeline.find({ company: companyId }).populate(
+        'User',
+        'name email'
+      );
+    }
+
     res.status(200).json(pipelines);
   } catch (error) {
+    console.error('getPipelines error:', error);
     res.status(500).json({ error: error.message });
   }
 };
+
 exports.getPipelineById = async (req, res) => {
   try {
-    const { id } = req.params; // Extract pipeline ID from the request parameters
+    const { id } = req.params;
+    const pipeline = await Pipeline.findById(id);
 
-    // Find the pipeline by ID and populate the user field
-    const pipeline = await Pipeline.findById(id)
-
-    // Check if the pipeline exists
     if (!pipeline) {
       return res.status(404).json({ message: 'Pipeline not found' });
     }
@@ -57,6 +105,7 @@ exports.updatePipeline = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
 exports.deletePipeline = async (req, res) => {
   try {
     const { pipelineid } = req.params;

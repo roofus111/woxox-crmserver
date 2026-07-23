@@ -739,7 +739,7 @@ exports.configureImap = async (req, res) => {
 // OAuth (callback handlers are public)
 exports.getOAuthUrls = async (req, res) => {
   try {
-    const urls = OAuthService.getAuthUrls(companyId(req), userId(req));
+    const urls = await OAuthService.getAuthUrls(companyId(req), userId(req));
     return success(res, urls);
   } catch (err) {
     return error(res, err.message);

@@ -5,7 +5,9 @@ const { S3 } = require("@aws-sdk/client-s3");
 const s3Client = require("../config/s3");
 const multer = require('multer');
 const mongoose =require('mongoose')
-const {CompanyPurchase} = require('../models/Plan');
+const { ensureCompanyPlan, getEmployeeLimit } = require('../utils/ensureCompanyPlan');
+
+const VALID_ROLES = ['admin', 'manager', 'user', 'guest', 'hr', 'docteam', 'finance', 'pipeline'];
 
 // Configure AWS S3
 const s3 = new AWS.S3({
@@ -18,7 +20,11 @@ const s3 = new AWS.S3({
 // Get all profiles within the user's company
 exports.getAllProfiles = async (req, res) => {
   try {
-    const profiles = await UserProfile.find({ company: req.user.company._id });
+    const companyId = req.user?.company?._id;
+    if (!companyId) {
+      return res.status(200).json([]);
+    }
+    const profiles = await UserProfile.find({ company: companyId });
     res.status(200).json(profiles);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -27,27 +33,68 @@ exports.getAllProfiles = async (req, res) => {
 
 // Create a new user profile
 exports.createProfile = async (req, res) => {
-  console.log(req.body);
-  const plan = await CompanyPurchase.findOne({companyId: req.user.company._id});
-  if(!plan){
-    return res.status(400).json({message: "Plan not found"});
-  }
-  let totalActiveUsers = await UserProfile.countDocuments({company: req.user.company._id,isActive: true});
-
-  if(totalActiveUsers >= plan.modules[0].plans[0].employeeLimit){
-    return res.status(400).json({message: "Maximum number of users reached"});
-  }
-
-  const userProfile = new UserProfile({
-    ...req.body,
-    company: req.user.company._id
-  });
-
   try {
+    const companyId = req.user?.company?._id;
+    if (!companyId) {
+      return res.status(400).json({
+        message: 'Company profile is not set up. Complete company registration first.',
+      });
+    }
+
+    const plan = await ensureCompanyPlan(companyId);
+    const employeeLimit = getEmployeeLimit(plan);
+    const totalActiveUsers = await UserProfile.countDocuments({
+      company: companyId,
+      isActive: true,
+    });
+
+    if (totalActiveUsers >= employeeLimit) {
+      return res.status(400).json({
+        message: `Maximum number of users (${employeeLimit}) reached. Upgrade your plan to add more.`,
+      });
+    }
+
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const existingEmail = await UserProfile.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ message: 'A user with this email already exists' });
+    }
+
+    const firstName = String(req.body.firstName || '').trim();
+    const lastName = String(req.body.lastName || '').trim();
+    if (!firstName || !lastName) {
+      return res.status(400).json({ message: 'First name and last name are required' });
+    }
+
+    let role = req.body.role || 'user';
+    if (role === 'employee') role = 'user';
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({
+        message: `Invalid role "${req.body.role}". Choose admin, manager, user, hr, finance, or pipeline.`,
+      });
+    }
+
+    const userProfile = new UserProfile({
+      email,
+      firstName,
+      lastName,
+      name: String(req.body.name || `${firstName} ${lastName}`).trim(),
+      phone: req.body.phone || '',
+      password: req.body.password || `${firstName}@CRMpass24`,
+      role,
+      company: companyId,
+      isEmailVerified: true,
+    });
+
     const newProfile = await userProfile.save();
     res.status(201).json(newProfile);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    console.error('createProfile error:', err);
+    res.status(400).json({ message: err.message || 'Failed to create employee' });
   }
 };
 
@@ -72,30 +119,41 @@ exports.getProfileById = async (req, res) => {
 // Controller to update profile by ID
 exports.updateProfileById = async (req, res) => {
   try {
-    const { userid } = req.params;
-    const updates = req.body; // Get the updated fields from the request body
+    const companyId = req.user?.company?._id;
+    if (!companyId) {
+      return res.status(400).json({ message: 'Company profile is not set up.' });
+    }
 
-    // Check if the profile exists
-    const profile = await UserProfile.findOne({ 
-      _id: userid, 
-      company: req.user.company._id 
+    const { userid } = req.params;
+    const profile = await UserProfile.findOne({
+      _id: userid,
+      company: companyId,
     });
 
     if (!profile) {
-      return res.status(404).json({ message: "Profile not found" });
+      return res.status(404).json({ message: 'Profile not found' });
     }
 
-    // Update the profile
+    const updates = { ...req.body };
+    if (updates.role === 'employee') updates.role = 'user';
+    if (updates.role && !VALID_ROLES.includes(updates.role)) {
+      return res.status(400).json({ message: `Invalid role "${updates.role}"` });
+    }
+    if (updates.email) {
+      updates.email = String(updates.email).trim().toLowerCase();
+    }
+
     Object.keys(updates).forEach((key) => {
-      profile[key] = updates[key];
+      if (key !== '_id') {
+        profile[key] = updates[key];
+      }
     });
 
-    // Save the updated profile
     await profile.save();
 
-    res.status(200).json({ message: "Profile updated successfully", profile });
+    res.status(200).json({ message: 'Profile updated successfully', profile });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(400).json({ message: err.message });
   }
 };
 

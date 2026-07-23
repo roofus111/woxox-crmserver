@@ -109,9 +109,11 @@ exports.getLeadActivitiesByCompany = async (req, res) => {
 
     // Group activities by userId -> action -> date
     const groupedActivities = activities.reduce((acc, activity) => {
+      if (!activity.userId?._id) return acc;
+
       const userId = activity.userId._id.toString();
-      const userName = activity.userId.name;
-      const userEmail = activity.userId.email;
+      const userName = activity.userId.name || 'Unknown User';
+      const userEmail = activity.userId.email || '';
       const action = activity.action;
       const date = moment(activity.timestamp).format('YYYY-MM-DD'); // Format timestamp to a date
 
@@ -151,7 +153,8 @@ exports.getActivityLogsByDate = async (req, res) => {
       startDate, 
       endDate, 
       assignedTo, 
-      action, 
+      action,
+      leadId,
       sort = '-timestamp',
       page = 1,
       limit = 50
@@ -187,6 +190,10 @@ exports.getActivityLogsByDate = async (req, res) => {
     // Action filter
     if (action) {
       filter.action = action;
+    }
+
+    if (leadId) {
+      filter.leadId = leadId;
     }
 
     // Calculate pagination
@@ -241,6 +248,10 @@ exports.getActivityLogsByDate = async (req, res) => {
 
 exports.getActivityKPIs = async (req, res) => {
   try {
+    if (!req.user?.company?._id) {
+      return res.status(403).json({ message: 'Unauthorized: Invalid company information in token' });
+    }
+
     const { startDate, endDate, userId } = req.query;
     const companyId = req.user.company._id;
 
@@ -362,10 +373,12 @@ exports.getActivityKPIs = async (req, res) => {
 
     // Group activities by date and then by user
     const dailyActivities = activities.reduce((acc, activity) => {
+      if (!activity.userId?._id) return acc;
+
       const date = new Date(activity.timestamp).toISOString().split('T')[0];
       const userId = activity.userId._id.toString();
-      const userName = activity.userId.name;
-      const userEmail = activity.userId.email;
+      const userName = activity.userId.name || 'Unknown User';
+      const userEmail = activity.userId.email || '';
 
       if (!acc[date]) {
         acc[date] = {

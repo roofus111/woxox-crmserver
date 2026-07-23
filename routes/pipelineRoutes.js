@@ -236,6 +236,7 @@ router.post('/createpipeline', pipelineController.createPipeline);
  */
 
 router.get('/getpipeline', pipelineController.getPipelines);
+router.get('/getPipeline', pipelineController.getPipelines); // legacy casing
 /**
  * @swagger
  * /api/pipelines/getpipeline/{id}:

@@ -9,6 +9,7 @@ RUN useradd --system --uid 1001 crmserver
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY . .
+RUN mkdir -p /app/data/wa-sessions /app/uploads && chown -R crmserver:crmserver /app/data /app/uploads
 
 USER crmserver
 EXPOSE 8000

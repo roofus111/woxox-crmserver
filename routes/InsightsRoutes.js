@@ -8,6 +8,7 @@ router.get('/accounts/overall-insights', InsightsController.getOverallInsights);
 router.get('/leads/insights', InsightsController.getLeadInsights);
 router.get('/campaigns/insights', InsightsController.getCampaignInsights);
 router.get('/hr/insights', InsightsController.getHRInsights);
+router.get('/dashboard/summary', InsightsController.getOperatingDashboard);
 
 //unused routes
 router.get('/accounts/:accountId/insights', InsightsController.getAccountInsights);

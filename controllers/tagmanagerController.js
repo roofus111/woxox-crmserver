@@ -35,13 +35,15 @@ exports.createTag = async (req, res) => {
 
 exports.getTags = async (req, res) => {
   try {
-    const companyId = req.user.company._id; // Define companyId
-    console.log("Fetching tags for company ID:", companyId);
-    const tags = await TagManager.find({ 
-      company: companyId
-    }).sort({ usageCount: -1 });
-    
-    console.log("Tags found:", tags);
+    const companyId = req.user?.company?._id;
+    if (!companyId) {
+      return res.json([]);
+    }
+
+    const tags = await TagManager.find({
+      company: companyId,
+    }).sort({ leadsCount: -1, createdAt: -1 });
+
     res.json(tags);
   } catch (error) {
     console.error("Error fetching tags:", error);
@@ -52,9 +54,14 @@ exports.getTags = async (req, res) => {
 
 exports.getTagByName = async (req, res) => {
   try {
-    const tag = await TagManager.findOne({ 
-      name: req.params.name.toLowerCase(), 
-      company: req.user.company._id
+    const companyId = req.user?.company?._id;
+    if (!companyId) {
+      return res.status(404).json({ error: "Tag not found" });
+    }
+
+    const tag = await TagManager.findOne({
+      name: req.params.name.toLowerCase(),
+      company: companyId,
     });
 
     if (!tag) return res.status(404).json({ error: "Tag not found" });

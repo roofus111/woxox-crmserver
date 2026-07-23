@@ -3,6 +3,15 @@ const OTP = require('../models/mailotp');
 const User = require('../models/User');
 const crypto = require('crypto');
 
+function mailFromAddress() {
+  const configured = (process.env.SMTP_FROM || '').trim();
+  if (configured) return configured;
+  // SES SMTP_USER is an access key — never use it as From
+  const user = process.env.SMTP_USER || '';
+  if (user.includes('@')) return `"WOXOX" <${user}>`;
+  return '"WOXOX" <noreply@woxox.com>';
+}
+
 // SMTP Configuration with better error handling
 const createTransporter = () => {
   // Check if required environment variables are set
@@ -10,10 +19,11 @@ const createTransporter = () => {
     throw new Error('SMTP_USER and SMTP_PASS environment variables are required');
   }
 
+  const port = parseInt(process.env.SMTP_PORT, 10) || 587;
   const config = {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT) || 587,
-    secure: true, // true for 465, false for other ports
+    port,
+    secure: port === 465, // true for 465, false for 587/STARTTLS
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
@@ -27,7 +37,8 @@ const createTransporter = () => {
     host: config.host,
     port: config.port,
     user: config.auth.user,
-    secure: config.secure
+    secure: config.secure,
+    from: mailFromAddress(),
   });
 
   return nodemailer.createTransport(config);
@@ -41,9 +52,10 @@ const generateOTP = (length = 6) => {
 // Create OTP record
 const createOTPRecord = async (email, type = 'email_verification', expiryMinutes = 10) => {
   try {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
     // Delete any existing unused OTPs for this email and type
     await OTP.deleteMany({ 
-      email, 
+      email: normalizedEmail, 
       type, 
       isUsed: false 
     });
@@ -52,14 +64,14 @@ const createOTPRecord = async (email, type = 'email_verification', expiryMinutes
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
     const otpRecord = new OTP({
-      email,
+      email: normalizedEmail,
       otp,
       type,
       expiresAt
     });
 
     await otpRecord.save();
-    console.log(`OTP created for ${email}: ${otp}`);
+    console.log(`OTP created for ${normalizedEmail}`);
     return otp;
   } catch (error) {
     console.error('Error creating OTP record:', error);
@@ -162,7 +174,7 @@ const sendOTPEmail = async (email, otp, type = 'email_verification') => {
     }
 
     const mailOptions = {
-      from: `"Woxox CRM" <${process.env.SMTP_USER}>`,
+      from: mailFromAddress(),
       to: email,
       subject: subject,
       html: htmlContent
@@ -193,14 +205,18 @@ const sendOTPEmail = async (email, otp, type = 'email_verification') => {
       throw new Error('SMTP connection failed. Please check your host and port settings.');
     } else if (error.code === 'ETIMEDOUT') {
       throw new Error('SMTP connection timed out. Please check your network connection.');
+    } else if (
+      error.responseCode === 554 ||
+      /not verified/i.test(error.response || error.message || '')
+    ) {
+      throw new Error(
+        'Amazon SES rejected this recipient (sandbox mode). Verify the recipient email in SES, or wait for production access approval.'
+      );
     } else {
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }
 };
-
-// Send email verification OTP
-const sendEmailVerificationOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -229,15 +245,9 @@ const sendEmailVerificationOTP = async (req, res) => {
         message: 'Email is already verified'
       });
     }
-   const otpExists = await OTP.findOne({ email: email.toLowerCase(), type: 'email_verification' });
-   if (otpExists) {
-    return res.status(200).json({
-      success: true,
-      message: 'OTP already Dispatched'
-    });
-   }else{
-    // Generate and send OTP
-    const otp = await createOTPRecord(email, 'email_verification');
+
+    // Always create a fresh OTP and attempt delivery (do not pretend success if mail fails)
+    const otp = await createOTPRecord(email.toLowerCase(), 'email_verification');
     await sendOTPEmail(email, otp, 'email_verification');
 
     res.status(200).json({
@@ -248,7 +258,6 @@ const sendEmailVerificationOTP = async (req, res) => {
         expiresIn: '10 minutes'
       }
     });
-   }
 
   } catch (error) {
     console.error('Error in sendEmailVerificationOTP:', error);
@@ -591,29 +600,28 @@ const sendInvitationEmail = async (email, invitationData) => {
     await transporter.verify();
     console.log('SMTP connection verified successfully'); 
     
-    const subject = 'Welcome to CRM System - Account Invitation';
-    const invitationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitationData.token}`;
+    const invitationUrl = `${process.env.FRONTEND_URL || process.env.APP_ORIGIN || 'https://app.woxox.com'}/en/accept-invitation?token=${invitationData.token}`;
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <h1 style="margin: 0; font-size: 28px;">Welcome to CRM System</h1>
-          <p style="margin: 10px 0 0 0; opacity: 0.9;">You've been invited to join our team</p>
+        <div style="background: linear-gradient(135deg, #0f766e 0%, #0ea5e9 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="margin: 0; font-size: 28px;">Welcome to WOXOX</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">You've been invited to join the team</p>
         </div>
         <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="color: #333; font-size: 16px; margin-bottom: 20px;">
             Hello <strong>${invitationData.employeeName}</strong>,
           </p>
           <p style="color: #333; font-size: 16px; margin-bottom: 20px;">
-            You have been invited to join our CRM system. Please click the button below to accept the invitation and set up your account:
+            You have been invited to join WOXOX CRM. Please click the button below to accept the invitation and set up your account:
           </p>
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${invitationUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+            <a href="${invitationUrl}" style="background: #0f766e; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
               Accept Invitation
             </a>
           </div>
-          <div style="background: #fff; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <h3 style="color: #667eea; margin-top: 0;">Your Account Details:</h3>
+          <div style="background: #fff; border: 2px solid #0f766e; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #0f766e; margin-top: 0;">Your Account Details:</h3>
             <p style="margin: 10px 0;"><strong>Email:</strong> ${email}</p>
             <p style="margin: 10px 0;"><strong>Role:</strong> ${invitationData.role}</p>
             <p style="margin: 10px 0;"><strong>Department:</strong> ${invitationData.department || 'Not specified'}</p>
@@ -624,12 +632,12 @@ const sendInvitationEmail = async (email, invitationData) => {
           </p>
           <p style="color: #666; font-size: 14px;">
             If the button doesn't work, you can copy and paste this link into your browser:<br>
-            <a href="${invitationUrl}" style="color: #667eea; word-break: break-all;">${invitationUrl}</a>
+            <a href="${invitationUrl}" style="color: #0f766e; word-break: break-all;">${invitationUrl}</a>
           </p>
           <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
             <p style="color: #999; font-size: 12px;">
               Best regards,<br>
-              CRM System Team
+              WOXOX Team
             </p>
           </div>
         </div>
@@ -637,9 +645,9 @@ const sendInvitationEmail = async (email, invitationData) => {
     `;
 
     const mailOptions = {
-      from: `"CRM System" <${process.env.SMTP_USER}>`,
+      from: mailFromAddress(),
       to: email,
-      subject: subject,
+      subject: 'Welcome to WOXOX — Account Invitation',
       html: htmlContent
     };
 
