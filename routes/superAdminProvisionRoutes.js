@@ -1,9 +1,19 @@
 const express = require('express')
+const crypto = require('crypto')
 const User = require('../models/User')
 const Company = require('../models/Company')
 const { ensureCompanyPlan } = require('../utils/ensureCompanyPlan')
 
 const router = express.Router()
+
+// Constant-time comparison of the shared secret header (hash both sides so
+// length differences don't leak and timingSafeEqual gets equal-length input).
+function secretMatches(provided, expected) {
+  if (!expected || typeof provided !== 'string' || !provided) return false
+  const a = crypto.createHash('sha256').update(provided).digest()
+  const b = crypto.createHash('sha256').update(String(expected)).digest()
+  return crypto.timingSafeEqual(a, b)
+}
 
 /**
  * Internal Super Admin provisioning for multi-tenant onboarding.
@@ -15,7 +25,7 @@ router.post('/provision-tenant', async (req, res) => {
   try {
     const expected = process.env.SUPER_ADMIN_PROVISION_SECRET
     const provided = req.headers['x-super-admin-secret']
-    if (!expected || provided !== expected) {
+    if (!secretMatches(provided, expected)) {
       return res.status(401).json({ message: 'Unauthorized' })
     }
 
@@ -107,7 +117,7 @@ router.post('/impersonate-handoff', async (req, res) => {
   try {
     const expected = process.env.SUPER_ADMIN_PROVISION_SECRET
     const provided = req.headers['x-super-admin-secret']
-    if (!expected || provided !== expected) {
+    if (!secretMatches(provided, expected)) {
       return res.status(401).json({ message: 'Unauthorized' })
     }
 
@@ -162,7 +172,7 @@ router.post('/sync-pipeline', async (req, res) => {
   try {
     const expected = process.env.SUPER_ADMIN_PROVISION_SECRET
     const provided = req.headers['x-super-admin-secret']
-    if (!expected || provided !== expected) {
+    if (!secretMatches(provided, expected)) {
       return res.status(401).json({ message: 'Unauthorized' })
     }
 
