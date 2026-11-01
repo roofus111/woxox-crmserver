@@ -96,6 +96,7 @@ const express = require('express');
 const router = express.Router();
 const blogController = require('../controllers/blogController');
 const upload = require('../middleware/upload');
+const authenticateUser = require('../middleware/authenticateUser');
 
 /**
  * @swagger
@@ -116,7 +117,7 @@ const upload = require('../middleware/upload');
  *       400:
  *         description: Bad request
  */
-router.post('/', upload.single('featuredImage'), blogController.createPost);
+router.post('/', authenticateUser, upload.single('featuredImage'), blogController.createPost);
 
 /**
  * @swagger
@@ -175,7 +176,7 @@ router.get('/:id', blogController.getPostById);
  *       404:
  *         description: Blog post not found
  */
-router.put('/:id', upload.single('featuredImage'), blogController.updatePost);
+router.put('/:id', authenticateUser, upload.single('featuredImage'), blogController.updatePost);
 
 /**
  * @swagger
@@ -195,7 +196,7 @@ router.put('/:id', upload.single('featuredImage'), blogController.updatePost);
  *       404:
  *         description: Blog post not found
  */
-router.delete('/:id', blogController.deletePost);
+router.delete('/:id', authenticateUser, blogController.deletePost);
 
 /**
  * @swagger
@@ -221,7 +222,7 @@ router.delete('/:id', blogController.deletePost);
  *       404:
  *         description: Blog post not found
  */
-router.post('/uploads/:postId', upload.single('featuredImage'), blogController.addPostImage);
+router.post('/uploads/:postId', authenticateUser, upload.single('featuredImage'), blogController.addPostImage);
 
 /**
  * @swagger
@@ -247,7 +248,7 @@ router.post('/uploads/:postId', upload.single('featuredImage'), blogController.a
  *       404:
  *         description: Blog post not found
  */
-router.put('/uploads/:postId', upload.single('featuredImage'), blogController.updatePostImage);
+router.put('/uploads/:postId', authenticateUser, upload.single('featuredImage'), blogController.updatePostImage);
 
 /**
  * @swagger
@@ -292,6 +293,6 @@ router.get('/images/:filename', blogController.getImageByFilename);
  *       404:
  *         description: Blog post or image not found
  */
-router.delete('/uploads/:postId', blogController.deletePostImage);
+router.delete('/uploads/:postId', authenticateUser, blogController.deletePostImage);
 
 module.exports = router;
