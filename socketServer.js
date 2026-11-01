@@ -4,6 +4,8 @@ const User = require("./models/User");
 const Message = require("./models/Message");
 const ChatGroup = require("./models/ChatGroup");
 const { uploadFileToS3 } = require("./utils/uploadFile");
+const { originCheck } = require("./config/corsOrigins");
+const { socketAuth, identityGuard } = require("./middleware/socketAuth");
 
 
 const onlineUsers = new Map();
@@ -14,10 +16,14 @@ const getOnlineUserIds = () => Array.from(onlineUsers.keys());
 function initializeSocket(server) {
   const io = new Server(server, {
     cors: {
-      origin: "*", // adjust in production
-      methods: ["GET", "POST"]
+      origin: originCheck(),
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
+
+  // Require a valid JWT to connect, then bind every event to that identity.
+  io.use(socketAuth);
 
   try {
     const { setIO } = require("./modules/whatsapp/events/socketBridge");
@@ -28,6 +34,8 @@ function initializeSocket(server) {
 
   io.on("connection", (socket) => {
     console.log("New client connected:", socket.id);
+    socket.use(identityGuard(socket));
+    socket.on("error", (err) => console.warn("Socket rejected event:", err.message));
 
     socket.emit("welcome", { message: "Welcome to the enhanced chat system!" });
 

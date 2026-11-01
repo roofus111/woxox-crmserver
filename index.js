@@ -91,7 +91,7 @@ mongoose.connection.on(
 mongoose.connection.once("open", () => console.log("Connected to MongoDB"));
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: require('./config/corsOrigins').originCheck(), credentials: true }));
 
 // Raw body capture for WhatsApp webhook signature verification
 app.use('/api/whatsapp/webhook', express.json({
