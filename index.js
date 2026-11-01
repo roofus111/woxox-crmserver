@@ -108,6 +108,33 @@ app.use('/uploads', require('express').static(chatUploadRoot));
 // also serve /app/uploads if present (compose volume)
 app.use('/uploads', require('express').static(path.join(__dirname, 'uploads')));
 
+// Behind nginx/ALB, trust the first proxy hop so rate limiting sees the real
+// client IP. Set TRUST_PROXY_HOPS=0 if the server is exposed directly.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
+// Brute-force protection on login and OTP endpoints
+const {
+  loginLimiter,
+  loginIpLimiter,
+  registerLimiter,
+  otpSendLimiter,
+  otpVerifyLimiter,
+} = require('./middleware/authRateLimiters');
+app.use(['/api/login', '/api/login-impersonation'], loginIpLimiter, loginLimiter);
+app.use('/api/register', registerLimiter);
+app.use(
+  [
+    '/api/mail/send-email-verification',
+    '/api/mail/resend-email-verification',
+    '/api/mail/send-password-reset',
+  ],
+  otpSendLimiter,
+);
+app.use(
+  ['/api/mail/verify-email', '/api/mail/verify-password-reset', '/api/mail/validate-otp'],
+  otpVerifyLimiter,
+);
+
 // Routes
 app.use("/api", authRoutes);
 app.use("/api/companies", companyRoutes);
